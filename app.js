@@ -47,8 +47,7 @@ const SESSION_STORAGE_KEY = 'edv_user_session';
 const AUTH_TOKEN_KEY = 'edv_auth_token';
 const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://127.0.0.1:8000'
-  : (window.EDV_API_BASE_URL || 'http://127.0.0.1:8000');
-
+  : (window.EDV_API_BASE_URL || 'https://edbrain.onrender.com');
 let currentUserSession = null;
 
 async function initAuth() {
