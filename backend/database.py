@@ -1,6 +1,7 @@
 """
 EDV Jr. - Camada de Banco de Dados Local (SQLite - Custo Zero)
-Armazena credenciais criptografadas e perfis de controle de acesso (RBAC).
+Armazena credenciais criptografadas, perfis de controle de acesso (RBAC),
+transações financeiras e mural de avisos institucionais.
 """
 
 import sqlite3
@@ -9,30 +10,193 @@ import bcrypt
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "auth.db")
 
+VALID_ROLES = {"presidente", "diretor", "gerente", "assessor"}
+
 MEMBROS_WHITELIST = [
-    {"email": "charles.junior@edvjr.com.br", "nome": "Charles", "setor": "Presidência", "cargo": "Presidente Institucional", "role": "ADMIN"},
-    {"email": "alice.mizuki@edvjr.com.br", "nome": "Alice Mizuki", "setor": "Projetos / RMs", "cargo": "Assessora de Projetos", "role": "ANALYST"},
-    {"email": "alice.ney@edvjr.com.br", "nome": "Alice Ney", "setor": "VPGG", "cargo": "Vice-Presidente de Gestão", "role": "ADMIN"},
-    {"email": "alicia.athayde@edvjr.com.br", "nome": "Alicia", "setor": "Marketing", "cargo": "Assessora de Conteúdo", "role": "ANALYST"},
-    {"email": "aline.tartaglia@edvjr.com.br", "nome": "Aline", "setor": "Jurídico", "cargo": "Assessora de Contratos", "role": "ANALYST"},
-    {"email": "amanda.bede@edvjr.com.br", "nome": "Amanda", "setor": "Projetos / RMs", "cargo": "Assessora de Projetos", "role": "ANALYST"},
-    {"email": "karolina.krause@edvjr.com.br", "nome": "Ana Karolina", "setor": "Jurídico", "cargo": "Assessora de Compliance", "role": "ANALYST"},
-    {"email": "estevao.coutinho@edvjr.com.br", "nome": "Estevão", "setor": "Comercial", "cargo": "Assessor de Vendas", "role": "ANALYST"},
-    {"email": "evelyn.roldi@edvjr.com.br", "nome": "Evelyn", "setor": "Marketing", "cargo": "Diretora de Marketing", "role": "MANAGER"},
-    {"email": "gabriel.orienrac@edvjr.com.br", "nome": "Cachorrão (Gabriel)", "setor": "Projetos / RMs", "cargo": "Assessor de Projetos", "role": "ANALYST"},
-    {"email": "giulia.moulin@edvjr.com.br", "nome": "Giulia", "setor": "VPGG", "cargo": "Assessora de Gente & Gestão", "role": "ANALYST"},
-    {"email": "guilherme.borges@edvjr.com.br", "nome": "Guilherme Borges", "setor": "Comercial", "cargo": "Assessor de Vendas", "role": "ANALYST"},
-    {"email": "isadora.epichin@edvjr.com.br", "nome": "Isadora", "setor": "Comercial / Vendas", "cargo": "Diretora Comercial", "role": "MANAGER"},
-    {"email": "joaop.lecco@edvjr.com.br", "nome": "Chillibão (João P.)", "setor": "Marketing", "cargo": "Assessor de Criação", "role": "ANALYST"},
-    {"email": "marialice.bacelar@edvjr.com.br", "nome": "Maria Alice", "setor": "Comercial", "cargo": "Assessora de Negociação", "role": "ANALYST"},
-    {"email": "mariaeduarda.dias@edvjr.com.br", "nome": "Maria Eduarda", "setor": "VPGG", "cargo": "Assessora de Gente & Gestão", "role": "ANALYST"},
-    {"email": "maria.teixeira@edvjr.com.br", "nome": "Maria Luyza", "setor": "Jurídico", "cargo": "Assessora de Governança", "role": "ANALYST"},
-    {"email": "marina.moretto@edvjr.com.br", "nome": "Marina", "setor": "Tesouraria / CJA", "cargo": "Diretora Financeira", "role": "MANAGER"},
-    {"email": "marllon.oliveira@edvjr.com.br", "nome": "Marllon", "setor": "Projetos / RMs", "cargo": "Assessor de Projetos", "role": "ANALYST"},
-    {"email": "pedro.barros@edvjr.com.br", "nome": "Pedro Barros", "setor": "Comercial", "cargo": "Assessor de Inbound", "role": "ANALYST"},
-    {"email": "renato.moura@edvjr.com.br", "nome": "Renato", "setor": "Projetos / RMs", "cargo": "Assessor de Projetos", "role": "ANALYST"},
-    {"email": "samuel.garcia@edvjr.com.br", "nome": "Samuel", "setor": "Comercial / Radar", "cargo": "Assessor de Prospecção", "role": "ANALYST"},
-    {"email": "thais.junger@edvjr.com.br", "nome": "Thais", "setor": "Projetos / RMs", "cargo": "Gerente de Registro de Marca", "role": "MANAGER"}
+    {
+        "email": "charles.junior@edvjr.com.br",
+        "nome": "Charles",
+        "area": "Presidência",
+        "role": "presidente",
+        "setor": "Presidência",
+        "cargo": "Presidente Institucional"
+    },
+    {
+        "email": "alice.mizuki@edvjr.com.br",
+        "nome": "Alice Mizuki",
+        "area": "Projetos",
+        "role": "assessor",
+        "setor": "Projetos / RMs",
+        "cargo": "Assessora de Projetos"
+    },
+    {
+        "email": "alice.ney@edvjr.com.br",
+        "nome": "Alice Ney",
+        "area": "VPGG",
+        "role": "diretor",
+        "setor": "VPGG",
+        "cargo": "Vice-Presidente de Gestão"
+    },
+    {
+        "email": "alicia.athayde@edvjr.com.br",
+        "nome": "Alicia",
+        "area": "Marketing",
+        "role": "assessor",
+        "setor": "Marketing",
+        "cargo": "Assessora de Conteúdo"
+    },
+    {
+        "email": "aline.tartaglia@edvjr.com.br",
+        "nome": "Aline",
+        "area": "Jurídico",
+        "role": "assessor",
+        "setor": "Jurídico",
+        "cargo": "Assessora de Contratos"
+    },
+    {
+        "email": "amanda.bede@edvjr.com.br",
+        "nome": "Amanda",
+        "area": "Projetos",
+        "role": "assessor",
+        "setor": "Projetos / RMs",
+        "cargo": "Assessora de Projetos"
+    },
+    {
+        "email": "karolina.krause@edvjr.com.br",
+        "nome": "Ana Karolina",
+        "area": "Jurídico",
+        "role": "assessor",
+        "setor": "Jurídico",
+        "cargo": "Assessora de Compliance"
+    },
+    {
+        "email": "estevao.coutinho@edvjr.com.br",
+        "nome": "Estevão",
+        "area": "Comercial",
+        "role": "assessor",
+        "setor": "Comercial",
+        "cargo": "Assessor de Vendas"
+    },
+    {
+        "email": "evelyn.roldi@edvjr.com.br",
+        "nome": "Evelyn",
+        "area": "Marketing",
+        "role": "diretor",
+        "setor": "Marketing",
+        "cargo": "Diretora de Marketing"
+    },
+    {
+        "email": "gabriel.orienrac@edvjr.com.br",
+        "nome": "Cachorrão (Gabriel)",
+        "area": "Projetos",
+        "role": "assessor",
+        "setor": "Projetos / RMs",
+        "cargo": "Assessor de Projetos"
+    },
+    {
+        "email": "giulia.moulin@edvjr.com.br",
+        "nome": "Giulia",
+        "area": "VPGG",
+        "role": "assessor",
+        "setor": "VPGG",
+        "cargo": "Assessora de Gente & Gestão"
+    },
+    {
+        "email": "guilherme.borges@edvjr.com.br",
+        "nome": "Guilherme Borges",
+        "area": "Comercial",
+        "role": "assessor",
+        "setor": "Comercial",
+        "cargo": "Assessor de Vendas"
+    },
+    {
+        "email": "isadora.epichin@edvjr.com.br",
+        "nome": "Isadora",
+        "area": "Comercial",
+        "role": "diretor",
+        "setor": "Comercial / Vendas",
+        "cargo": "Diretora Comercial"
+    },
+    {
+        "email": "joaop.lecco@edvjr.com.br",
+        "nome": "Chillibão (João P.)",
+        "area": "Marketing",
+        "role": "assessor",
+        "setor": "Marketing",
+        "cargo": "Assessor de Criação"
+    },
+    {
+        "email": "marialice.bacelar@edvjr.com.br",
+        "nome": "Maria Alice",
+        "area": "Comercial",
+        "role": "assessor",
+        "setor": "Comercial",
+        "cargo": "Assessora de Negociação"
+    },
+    {
+        "email": "mariaeduarda.dias@edvjr.com.br",
+        "nome": "Maria Eduarda",
+        "area": "VPGG",
+        "role": "assessor",
+        "setor": "VPGG",
+        "cargo": "Assessora de Gente & Gestão"
+    },
+    {
+        "email": "maria.teixeira@edvjr.com.br",
+        "nome": "Maria Luyza",
+        "area": "Jurídico",
+        "role": "assessor",
+        "setor": "Jurídico",
+        "cargo": "Assessora de Governança"
+    },
+    {
+        "email": "marina.moretto@edvjr.com.br",
+        "nome": "Marina",
+        "area": "Tesouraria",
+        "role": "diretor",
+        "setor": "Tesouraria / CJA",
+        "cargo": "Diretora Financeira"
+    },
+    {
+        "email": "marllon.oliveira@edvjr.com.br",
+        "nome": "Marllon",
+        "area": "Projetos",
+        "role": "assessor",
+        "setor": "Projetos / RMs",
+        "cargo": "Assessor de Projetos"
+    },
+    {
+        "email": "pedro.barros@edvjr.com.br",
+        "nome": "Pedro Barros",
+        "area": "Comercial",
+        "role": "assessor",
+        "setor": "Comercial",
+        "cargo": "Assessor de Inbound"
+    },
+    {
+        "email": "renato.moura@edvjr.com.br",
+        "nome": "Renato",
+        "area": "Projetos",
+        "role": "assessor",
+        "setor": "Projetos / RMs",
+        "cargo": "Assessor de Projetos"
+    },
+    {
+        "email": "samuel.garcia@edvjr.com.br",
+        "nome": "Samuel",
+        "area": "Comercial",
+        "role": "assessor",
+        "setor": "Comercial / Radar",
+        "cargo": "Assessor de Prospecção"
+    },
+    {
+        "email": "thais.junger@edvjr.com.br",
+        "nome": "Thais",
+        "area": "Projetos",
+        "role": "gerente",
+        "setor": "Projetos / RMs",
+        "cargo": "Gerente de Registro de Marca"
+    }
 ]
 
 DEFAULT_PASSWORD = "edv2026!"
@@ -46,36 +210,76 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
     
+    # 1. Tabela de usuários com colunas 'area' e 'role' estritas
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         email TEXT UNIQUE NOT NULL,
         nome TEXT NOT NULL,
         hashed_password TEXT NOT NULL,
-        setor TEXT NOT NULL,
-        cargo TEXT NOT NULL,
-        role TEXT NOT NULL,
+        area TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('presidente', 'diretor', 'gerente', 'assessor')),
+        setor TEXT,
+        cargo TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    
+    # Migração segura para bases existentes
+    cursor.execute("PRAGMA table_info(users);")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "area" not in columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN area TEXT;")
+    
+    # 2. Tabela de transações financeiras (Atualização Indireta e Blindagem)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        area TEXT NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('receita', 'despesa')),
+        category TEXT NOT NULL,
+        amount REAL NOT NULL,
+        description TEXT,
+        created_by TEXT NOT NULL,
+        date TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    
+    # 3. Tabela de avisos e comunicados institucionais (Mural de Avisos)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS notices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        target_area TEXT,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL,
+        author TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
     conn.commit()
 
-    # Preencher automaticamente a base com os 23 membros se estiver vazia
-    cursor.execute("SELECT COUNT(*) FROM users;")
-    count = cursor.fetchone()[0]
-
-    if count == 0:
-        default_hash = bcrypt.hashpw(DEFAULT_PASSWORD.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-        for m in MEMBROS_WHITELIST:
+    # Sincronização da Whitelist oficial com roles estritos e áreas correspondentes
+    default_hash = bcrypt.hashpw(DEFAULT_PASSWORD.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    for m in MEMBROS_WHITELIST:
+        cursor.execute("SELECT id FROM users WHERE email = ?;", (m["email"],))
+        row = cursor.fetchone()
+        if row:
             cursor.execute("""
-            INSERT INTO users (email, nome, hashed_password, setor, cargo, role)
-            VALUES (?, ?, ?, ?, ?, ?);
-            """, (m["email"], m["nome"], default_hash, m["setor"], m["cargo"], m["role"]))
-        conn.commit()
-        print(f"[SQLite] Base inicializada com {len(MEMBROS_WHITELIST)} usuários da Whitelist oficial.")
-    else:
-        print(f"[SQLite] Base de autenticação pronta com {count} usuários.")
-
+            UPDATE users 
+            SET nome = ?, area = ?, role = ?, setor = ?, cargo = ?
+            WHERE email = ?;
+            """, (m["nome"], m["area"], m["role"], m["setor"], m["cargo"], m["email"]))
+        else:
+            cursor.execute("""
+            INSERT INTO users (email, nome, hashed_password, area, role, setor, cargo)
+            VALUES (?, ?, ?, ?, ?, ?, ?);
+            """, (m["email"], m["nome"], default_hash, m["area"], m["role"], m["setor"], m["cargo"]))
+            
+    conn.commit()
+    cursor.execute("SELECT COUNT(*) FROM users;")
+    total_users = cursor.fetchone()[0]
+    print(f"[SQLite] Base inicializada e sincronizada com {total_users} membros no padrão RBAC estrito.")
     conn.close()
 
 def get_user_by_email(email: str):

@@ -1,5 +1,5 @@
 """
-EDV Jr. - Módulo de Criptografia, Hashing Bcrypt e Validação JWT
+EDV Jr. - Módulo de Autenticação, Criptografia Bcrypt, JWT e Controle de Acesso (RBAC)
 """
 
 import os
@@ -9,9 +9,8 @@ import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from database import get_user_by_email
+from database import get_user_by_email, VALID_ROLES
 
-# Chave secreta de 64 caracteres com alta entropia para HMAC-SHA256 (Custo Zero)
 SECRET_KEY = os.getenv("EDV_JWT_SECRET", "edv_junior_secure_jwt_token_secret_key_gestao_2026_enterprise_rbac_sig")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas de sessão
@@ -35,13 +34,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 def decode_access_token(token: str) -> dict:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -80,18 +77,71 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depen
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Remover senha antes de retornar os dados da sessão
     user_copy = dict(user)
     user_copy.pop("hashed_password", None)
     return user_copy
 
 def require_role(allowed_roles: List[str]):
+    """
+    Dependência que restringe a rota aos papéis estritos informados
+    (ex: 'presidente', 'diretor', 'gerente', 'assessor').
+    """
+    normalized_allowed = {r.lower().strip() for r in allowed_roles}
     def role_checker(user: dict = Depends(get_current_user)):
-        user_role = user.get("role", "ANALYST")
-        if user_role not in allowed_roles:
+        user_role = (user.get("role") or "").lower().strip()
+        if user_role not in normalized_allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Acesso negado: Perfil '{user_role}' não tem permissão para este recurso. Permitidos: {allowed_roles}"
+                detail=f"Acesso negado: Perfil '{user_role}' não tem permissão para este recurso. Permitidos: {list(normalized_allowed)}"
             )
         return user
     return role_checker
+
+def check_area_access(target_area: Optional[str], user: dict) -> bool:
+    """
+    Retorna True se o usuário possuir acesso operacional à área solicitada.
+    - 'presidente' e 'diretor' possuem privilégios cross-area irrestritos.
+    - 'gerente' e 'assessor' têm escopo restrito exclusivamente à sua própria área.
+    """
+    if not user:
+        return False
+    role = (user.get("role") or "").lower().strip()
+    if role in {"presidente", "diretor"}:
+        return True
+    
+    if not target_area:
+        return False
+        
+    user_area = (user.get("area") or user.get("setor") or "").lower().strip()
+    target = target_area.lower().strip()
+    
+    return (
+        user_area == target
+        or user_area.startswith(target)
+        or target.startswith(user_area)
+    )
+
+def verify_area_access(target_area: str, user: Optional[dict] = None):
+    """
+    Validação de Escopo de Área (RBAC).
+    Suporta tanto uso direto como função:
+        verify_area_access("Projetos", current_user)
+    quanto uso declarativo como Factory de Dependência FastAPI:
+        Depends(verify_area_access("Projetos"))
+    """
+    if user is None:
+        def dependency(current_user: dict = Depends(get_current_user)):
+            return verify_area_access(target_area, current_user)
+        return dependency
+
+    if not check_area_access(target_area, user):
+        role = user.get("role", "desconhecido")
+        area = user.get("area", user.get("setor", "indefinida"))
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Acesso negado: Perfil '{role}' da área '{area}' não possui permissão "
+                f"para operar sobre a área '{target_area}'. Privilégios cross-area são restritos à Presidência e Diretorias."
+            )
+        )
+    return True
