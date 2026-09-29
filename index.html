@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EDV Jr. | Sistema Operacional Unificado 2.0</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Design System Oficial Kamiclock + Prospector -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased h-screen overflow-hidden">
+
+  <!-- ==================== 1. TELA DE AUTENTICAÇÃO / LOGIN ==================== -->
+  <div id="auth-container" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gradient-to-br from-[#071224] via-[#0b1d3a] to-[#162a4d] overflow-y-auto">
+    <div class="max-w-md w-full my-auto space-y-6">
+      
+      <!-- Logo Superior Institucional -->
+      <div class="text-center">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600 text-white text-3xl shadow-xl border border-blue-400/30 mb-3">
+          ⚖️
+        </div>
+        <h1 class="text-2xl font-black tracking-wider text-white">EDV <span class="text-blue-400">JR.</span></h1>
+        <p class="text-xs uppercase tracking-widest text-[#7ba4d1] font-semibold">Serviços Jurídicos & Propriedade Intelectual</p>
+        <span class="inline-block mt-2 bg-blue-500/20 text-blue-300 font-mono text-[10px] px-2.5 py-0.5 rounded-full border border-blue-400/30">Sistema Operacional Unificado 2.0</span>
+      </div>
+
+      <!-- Card de Autenticação -->
+      <div class="bg-white rounded-2xl p-7 shadow-2xl border border-slate-200">
+        <div class="border-b border-slate-100 pb-4 mb-5">
+          <h2 class="text-lg font-bold text-slate-900">Autenticação de Membro</h2>
+          <p class="text-xs text-slate-500 mt-1">Informe seu e-mail corporativo para acessar os módulos e DataGrids setoriais com controle RBAC.</p>
+        </div>
+
+        <form id="loginForm" onsubmit="handleLoginSubmit(event)" class="space-y-4">
+          <div>
+            <label for="emailMembro" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">E-mail Corporativo</label>
+            <input 
+              type="email" 
+              id="emailMembro" 
+              required 
+              placeholder="seu.nome@edvjr.com.br"
+              class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-slate-50/50"
+            >
+          </div>
+
+          <div id="loginError" class="hidden p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 font-medium"></div>
+
+          <button 
+            type="submit" 
+            class="w-full bg-[#0b1d3a] hover:bg-[#162a4d] text-white font-bold py-2.5 px-4 rounded-lg text-sm shadow-md transition duration-150 flex items-center justify-center gap-2"
+          >
+            <span>Autenticar e Sincronizar</span>
+            <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+          </button>
+        </form>
+
+        <!-- Acesso Rápido Whitelist (23 Membros) -->
+        <div class="mt-6 pt-5 border-t border-slate-100">
+          <span class="text-[11px] font-bold uppercase text-slate-400 tracking-wider block mb-2 text-center">Atalhos de Acesso Rápido</span>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <button onclick="quickLogin('charles.junior@edvjr.com.br')" class="p-2 text-left bg-slate-50 hover:bg-blue-50 hover:border-blue-300 border border-slate-200 rounded-lg transition">
+              <strong class="text-slate-800 block text-[11px]">Charles</strong>
+              <span class="text-[10px] text-blue-600">Presidência (Admin)</span>
+            </button>
+            <button onclick="quickLogin('isadora.epichin@edvjr.com.br')" class="p-2 text-left bg-slate-50 hover:bg-blue-50 hover:border-blue-300 border border-slate-200 rounded-lg transition">
+              <strong class="text-slate-800 block text-[11px]">Isadora</strong>
+              <span class="text-[10px] text-indigo-600">Comercial (Gerente)</span>
+            </button>
+            <button onclick="quickLogin('samuel.garcia@edvjr.com.br')" class="p-2 text-left bg-slate-50 hover:bg-blue-50 hover:border-blue-300 border border-slate-200 rounded-lg transition">
+              <strong class="text-slate-800 block text-[11px]">Samuel</strong>
+              <span class="text-[10px] text-slate-600">Comercial / Radar</span>
+            </button>
+            <button onclick="quickLogin('thais.junger@edvjr.com.br')" class="p-2 text-left bg-slate-50 hover:bg-blue-50 hover:border-blue-300 border border-slate-200 rounded-lg transition">
+              <strong class="text-slate-800 block text-[11px]">Thais</strong>
+              <span class="text-[10px] text-slate-600">Projetos / RMs</span>
+            </button>
+          </div>
+
+          <div class="mt-3">
+            <select onchange="if(this.value) quickLogin(this.value)" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white text-slate-600">
+              <option value="">-- Whitelist Completa (23 Membros da Gestão 2026) --</option>
+              <option value="alice.mizuki@edvjr.com.br">Alice Mizuki (Projetos / RMs)</option>
+              <option value="alice.ney@edvjr.com.br">Alice Ney (VPGG)</option>
+              <option value="alicia.athayde@edvjr.com.br">Alicia (Marketing)</option>
+              <option value="aline.tartaglia@edvjr.com.br">Aline (Jurídico)</option>
+              <option value="amanda.bede@edvjr.com.br">Amanda (Projetos / RMs)</option>
+              <option value="karolina.krause@edvjr.com.br">Ana Karolina (Jurídico)</option>
+              <option value="estevao.coutinho@edvjr.com.br">Estevão (Comercial)</option>
+              <option value="evelyn.roldi@edvjr.com.br">Evelyn (Marketing)</option>
+              <option value="gabriel.orienrac@edvjr.com.br">Cachorrão / Gabriel (Projetos / RMs)</option>
+              <option value="giulia.moulin@edvjr.com.br">Giulia (VPGG)</option>
+              <option value="guilherme.borges@edvjr.com.br">Guilherme Borges (Comercial)</option>
+              <option value="joaop.lecco@edvjr.com.br">Chillibão / João P. (Marketing)</option>
+              <option value="marialice.bacelar@edvjr.com.br">Maria Alice (Comercial)</option>
+              <option value="mariaeduarda.dias@edvjr.com.br">Maria Eduarda (VPGG)</option>
+              <option value="maria.teixeira@edvjr.com.br">Maria Luyza (Jurídico)</option>
+              <option value="marina.moretto@edvjr.com.br">Marina (Tesouraria / CJA)</option>
+              <option value="marllon.oliveira@edvjr.com.br">Marllon (Projetos / RMs)</option>
+              <option value="pedro.barros@edvjr.com.br">Pedro Barros (Comercial)</option>
+              <option value="renato.moura@edvjr.com.br">Renato (Projetos / RMs)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="text-center text-[11px] text-slate-400">
+        © 2026 EDV Jr. — Empresa Júnior de Direito • Vitória/ES
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 2. LAYOUT PRINCIPAL DO APLICATIVO ==================== -->
+  <div id="app-main-layout" class="hidden flex h-screen overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside class="w-64 bg-[#0b1d3a] text-white flex flex-col z-20 shadow-2xl border-r border-slate-800 shrink-0">
+      <div class="p-5 border-b border-slate-800/80 bg-[#071224]/60">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white shadow-lg text-lg">
+            ⚖️
+          </div>
+          <div>
+            <span class="text-lg font-black tracking-wider text-white block leading-tight">EDV <span class="text-blue-400">JR.</span></span>
+            <span class="text-[9px] uppercase tracking-widest text-[#7ba4d1] font-semibold block">Serviços Jurídicos</span>
+          </div>
+        </div>
+        <div class="mt-3 flex items-center justify-between text-[11px] bg-slate-800/60 py-1 px-2.5 rounded border border-slate-700/60">
+          <span class="text-slate-400 font-medium">SO Unificado</span>
+          <span class="bg-blue-500/20 text-blue-300 font-mono text-[10px] px-1.5 py-0.5 rounded border border-blue-400/30">v2.0 Full</span>
+        </div>
+      </div>
+
+      <nav class="flex-1 py-3 space-y-0.5 overflow-y-auto px-2">
+        <div class="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Estratégico</div>
+        
+        <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-active">
+          <i class="fa-solid fa-chart-pie w-4 text-center text-blue-400"></i>
+          <span class="text-xs">Painel Geral</span>
+        </button>
+
+        <button onclick="switchTab('presidencia')" id="nav-presidencia" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+          <i class="fa-solid fa-landmark w-4 text-center text-blue-400"></i>
+          <span class="text-xs">Presidência & Selo EJ</span>
+          <span class="ml-auto text-[9px] bg-emerald-900/60 text-emerald-300 px-1 py-0.5 rounded font-mono">100% OK</span>
+        </button>
+
+        <div class="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Comercial & Marketing</div>
+
+        <button onclick="switchTab('comercial')" id="nav-comercial" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+          <i class="fa-solid fa-satellite-dish w-4 text-center text-blue-400"></i>
+          <span class="text-xs font-semibold text-sky-300">Radar & CRM (Leads)</span>
+          <span id="nav-badge-leads" class="ml-auto text-[10px] bg-blue-900 text-blue-200 px-1.5 py-0.5 rounded-full font-mono">693</span>
+        </button>
+
+        <button onclick="switchTab('copys')" id="nav-copys" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+          <i class="fa-solid fa-comments w-4 text-center text-blue-400"></i>
+          <span class="text-xs font-semibold text-amber-300">Playbook de Mensagens</span>
+          <span class="ml-auto text-[9px] bg-amber-900/60 text-amber-200 px-1 py-0.5 rounded font-mono">Copys ⚡</span>
+        </button>
+
+        <button onclick="switchTab('marketing')" id="nav-marketing" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+          <i class="fa-solid fa-bullhorn w-4 text-center text-blue-400"></i>
+          <span class="text-xs">Marketing & Campanhas</span>
+        </button>
+
+        <div class="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Operação & Finanças</div>
+
+        <button onclick="switchTab('projetos')" id="nav-projetos" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+          <i class="fa-solid fa-shield-halved w-4 text-center text-blue-400"></i>
+          <span class="text-xs">Processos RM (INPI)</span>
+          <span id="nav-badge-rms" class="ml-auto text-[9px] bg-indigo-900/70 text-indigo-200 px-1.5 py-0.5 rounded-full font-mono">85</span>
+        </button>
+
+        <button onclick="switchTab('financeiro')" id="nav-financeiro" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+          <i class="fa-solid fa-sack-dollar w-4 text-center text-blue-400"></i>
+          <span class="text-xs">Tesouraria (CJA / Cora)</span>
+          <span id="nav-badge-fluxo" class="ml-auto text-[9px] bg-emerald-900/60 text-emerald-200 px-1 py-0.5 rounded-full font-mono">78</span>
+        </button>
+
+        <div class="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Pessoas & Conhecimento</div>
+
+        <button onclick="switchTab('vpgg')" id="nav-vpgg" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+          <i class="fa-solid fa-users w-4 text-center text-blue-400"></i>
+          <span class="text-xs">Gente & Gestão (VPGG)</span>
+          <span class="ml-auto text-[9px] bg-purple-900/60 text-purple-200 px-1 py-0.5 rounded-full font-mono">23</span>
+        </button>
+
+        <button onclick="switchTab('tutoriais')" id="nav-tutoriais" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+          <i class="fa-solid fa-book-bookmark w-4 text-center text-blue-400"></i>
+          <span class="text-xs font-semibold text-emerald-300">Base de Tutoriais</span>
+          <span class="ml-auto text-[9px] bg-emerald-900/60 text-emerald-200 px-1 py-0.5 rounded font-mono">Docs</span>
+        </button>
+
+        <button onclick="switchTab('planilhas')" id="nav-planilhas" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+          <i class="fa-solid fa-folder-tree w-4 text-center text-blue-400"></i>
+          <span class="text-xs font-semibold text-sky-300">Central de Planilhas & Drive</span>
+        </button>
+
+        <button onclick="switchTab('auditoria')" id="nav-auditoria" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+          <i class="fa-solid fa-user-shield w-4 text-center text-blue-400"></i>
+          <span class="text-xs">Auditoria & RBAC</span>
+        </button>
+      </nav>
+
+      <!-- Rodapé do Membro Autenticado -->
+      <div class="p-3 border-t border-slate-800 bg-[#071224]/80 flex items-center justify-between">
+        <div class="flex items-center gap-2.5 overflow-hidden">
+          <div id="user-session-avatar" class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-xs text-white border border-blue-400 shrink-0">
+            CJ
+          </div>
+          <div class="truncate">
+            <div id="user-session-name" class="text-xs font-semibold text-slate-200 truncate">Charles</div>
+            <div id="user-session-role" class="text-[10px] text-blue-400 font-mono truncate">ADMIN • Presidência</div>
+          </div>
+        </div>
+        <button onclick="logout()" title="Encerrar Sessão (Logout)" class="text-slate-400 hover:text-rose-400 p-1.5 rounded hover:bg-slate-800 text-xs transition">
+          <i class="fa-solid fa-right-from-bracket"></i>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ÁREA PRINCIPAL -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50">
+      
+      <!-- Top Bar -->
+      <header class="bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between shrink-0 shadow-sm">
+        <div class="flex items-center gap-3">
+          <h2 id="view-title" class="text-lg font-bold text-slate-800">Painel Executivo Integrado</h2>
+          <span class="text-xs text-slate-400">|</span>
+          <span id="view-subtitle" class="text-xs text-slate-500 font-medium">Visão global dos eixos estratégicos da EDV Jr.</span>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button onclick="toggleTutorialModal(true)" class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg text-xs text-amber-800 font-bold shadow-xs transition">
+            <span>💡 Como Usar o Sistema</span>
+          </button>
+
+          <!-- Alerta RPI INPI -->
+          <div class="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-[11px] text-blue-700 font-medium">
+            <span class="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+            <span>Próxima RPI INPI: <strong>Terça-feira</strong></span>
+          </div>
+
+          <!-- Seletor RBAC Sandbox -->
+          <div class="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+            <button onclick="setRBACTest('ADMIN')" id="role-admin" class="px-2 py-1 rounded bg-white text-slate-800 font-semibold shadow-xs">Admin</button>
+            <button onclick="setRBACTest('MANAGER')" id="role-manager" class="px-2 py-1 rounded text-slate-600 hover:text-slate-900">Gerente</button>
+            <button onclick="setRBACTest('ANALYST')" id="role-analyst" class="px-2 py-1 rounded text-slate-600 hover:text-slate-900">Consultor</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- CORPO DOS MÓDULOS -->
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+
+        <!-- 1. DASHBOARD GERAL -->
+        <section id="view-dashboard" class="space-y-6">
+          <div class="glass-card rounded-xl p-5 border-l-4 border-blue-600 bg-gradient-to-r from-blue-50/50 to-white flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <span class="text-xs font-bold text-blue-800 uppercase tracking-wider block">Sistema Operacional Autoral • EDV Jr. 2026</span>
+              <h3 class="text-base font-bold text-slate-800 mt-0.5">Centro de comando unificado com ingestão ao vivo do Google Drive.</h3>
+              <p class="text-xs text-slate-500 mt-0.5">85 Processos de Marcas, 693 Leads de Prospecção, Fluxo de Caixa CJA e 23 Membros sincronizados.</p>
+            </div>
+            <button onclick="switchTab('comercial')" class="self-start md:self-auto bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm flex items-center gap-1.5 shrink-0">
+              <i class="fa-solid fa-satellite-dish"></i>
+              <span>Abrir Radar Comercial</span>
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="glass-card rounded-xl p-5 border-l-4 border-blue-600">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Processos de Marca (INPI)</span>
+              <div class="flex items-baseline gap-2 mt-2">
+                <span id="kpi-total-rms" class="text-2xl font-bold text-slate-800">85</span>
+                <span class="text-xs font-medium text-emerald-600">Base Ativa</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">Concessões, Exames e Despachos RPI</p>
+            </div>
+
+            <div class="glass-card rounded-xl p-5 border-l-4 border-indigo-600">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Pipeline do CRM (Leads)</span>
+              <div class="flex items-baseline gap-2 mt-2">
+                <span id="kpi-total-leads" class="text-2xl font-bold text-slate-800">693</span>
+                <span class="text-xs font-medium text-blue-600">Drive Oficial</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">Integrado ao Radar & BrasilAPI</p>
+            </div>
+
+            <div class="glass-card rounded-xl p-5 border-l-4 border-emerald-500">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Saldo Consolidado (Cora)</span>
+              <div class="flex items-baseline gap-2 mt-2">
+                <span id="kpi-saldo-caixa" class="text-2xl font-bold text-slate-800">R$ 15.720,00</span>
+                <span class="text-xs font-medium text-emerald-600">CJA</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">78 Transações de Honorários e Taxas</p>
+            </div>
+
+            <div class="glass-card rounded-xl p-5 border-l-4 border-purple-600">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Equipe & Selo EJ</span>
+              <div class="flex items-baseline gap-2 mt-2">
+                <span class="text-2xl font-bold text-slate-800">23</span>
+                <span class="text-xs font-medium text-purple-600">100% Regular</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">Cluster 4.0 • Meta Batida</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. PRESIDÊNCIA & SELO EJ -->
+        <section id="view-presidencia" class="hidden space-y-6">
+          <div class="glass-card rounded-xl p-5 border-t-4 border-blue-700">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 class="text-base font-bold text-slate-800">🏛️ Governança Jurídica, Selo EJ 2026 e Cluster 4.0</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Critérios estatutários, certidões negativas e conformidade federada da EDV Jr.</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-bold">Selo EJ: 100% Conforme</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card rounded-xl overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+              <span class="font-bold text-sm text-slate-800">DataGrid de Conformidade do Selo EJ (Critérios Oficiais)</span>
+              <span class="text-xs text-slate-500 font-medium">Controle de Validade e Auditoria</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs text-left datagrid-table">
+                <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                  <tr>
+                    <th class="px-4 py-3">Critério Estatutário / Legal</th>
+                    <th class="px-4 py-3">Setor Responsável</th>
+                    <th class="px-4 py-3">Status de Homologação</th>
+                    <th class="px-4 py-3">Vigência / Prazo</th>
+                    <th class="px-4 py-3">Fase do Edital</th>
+                  </tr>
+                </thead>
+                <tbody id="datagrid-selo-ej" class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. MÓDULO COMERCIAL & EDV PROSPECTOR (ABSORVIDO INTEGRALMENTE) -->
+        <section id="view-comercial" class="hidden space-y-6">
+          
+          <!-- Seletor de Sub-Abas do Módulo Comercial -->
+          <div class="flex border-b border-slate-200 gap-4 text-xs font-bold">
+            <button onclick="switchComercialSubtab('pipeline')" id="subtab-com-pipeline" class="pb-3 subtab-active flex items-center gap-1.5">
+              <i class="fa-solid fa-table-list"></i> Pipeline & Base Ativa CRM (693 Leads)
+            </button>
+            <button onclick="switchComercialSubtab('radar')" id="subtab-com-radar" class="pb-3 subtab-inactive flex items-center gap-1.5">
+              <i class="fa-solid fa-satellite-dish text-blue-600"></i> Radar de Prospecção Ativa (Scraper)
+            </button>
+          </div>
+
+          <!-- SUB-ABA A: PIPELINE CRM DATAGRID -->
+          <div id="comercial-sub-pipeline" class="space-y-6">
+            <div class="glass-card rounded-xl p-5 border-t-4 border-blue-600">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 class="text-base font-bold text-slate-800">📊 DataGrid Geral do Funil de Vendas (EDV Jr. CRM)</h3>
+                  <p class="text-xs text-slate-500 mt-0.5">Leads importados diretamente do Google Drive com acompanhamento por membro e status do funil.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <input type="text" id="filtro-crm-busca" oninput="filtrarCRMDataGrid()" placeholder="Buscar empresa, contato ou responsável..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-64 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <select id="filtro-crm-status" onchange="filtrarCRMDataGrid()" class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Todos os Status</option>
+                    <option value="Entrada">Entrada</option>
+                    <option value="FU1">F.U 1</option>
+                    <option value="FU2">F.U 2</option>
+                    <option value="FU3">F.U 3</option>
+                    <option value="Em negociação">Em Negociação</option>
+                    <option value="Proposta enviada">Proposta Enviada</option>
+                    <option value="Convertido">Convertido</option>
+                    <option value="Perdido">Perdido</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Funil Compacto de Fases -->
+              <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 mt-5 pt-4 border-t border-slate-100 text-center">
+                <div class="p-2 bg-slate-50 rounded-lg border border-slate-200">
+                  <span class="text-[10px] uppercase font-bold text-slate-500 block">Entrada</span>
+                  <span id="count-crm-entrada" class="text-sm font-bold text-slate-800">456</span>
+                </div>
+                <div class="p-2 bg-slate-50 rounded-lg border border-slate-200">
+                  <span class="text-[10px] uppercase font-bold text-slate-500 block">F.U 1</span>
+                  <span id="count-crm-fu1" class="text-sm font-bold text-blue-600">87</span>
+                </div>
+                <div class="p-2 bg-slate-50 rounded-lg border border-slate-200">
+                  <span class="text-[10px] uppercase font-bold text-slate-500 block">F.U 2</span>
+                  <span id="count-crm-fu2" class="text-sm font-bold text-indigo-600">15</span>
+                </div>
+                <div class="p-2 bg-slate-50 rounded-lg border border-slate-200">
+                  <span class="text-[10px] uppercase font-bold text-slate-500 block">F.U 3/4</span>
+                  <span id="count-crm-fu3" class="text-sm font-bold text-purple-600">12</span>
+                </div>
+                <div class="p-2 bg-slate-50 rounded-lg border border-slate-200">
+                  <span class="text-[10px] uppercase font-bold text-slate-500 block">Negociação</span>
+                  <span id="count-crm-negoc" class="text-sm font-bold text-amber-600">9</span>
+                </div>
+                <div class="p-2 bg-emerald-50 rounded-lg border border-emerald-200">
+                  <span class="text-[10px] uppercase font-bold text-emerald-700 block">Convertido</span>
+                  <span id="count-crm-conv" class="text-sm font-bold text-emerald-700">20</span>
+                </div>
+                <div class="p-2 bg-rose-50 rounded-lg border border-rose-200">
+                  <span class="text-[10px] uppercase font-bold text-rose-600 block">Perdido</span>
+                  <span id="count-crm-perd" class="text-sm font-bold text-rose-700">94</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tabela DataGrid Interativa -->
+            <div class="glass-card rounded-xl overflow-hidden shadow-sm">
+              <div class="overflow-x-auto max-h-[500px]">
+                <table class="w-full text-xs text-left datagrid-table">
+                  <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                    <tr>
+                      <th class="px-4 py-3">ID</th>
+                      <th class="px-4 py-3">Empresa / Lead</th>
+                      <th class="px-4 py-3">Segmento</th>
+                      <th class="px-4 py-3">Responsável (Membro)</th>
+                      <th class="px-4 py-3">Status do Funil</th>
+                      <th class="px-4 py-3">Contato & Telefone</th>
+                      <th class="px-4 py-3 text-right">Valor Estimado</th>
+                      <th class="px-4 py-3 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="datagrid-crm-leads" class="divide-y divide-slate-100"></tbody>
+                </table>
+              </div>
+              <div class="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                <span id="info-paginacao-crm">Mostrando leads</span>
+                <div class="flex gap-2">
+                  <button onclick="mudarPaginaCRM(-1)" class="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100">Anterior</button>
+                  <button onclick="mudarPaginaCRM(1)" class="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100">Próxima</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-ABA B: O RADAR PROSPECTOR (MOTOR AUTORAL ABSORVIDO) -->
+          <div id="comercial-sub-radar" class="hidden space-y-6">
+            
+            <!-- Painel de Disparo do Radar -->
+            <div class="glass-card rounded-xl p-6 border-t-4 border-blue-500">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Segmento / Nicho Alvo</label>
+                  <select id="nichoInput" class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-xs bg-white focus:ring-2 focus:ring-blue-500">
+                    <option value="" disabled>Selecione o segmento...</option>
+                    <optgroup label="Saúde e Bem-estar">
+                      <option value="Clínica de Estética">Clínica de Estética & Harmonização</option>
+                      <option value="Academia">Academia / Estúdio Fitness</option>
+                      <option value="Personal Trainer">Personal Trainer</option>
+                      <option value="Nutricionista">Nutricionista</option>
+                      <option value="Clínica Odontológica">Clínica Odontológica</option>
+                      <option value="Clínica Médica">Clínica Médica</option>
+                      <option value="Clínica de Fisioterapia">Fisioterapia</option>
+                      <option value="Clínica de Psicologia">Psicologia / Terapia</option>
+                      <option value="Farmácia de Manipulação">Farmácia de Manipulação</option>
+                      <option value="Ótica">Ótica</option>
+                    </optgroup>
+                    <optgroup label="Beleza e Moda">
+                      <option value="Salão de Beleza">Salão de Beleza</option>
+                      <option value="Barbearia">Barbearia</option>
+                      <option value="Loja de Roupas">Loja de Roupas / Moda</option>
+                      <option value="Loja de Calçados">Loja de Calçados</option>
+                      <option value="Semijoias">Joalheria / Semijoias</option>
+                    </optgroup>
+                    <optgroup label="Alimentação">
+                      <option value="Restaurante" selected>Restaurante</option>
+                      <option value="Hamburgueria">Hamburgueria / Delivery</option>
+                      <option value="Pizzaria">Pizzaria</option>
+                      <option value="Confeitaria">Confeitaria / Doceria</option>
+                      <option value="Cafeteria">Cafeteria</option>
+                    </optgroup>
+                    <optgroup label="Serviços Profissionais">
+                      <option value="Escritório de Advocacia">Escritório de Advocacia</option>
+                      <option value="Escritório de Contabilidade">Contabilidade</option>
+                      <option value="Consultoria Empresarial">Consultoria Empresarial</option>
+                      <option value="Escritório de Arquitetura">Arquitetura</option>
+                      <option value="Agência de Marketing Digital">Marketing Digital / Agência</option>
+                    </optgroup>
+                    <optgroup label="Comércio e Imóveis">
+                      <option value="Imobiliária">Imobiliária / Construtora</option>
+                      <option value="Loja de Eletrônicos">Loja de Eletrônicos</option>
+                      <option value="Papelaria">Papelaria / Gráfica</option>
+                      <option value="Floricultura">Floricultura</option>
+                    </optgroup>
+                    <optgroup label="Pet e Veterinária">
+                      <option value="Pet Shop">Pet Shop</option>
+                      <option value="Clínica Veterinária">Clínica Veterinária</option>
+                    </optgroup>
+                    <optgroup label="Educação e Tecnologia">
+                      <option value="Escola de Idiomas">Escola de Idiomas</option>
+                      <option value="Startup de Tecnologia">Tecnologia / Software</option>
+                    </optgroup>
+                    <optgroup label="Turismo e Automotivo">
+                      <option value="Pousada">Hotel / Pousada</option>
+                      <option value="Oficina Mecânica">Autopeças / Oficina Mecânica</option>
+                      <option value="Concessionária">Concessionária de Veículos</option>
+                    </optgroup>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Estado (UF)</label>
+                  <select id="estadoInput" onchange="popularCidadesIBGE()" class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-xs bg-white focus:ring-2 focus:ring-blue-500">
+                    <option value="Acre">Acre (AC)</option>
+                    <option value="Alagoas">Alagoas (AL)</option>
+                    <option value="Amapá">Amapá (AP)</option>
+                    <option value="Amazonas">Amazonas (AM)</option>
+                    <option value="Bahia">Bahia (BA)</option>
+                    <option value="Ceará">Ceará (CE)</option>
+                    <option value="Distrito Federal">Distrito Federal (DF)</option>
+                    <option value="Espírito Santo" selected>Espírito Santo (ES)</option>
+                    <option value="Goiás">Goiás (GO)</option>
+                    <option value="Maranhão">Maranhão (MA)</option>
+                    <option value="Mato Grosso">Mato Grosso (MT)</option>
+                    <option value="Mato Grosso do Sul">Mato Grosso do Sul (MS)</option>
+                    <option value="Minas Gerais">Minas Gerais (MG)</option>
+                    <option value="Pará">Pará (PA)</option>
+                    <option value="Paraíba">Paraíba (PB)</option>
+                    <option value="Paraná">Paraná (PR)</option>
+                    <option value="Pernambuco">Pernambuco (PE)</option>
+                    <option value="Piauí">Piauí (PI)</option>
+                    <option value="Rio de Janeiro">Rio de Janeiro (RJ)</option>
+                    <option value="Rio Grande do Norte">Rio Grande do Norte (RN)</option>
+                    <option value="Rio Grande do Sul">Rio Grande do Sul (RS)</option>
+                    <option value="Rondônia">Rondônia (RO)</option>
+                    <option value="Roraima">Roraima (RR)</option>
+                    <option value="Santa Catarina">Santa Catarina (SC)</option>
+                    <option value="São Paulo">São Paulo (SP)</option>
+                    <option value="Sergipe">Sergipe (SE)</option>
+                    <option value="Tocantins">Tocantins (TO)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="mt-4">
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-1">Cidade (Triangulação OpenStreetMap & IBGE)</label>
+                <select id="cidadeOpcionalInput" class="w-full border border-slate-300 rounded-lg px-3.5 py-2 text-xs bg-white">
+                  <option value="">Selecione ou deixe em branco para busca ampla...</option>
+                  <option value="Vitória" selected>Vitória (capital)</option>
+                  <option value="Vila Velha">Vila Velha</option>
+                  <option value="Serra">Serra</option>
+                  <option value="Cariacica">Cariacica</option>
+                </select>
+                <p class="text-[11px] text-slate-400 mt-1">Cidades dinâmicas via IBGE. Se selecionada, o Radar triangula com tags reais no OpenStreetMap.</p>
+              </div>
+
+              <div class="mt-5 flex flex-wrap items-center gap-3">
+                <button onclick="rodarRadar()" id="btnRodarRadar" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-bold text-xs shadow transition flex items-center gap-2">
+                  <i class="fa-solid fa-play"></i> INICIAR VARREDURA DO RADAR
+                </button>
+                <div id="loadingRadar" class="text-xs font-medium hidden"></div>
+              </div>
+
+              <div id="statusTriagemFiscal" class="mt-2 text-xs text-slate-500 font-medium"></div>
+
+              <!-- Painel de Diagnóstico do Radar -->
+              <div id="debugPanel" class="hidden mt-4 border border-amber-300 bg-amber-50 rounded-lg p-3 text-xs">
+                <div class="flex justify-between items-center cursor-pointer" onclick="document.getElementById('debugBody').classList.toggle('hidden')">
+                  <span class="font-bold text-amber-800"><i class="fa-solid fa-bug mr-1"></i>Diagnóstico da Última Varredura</span>
+                  <span class="text-amber-600 text-[11px]">clique para expandir/recolher</span>
+                </div>
+                <div id="debugBody" class="mt-2 space-y-2 hidden">
+                  <div id="debugResumo" class="font-mono text-[11px] whitespace-pre-wrap text-slate-700 bg-white p-2 rounded border border-amber-200"></div>
+                  <details>
+                    <summary class="cursor-pointer text-amber-700 font-medium text-[11px]">Ver resposta bruta da API (JSON)</summary>
+                    <pre id="debugHtml" class="mt-1 max-h-48 overflow-y-auto bg-white border border-amber-200 rounded p-2 text-[10px] whitespace-pre-wrap font-mono"></pre>
+                  </details>
+                </div>
+              </div>
+            </div>
+
+            <!-- Dossiê do Lead & Triagem Fiscal -->
+            <div id="leadsContainer" class="hidden">
+              <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                
+                <!-- Lista de Leads do Radar -->
+                <div class="xl:col-span-1 glass-card rounded-xl h-[600px] flex flex-col">
+                  <div class="bg-slate-100 p-3 border-b text-xs font-bold flex justify-between items-center">
+                    <span class="flex items-center gap-1.5"><i class="fa-solid fa-building text-slate-500"></i> Leads Localizados</span>
+                    <div class="flex items-center gap-2">
+                      <span id="contadorLeads" class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-mono">0</span>
+                      <button id="btnSincronizar" onclick="sincronizarN8N()" class="text-[10px] bg-purple-600 hover:bg-purple-700 text-white px-2 py-1 rounded shadow transition">
+                        <i class="fa-solid fa-cloud-arrow-up mr-0.5"></i> n8n
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Filtros Rápidos -->
+                  <div class="bg-slate-50 border-b p-2 space-y-1 text-slate-600">
+                    <label class="flex items-center gap-2 px-1 text-[11px] cursor-pointer">
+                      <input type="checkbox" id="filtroRiscoAlto" checked onchange="renderLeads()" class="rounded text-blue-600">
+                      Ocultar risco alto de marca já registrada
+                    </label>
+                    <label class="flex items-center gap-2 px-1 text-[11px] cursor-pointer">
+                      <input type="checkbox" id="filtroDescartadoFiscal" checked onchange="renderLeads()" class="rounded text-blue-600">
+                      Ocultar descartados na triagem fiscal
+                    </label>
+                  </div>
+
+                  <ul id="listaLeads" class="overflow-y-auto flex-1 divide-y divide-slate-100"></ul>
+                </div>
+
+                <!-- Painel de Ação e Enriquecimento Fiscal -->
+                <div id="painelAcao" class="xl:col-span-2 glass-card rounded-xl p-6 hidden flex-col">
+                  <div class="border-b border-slate-100 pb-3 mb-4 flex items-start justify-between">
+                    <div>
+                      <h3 id="leadNome" class="text-xl font-bold text-slate-800">Empresa</h3>
+                      <a id="leadInsta" href="#" target="_blank" class="text-blue-600 font-medium text-xs mt-1 inline-block">@perfil</a>
+                    </div>
+                    <button onclick="adicionarLeadSelecionadoAoCRM()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow transition flex items-center gap-1">
+                      <i class="fa-solid fa-plus"></i> Inserir no CRM Geral
+                    </button>
+                  </div>
+
+                  <div id="triagemFiscalContainer" class="mb-4"></div>
+                  <div id="auditoriaSocioContainer" class="mb-4"></div>
+
+                  <div class="flex flex-wrap gap-2 mb-3">
+                    <button onclick="checarINPI()" class="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition">
+                      <i class="fa-solid fa-copy mr-1"></i> Checar INPI
+                    </button>
+                    <button onclick="verificarEndereco()" class="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition">
+                      <i class="fa-solid fa-map-location-dot mr-1"></i> Confirmar Endereço
+                    </button>
+                    <button onclick="gerarCopy()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow transition">
+                      <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Gerar Copy com IA
+                    </button>
+                  </div>
+
+                  <label class="flex items-center gap-2 px-3 py-1.5 text-xs text-slate-600 border bg-slate-50 rounded-lg cursor-pointer w-max mb-3">
+                    <input type="checkbox" id="toggleB2B" checked class="rounded text-blue-600">
+                    Abordagem corporativa rigorosa (B2B)
+                  </label>
+
+                  <div id="resultadoEndereco" class="hidden mb-4 text-xs bg-emerald-50 border border-emerald-200 rounded-lg p-3"></div>
+
+                  <p id="loadingGroq" class="text-blue-600 text-xs hidden mb-3"><i class="fa-solid fa-circle-notch fa-spin mr-1"></i> IA processando...</p>
+                  
+                  <div id="copyResult" class="hidden flex-col">
+                    <label class="text-xs font-bold text-slate-700 mb-1">Tese Jurídica Central</label>
+                    <p id="argumentoVenda" class="text-xs bg-blue-50 p-3 rounded-lg border border-blue-100 mb-3 text-slate-700"></p>
+                    <div class="flex justify-between items-center mb-1">
+                      <label class="text-xs font-bold text-slate-700">Copy Pronta para Envio</label>
+                      <button onclick="copyToClipboard('copyInstagram')" class="text-xs text-blue-600 hover:underline font-semibold">Copiar Mensagem</button>
+                    </div>
+                    <textarea id="copyInstagram" rows="4" class="w-full p-3 border border-blue-200 rounded-lg text-xs font-mono bg-white"></textarea>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+
+        </section>
+
+        <!-- 4. PLAYBOOK DE MENSAGENS -->
+        <section id="view-copys" class="hidden space-y-6">
+          <div class="glass-card rounded-xl p-5 border-t-4 border-amber-500">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 class="text-base font-bold text-slate-800">💬 Playbook de Mensagens Padronizadas</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Modelos validados de abordagem e quebra de objeções para Instagram DM, LinkedIn e WhatsApp.</p>
+              </div>
+              <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
+                <button onclick="filterCopyChannel('todos')" id="filter-copy-todos" class="px-3 py-1 bg-white font-bold rounded shadow-xs text-slate-800">Todos</button>
+                <button onclick="filterCopyChannel('instagram')" id="filter-copy-instagram" class="px-3 py-1 text-slate-600 hover:text-slate-900">Instagram</button>
+                <button onclick="filterCopyChannel('whatsapp')" id="filter-copy-whatsapp" class="px-3 py-1 text-slate-600 hover:text-slate-900">WhatsApp</button>
+                <button onclick="filterCopyChannel('linkedin')" id="filter-copy-linkedin" class="px-3 py-1 text-slate-600 hover:text-slate-900">LinkedIn</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass-card rounded-xl p-5 flex flex-col justify-between border-l-4 border-rose-500 copy-card" data-channel="instagram">
+              <div>
+                <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <span class="text-xs font-bold text-slate-800">1º Contato Instagram (Alerta Preventivo INPI)</span>
+                  <span class="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded text-[10px] font-bold">Instagram DM</span>
+                </div>
+                <div class="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-700 leading-relaxed font-mono whitespace-pre-wrap" id="copy-text-1">Olá, tudo bem? Acompanho o trabalho da {nome_empresa} aqui em Vitória e acho incrível o posicionamento de vocês!
+
+Faço parte da EDV Jr., a consultoria jurídica da faculdade de Direito, e enquanto fazíamos um levantamento de marcas no banco de dados do INPI, notamos que a marca de vocês ainda não consta com proteção deferida na classe principal.
+
+Vocês já chegaram a fazer a pesquisa prévia de anterioridade ou tem alguém cuidando desse registro hoje? Se quiser, podemos rodar um diagnóstico gratuito de disponibilidade pra vocês sem compromisso nenhum! Abraço!</div>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span class="text-[11px] text-slate-400">Gatilho: Curiosidade & Prevenção</span>
+                <button onclick="copyToClipboard('copy-text-1')" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                  <i class="fa-solid fa-copy"></i> Copiar Texto
+                </button>
+              </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-5 flex flex-col justify-between border-l-4 border-emerald-500 copy-card" data-channel="whatsapp">
+              <div>
+                <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <span class="text-xs font-bold text-slate-800">Follow-up 1 (WhatsApp Pós-Diagnóstico)</span>
+                  <span class="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold">WhatsApp</span>
+                </div>
+                <div class="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-700 leading-relaxed font-mono whitespace-pre-wrap" id="copy-text-2">Olá {nome_socio}, tudo bem? Aqui é o {consultor_edv} da EDV Jr.!
+
+Passando rapidinho para te enviar o relatório preliminar que rodamos sobre a viabilidade da {nome_empresa} no INPI. 
+
+Vimos que o nicho de vocês tem bastante concorrência e que vale a pena garantir o protocolo antes que surja algum pedido colidente. 
+
+Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próximos passos? Posso te ligar ou mandar o link do Meet!</div>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span class="text-[11px] text-slate-400">Gatilho: Urgência suave</span>
+                <button onclick="copyToClipboard('copy-text-2')" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                  <i class="fa-solid fa-copy"></i> Copiar Texto
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. MARKETING & CAMPANHAS -->
+        <section id="view-marketing" class="hidden space-y-6">
+          <div class="glass-card rounded-xl p-5 border-t-4 border-pink-600">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 class="text-base font-bold text-slate-800">📢 Marketing Estratégico & Campanhas Comerciais</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Gestão de campanhas institucionais, Maré de Vendas, captação de leads e métricas de engajamento.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card rounded-xl overflow-hidden shadow-sm">
+            <div class="px-5 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+              <span class="font-bold text-sm text-slate-800">DataGrid de Campanhas Ativas da Gestão</span>
+              <span class="text-xs text-slate-500">Métricas de Aquisição</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs text-left datagrid-table">
+                <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                  <tr>
+                    <th class="px-4 py-3">Campanha / Ação</th>
+                    <th class="px-4 py-3">Canal Principal</th>
+                    <th class="px-4 py-3">Responsável</th>
+                    <th class="px-4 py-3">Status</th>
+                    <th class="px-4 py-3">Meta de Leads</th>
+                    <th class="px-4 py-3">Conversão</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <tr>
+                    <td class="px-4 py-3 font-semibold text-slate-800">Maré de Vendas 2026</td>
+                    <td class="px-4 py-3 text-slate-600">Instagram & WhatsApp</td>
+                    <td class="px-4 py-3 text-slate-600">Evelyn & Alicia</td>
+                    <td class="px-4 py-3"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">Ativa</span></td>
+                    <td class="px-4 py-3 font-mono">150 Leads</td>
+                    <td class="px-4 py-3 font-mono font-bold text-blue-600">18 RMs Fechados</td>
+                  </tr>
+                  <tr>
+                    <td class="px-4 py-3 font-semibold text-slate-800">Reels: "O que acontece se não registrar sua marca"</td>
+                    <td class="px-4 py-3 text-slate-600">Instagram Reels / TikTok</td>
+                    <td class="px-4 py-3 text-slate-600">Chillibão (João P.)</td>
+                    <td class="px-4 py-3"><span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold text-[10px]">Em Produção</span></td>
+                    <td class="px-4 py-3 font-mono">10.000 Views</td>
+                    <td class="px-4 py-3 font-mono font-bold text-slate-600">Inbound Contínuo</td>
+                  </tr>
+                  <tr>
+                    <td class="px-4 py-3 font-semibold text-slate-800">Parceria Aderes / Centros Comerciais de Vitória</td>
+                    <td class="px-4 py-3 text-slate-600">Eventos Presenciais</td>
+                    <td class="px-4 py-3 text-slate-600">Charles & Evelyn</td>
+                    <td class="px-4 py-3"><span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">Alinhamento</span></td>
+                    <td class="px-4 py-3 font-mono">40 Empresas</td>
+                    <td class="px-4 py-3 font-mono font-bold text-slate-600">Diagnóstico Coletivo</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. PROJETOS (RMs / INPI) DATAGRID COMPLETO -->
+        <section id="view-projetos" class="hidden space-y-6">
+          <div class="glass-card rounded-xl p-5 border-t-4 border-indigo-600">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 class="text-base font-bold text-slate-800">🛡️ Esteira Operacional de Registro de Marca (DataGrid Oficial)</h3>
+                <p class="text-xs text-slate-500 mt-0.5">85 Processos mapeados da planilha oficial do Drive. Gestão de prazos de 60 dias e despachos RPI.</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <input type="text" id="filtro-rms-busca" oninput="filtrarRMsDataGrid()" placeholder="Buscar marca, processo ou consultor..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-64 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <select id="filtro-rms-fase" onchange="filtrarRMsDataGrid()" class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <option value="">Todas as Fases</option>
+                  <option value="CONCEDIDO">Concedido</option>
+                  <option value="INDEFERIDO">Indeferido</option>
+                  <option value="EXAME">Exame de Mérito</option>
+                  <option value="PUBLICADO">Publicação</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card rounded-xl overflow-hidden shadow-sm">
+            <div class="overflow-x-auto max-h-[550px]">
+              <table class="w-full text-xs text-left datagrid-table">
+                <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                  <tr>
+                    <th class="px-4 py-3">Código</th>
+                    <th class="px-4 py-3">Marca / Pedido</th>
+                    <th class="px-4 py-3">Participantes (Equipe)</th>
+                    <th class="px-4 py-3">Fase do Processo (INPI)</th>
+                    <th class="px-4 py-3">Responsável</th>
+                    <th class="px-4 py-3">Última Conferência</th>
+                    <th class="px-4 py-3">Último Contato Cliente</th>
+                    <th class="px-4 py-3">Telefone</th>
+                  </tr>
+                </thead>
+                <tbody id="datagrid-projetos-rms" class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+            <div class="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+              <span id="info-paginacao-rms">Carregando processos...</span>
+              <div class="flex gap-2">
+                <button onclick="mudarPaginaRMs(-1)" class="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100">Anterior</button>
+                <button onclick="mudarPaginaRMs(1)" class="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100">Próxima</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 7. TESOURARIA (FLUXO DE CAIXA & OBZ) DATAGRID COMPLETO -->
+        <section id="view-financeiro" class="hidden space-y-6">
+          <div class="glass-card rounded-xl p-5 border-t-4 border-emerald-600">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 class="text-base font-bold text-slate-800">💰 Livro Caixa & Fluxo de Caixa Integrado (CJA / Cora)</h3>
+                <p class="text-xs text-slate-500 mt-0.5">78 Transações de honorários parcelados e custas do INPI sincronizadas da planilha oficial.</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <input type="text" id="filtro-fluxo-busca" oninput="filtrarFluxoDataGrid()" placeholder="Buscar histórico ou beneficiário..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-64 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                <select id="filtro-fluxo-op" onchange="filtrarFluxoDataGrid()" class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                  <option value="">Todas Operações</option>
+                  <option value="ENTRADA">Entradas (Receitas)</option>
+                  <option value="SAÍDA">Saídas (Despesas)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5 pt-4 border-t border-slate-100">
+              <div class="p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+                <span class="text-[11px] font-bold text-emerald-800 uppercase">Receitas Totais (Entradas)</span>
+                <span id="totais-fluxo-rec" class="text-lg font-bold font-mono text-emerald-700 block mt-1">R$ 0,00</span>
+              </div>
+              <div class="p-3 bg-rose-50 rounded-xl border border-rose-200">
+                <span class="text-[11px] font-bold text-rose-800 uppercase">Despesas Totais (Saídas)</span>
+                <span id="totais-fluxo-desp" class="text-lg font-bold font-mono text-rose-700 block mt-1">R$ 0,00</span>
+              </div>
+              <div class="p-3 bg-blue-50 rounded-xl border border-blue-200">
+                <span class="text-[11px] font-bold text-blue-800 uppercase">Saldo Líquido Realizado</span>
+                <span id="totais-fluxo-saldo" class="text-lg font-bold font-mono text-blue-700 block mt-1">R$ 0,00</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card rounded-xl overflow-hidden shadow-sm">
+            <div class="overflow-x-auto max-h-[500px]">
+              <table class="w-full text-xs text-left datagrid-table">
+                <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                  <tr>
+                    <th class="px-4 py-3">ID</th>
+                    <th class="px-4 py-3">Data</th>
+                    <th class="px-4 py-3">Operação</th>
+                    <th class="px-4 py-3">Histórico / Descrição da Transação</th>
+                    <th class="px-4 py-3">Conta Bancária</th>
+                    <th class="px-4 py-3 text-right">Valor Líquido</th>
+                    <th class="px-4 py-3">Mês de Referência</th>
+                  </tr>
+                </thead>
+                <tbody id="datagrid-fluxo-caixa" class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 8. GESTÃO DE PESSOAS (VPGG) DATAGRID -->
+        <section id="view-vpgg" class="hidden space-y-6">
+          <div class="glass-card rounded-xl p-5 border-t-4 border-purple-600">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 class="text-base font-bold text-slate-800">👥 Vice-Presidência de Gente & Gestão (DataGrid de Membros)</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Assiduidade nas Ágoras, Planos de Desenvolvimento Individual (PDI) e One-on-Ones.</p>
+              </div>
+              <input type="text" id="filtro-vpgg-busca" oninput="filtrarVPGGDataGrid()" placeholder="Buscar membro ou setor..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-64 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+            </div>
+          </div>
+
+          <div class="glass-card rounded-xl overflow-hidden shadow-sm">
+            <div class="overflow-x-auto">
+              <table class="w-full text-xs text-left datagrid-table">
+                <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                  <tr>
+                    <th class="px-4 py-3">Membro</th>
+                    <th class="px-4 py-3">Setor</th>
+                    <th class="px-4 py-3">Cargo Institucional</th>
+                    <th class="px-4 py-3">Assiduidade nas Ágoras</th>
+                    <th class="px-4 py-3">Status do PDI</th>
+                    <th class="px-4 py-3">One-on-One</th>
+                  </tr>
+                </thead>
+                <tbody id="datagrid-vpgg-membros" class="divide-y divide-slate-100"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 9. BASE DE TUTORIAIS -->
+        <section id="view-tutoriais" class="hidden space-y-6">
+          <div class="glass-card rounded-xl p-5 border-t-4 border-emerald-500">
+            <h3 class="text-base font-bold text-slate-800">📖 Base de Conhecimento e Tutoriais do Google Drive</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Procedimentos operacionais padrão (POPs) mapeados para consulta rápida da equipe.</p>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="glass-card rounded-xl p-5 border-l-4 border-blue-600">
+              <h4 class="font-bold text-xs text-slate-800">Como Protocolar Pedido de Marca no INPI</h4>
+              <p class="text-xs text-slate-500 mt-1">Passo a passo com emissão de GRU, preenchimento do formulário e upload da logo.</p>
+              <button onclick="openTutorialReader('Como Protocolar Marca no INPI', '04. Projetos/Tutoriais/POP_INPI.gdoc', 'Manual oficial de depósito de marcas.', [{'title':'Gerar GRU','desc':'Acesse o e-INPI e emita a guia código 389.'},{'title':'Preencher Formulário','desc':'Vincule o titular e a classificação de Nice.'},{'title':'Protocolar','desc':'Guarde o número de processo de 9 dígitos.'}])" class="mt-3 text-xs font-bold text-blue-600 hover:underline">Ler Tutorial &rarr;</button>
+            </div>
+
+            <div class="glass-card rounded-xl p-5 border-l-4 border-emerald-600">
+              <h4 class="font-bold text-xs text-slate-800">Rotina Semanal de Conferência da RPI</h4>
+              <p class="text-xs text-slate-500 mt-1">Como cruzar os 85 processos ativos na Revista da Propriedade Industrial toda terça-feira.</p>
+              <button onclick="openTutorialReader('Rotina da RPI', '04. Projetos/RPI_Checklist.gdoc', 'Checklist semanal de acompanhamento.', [{'title':'Baixar PDF','desc':'Acesse o portal do INPI às terças.'},{'title':'Buscar Pedidos','desc':'Faça busca por número e titular.'},{'title':'Anotar Despachos','desc':'Atualize imediatamente a planilha de RMs.'}])" class="mt-3 text-xs font-bold text-emerald-600 hover:underline">Ler Tutorial &rarr;</button>
+            </div>
+
+            <div class="glass-card rounded-xl p-5 border-l-4 border-amber-600">
+              <h4 class="font-bold text-xs text-slate-800">Emissão de Nota Fiscal & Boleto Cora</h4>
+              <p class="text-xs text-slate-500 mt-1">Fluxo completo de cobrança de honorários parcelados e prestação de contas na CJA.</p>
+              <button onclick="openTutorialReader('Emissão NF e Cora', '05. VPGG/Financeiro/NotaFiscal.gdoc', 'Emissão de cobrança pelo Cora.', [{'title':'Gerar Carnê','desc':'Emita as parcelas no banco Cora.'},{'title':'Emitir NF','desc':'No portal da Prefeitura de Vitória.'},{'title':'Enviar ao Cliente','desc':'Notifique via WhatsApp com o contrato.'}])" class="mt-3 text-xs font-bold text-amber-600 hover:underline">Ler Tutorial &rarr;</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 10. CENTRAL DE PLANILHAS -->
+        <section id="view-planilhas" class="hidden space-y-6">
+          <div class="glass-card rounded-xl p-5 border-t-4 border-sky-600">
+            <h3 class="text-base font-bold text-slate-800">📁 Central de Planilhas e Repositório do Google Drive</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Acesso direto e catalogado aos arquivos oficiais sincronizados na nuvem.</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="glass-card rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <span class="text-xs font-bold text-slate-800 block">Controle de RMs.xlsx</span>
+                <span class="text-[11px] text-slate-500">04. Projetos • 85 Processos mapeados</span>
+              </div>
+              <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full">Sincronizado</span>
+            </div>
+            <div class="glass-card rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <span class="text-xs font-bold text-slate-800 block">Fluxo_de_Caixa_Unificado_2026.xlsx</span>
+                <span class="text-[11px] text-slate-500">Meu Drive / Tesouraria • 78 Transações</span>
+              </div>
+              <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full">Sincronizado</span>
+            </div>
+            <div class="glass-card rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <span class="text-xs font-bold text-slate-800 block">EDV Jr CRM atualizado v2.xlsx</span>
+                <span class="text-[11px] text-slate-500">06. Comercial / CRM • 693 Leads</span>
+              </div>
+              <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full">Sincronizado</span>
+            </div>
+            <div class="glass-card rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <span class="text-xs font-bold text-slate-800 block">Metropolitana_parte1.xlsx</span>
+                <span class="text-[11px] text-slate-500">04. Projetos • Acervo Histórico</span>
+              </div>
+              <span class="px-2.5 py-1 bg-blue-100 text-blue-800 text-[10px] font-bold rounded-full">Disponível</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 11. AUDITORIA & RBAC -->
+        <section id="view-auditoria" class="hidden space-y-6">
+          <div class="glass-card rounded-xl p-5 border-t-4 border-slate-800">
+            <h3 class="text-base font-bold text-slate-800">🔒 Auditoria de Ações, Telemetria & Controle RBAC</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Rastreamento de acessos e permissões por membro e setor da EDV Jr.</p>
+          </div>
+
+          <div class="glass-card rounded-xl p-5">
+            <div class="text-xs space-y-3">
+              <div class="p-3 bg-slate-50 rounded-lg border border-slate-200 flex justify-between items-center">
+                <div>
+                  <strong class="text-slate-800 block">Perfil ADMIN (Presidência)</strong>
+                  <span class="text-slate-500 text-[11px]">Acesso total de leitura e edição a todos os módulos, tesouraria e governança.</span>
+                </div>
+                <span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold">Nível Máximo</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-lg border border-slate-200 flex justify-between items-center">
+                <div>
+                  <strong class="text-slate-800 block">Perfil MANAGER (Diretores & Gerentes)</strong>
+                  <span class="text-slate-500 text-[11px]">Acesso completo ao próprio setor (Comercial, Projetos, Tesouraria, VPGG) e leitura dos demais.</span>
+                </div>
+                <span class="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded font-bold">Gerencial</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-lg border border-slate-200 flex justify-between items-center">
+                <div>
+                  <strong class="text-slate-800 block">Perfil ANALYST (Consultores & Assessores)</strong>
+                  <span class="text-slate-500 text-[11px]">Acesso operacional a prospecção de leads, registros de acompanhamento e consultas INPI.</span>
+                </div>
+                <span class="px-2 py-0.5 bg-slate-200 text-slate-700 rounded font-bold">Operacional</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- MODAL: GUIA RÁPIDO DO SISTEMA -->
+  <div id="tutorialModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="bg-[#0b1d3a] text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-sm">💡</div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Guia Rápido do Sistema Operacional Unificado EDV Jr.</h3>
+            <span class="text-[11px] text-[#7ba4d1]">Rotinas e boas práticas integradas</span>
+          </div>
+        </div>
+        <button onclick="toggleTutorialModal(false)" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4">
+        <div class="p-4 bg-blue-50 border border-blue-200 rounded-xl flex gap-3.5">
+          <div class="w-7 h-7 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xs shrink-0">1</div>
+          <div>
+            <h4 class="text-xs font-bold text-blue-950">Módulo Comercial Unificado (EDV Prospector)</h4>
+            <p class="text-xs text-slate-600 mt-1">Acesse a aba <strong>Radar & CRM</strong> para navegar pelos 693 leads reais da planilha oficial ou disparar novas varreduras algorítmicas com enriquecimento fiscal automático pela BrasilAPI.</p>
+          </div>
+        </div>
+
+        <div class="p-4 bg-indigo-50 border border-indigo-200 rounded-xl flex gap-3.5">
+          <div class="w-7 h-7 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-xs shrink-0">2</div>
+          <div>
+            <h4 class="text-xs font-bold text-indigo-950">Esteira de RMs do INPI</h4>
+            <p class="text-xs text-slate-600 mt-1">No módulo <strong>Processos RM</strong>, você acompanha todos os 85 processos de clientes da empresa com marcação direta das fases (Concedido, Exame de Mérito e Prazos RPI).</p>
+          </div>
+        </div>
+
+        <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex gap-3.5">
+          <div class="w-7 h-7 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs shrink-0">3</div>
+          <div>
+            <h4 class="text-xs font-bold text-emerald-950">Livro Caixa & Tesouraria (CJA)</h4>
+            <p class="text-xs text-slate-600 mt-1">Na aba <strong>Tesouraria</strong>, consulte todas as 78 transações financeiras reais do banco Cora, conciliação de honorários parcelados e custas do INPI.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+        <span class="text-[11px] text-slate-400">Suporte técnico • Gestão 2026 EDV Jr.</span>
+        <button onclick="toggleTutorialModal(false)" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-5 py-2 rounded-lg shadow-sm">
+          Entendi, vamos começar!
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE LEITURA DE TUTORIAL -->
+  <div id="tutorialReaderModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="bg-slate-900 text-white p-5 flex items-center justify-between">
+        <div>
+          <span id="tutReaderSource" class="text-[10px] text-blue-400 font-mono block">Origem do Drive</span>
+          <h3 id="tutReaderTitle" class="font-bold text-sm text-white mt-0.5">Título do Tutorial</h3>
+        </div>
+        <button onclick="closeTutorialReader()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+      </div>
+      <div class="p-6 overflow-y-auto space-y-4">
+        <p id="tutReaderSummary" class="text-xs text-slate-600 italic bg-slate-50 p-3 rounded-lg border border-slate-200"></p>
+        <ul id="tutReaderSteps" class="space-y-3"></ul>
+      </div>
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <button onclick="closeTutorialReader()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-lg">
+          Fechar Leitor
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ingestão de Dados Legados Sincronizados do Google Drive -->
+  <script src="data/legacy_data.js"></script>
+  <!-- Lógica Central da Aplicação -->
+  <script src="app.js"></script>
+</body>
+</html>

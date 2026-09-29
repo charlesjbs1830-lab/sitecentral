@@ -1,0 +1,27 @@
+# Credenciais e Variáveis de Ambiente
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.cert
+
+# Arquivos de Configuração do Sistema e IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs e Dados Dinâmicos
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+
+# Bancos de Dados Locais e Arquivos Temporários
+*.sqlite
+*.db
+tmp/
+dist/
+build/
