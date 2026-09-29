@@ -1889,3 +1889,50 @@ const transactionCountEl = document.getElementById("transaction-count");
 if (transactionCountEl) {
     transactionCountEl.textContent = transactions.length;
 }
+document.addEventListener("DOMContentLoaded", () => {
+    if (typeof LEGACY_DATA === 'undefined') {
+        console.error("Erro crítico: payload legacy_data.js não carregado.");
+        return;
+    }
+
+    const { rms, transactions, leads } = LEGACY_DATA;
+
+    // Atualização de KPIs métricos
+    setElementText("lead-count", leads.length);
+    setElementText("rm-count", rms.length);
+    setElementText("transaction-count", transactions.length);
+
+    // Renderização tabular dos dados legados
+    renderList("lead-container", leads, lead => `
+        <div class="data-item">
+            <span><strong>${lead.Nome || 'Lead sem identificação'}</strong></span>
+            <span class="badge">Status: ${lead.Status || 'N/A'}</span>
+        </div>
+    `);
+
+    renderList("rm-container", rms, rm => `
+        <div class="data-item">
+            <span><strong>RM: ${rm.ID || rm.Codigo || 'Projeto'}</strong></span>
+            <span>${rm.Cliente || rm.Descricao || 'N/A'}</span>
+        </div>
+    `);
+
+    renderList("transaction-container", transactions, tx => `
+        <div class="data-item">
+            <span><strong>R$ ${tx.Valor || '0.00'}</strong></span>
+            <span>${tx.Categoria || 'Transação'}</span>
+        </div>
+    `);
+});
+
+function setElementText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+}
+
+function renderList(containerId, items, templateFn) {
+    const container = document.getElementById(containerId);
+    if (container && items) {
+        container.innerHTML = items.slice(0, 15).map(templateFn).join('');
+    }
+}
