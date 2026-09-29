@@ -49,6 +49,11 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         res = cls.client.post("/api/auth/login", json={"email": "estevao.coutinho@edvjr.com.br", "password": "edv2026!"})
         assert res.status_code == 200, res.text
         cls.tokens["assessor_comercial"] = res.json()["access_token"]
+        
+        # 6. Assessor VPGG: Giulia (VPGG)
+        res = cls.client.post("/api/auth/login", json={"email": "giulia.moulin@edvjr.com.br", "password": "edv2026!"})
+        assert res.status_code == 200, res.text
+        cls.tokens["assessor_vpgg"] = res.json()["access_token"]
 
     def test_01_user_schema_and_roles(self):
         """Verifica se o esquema de usuários possui colunas area e role estritas"""
@@ -224,6 +229,154 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         self.assertIn("Meta Comercial Batida", titles_com)
         # NÃO deve conter o exclusivo de Projetos
         self.assertNotIn("Reunião Geral de Projetos", titles_com)
+
+    def test_07_self_promotion_shield(self):
+        """Verifica se PUT /api/auth/me bloqueia auto-promoção e alteração de área/setor/cargo (403), permitindo apenas nome (200)"""
+        token = self.tokens["assessor_projetos"]
+
+        # 1. Tentativa de auto-promover para diretor -> 403 Forbidden
+        res = self.client.put("/api/auth/me", json={"role": "diretor"}, headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res.status_code, 403)
+        self.assertIn("auto-promoção", res.json()["detail"].lower())
+
+        # 2. Tentativa de alterar própria área para VPGG -> 403 Forbidden
+        res = self.client.put("/api/auth/me", json={"area": "VPGG"}, headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res.status_code, 403)
+        self.assertIn("alteração de área", res.json()["detail"].lower())
+
+        # 3. Tentativa de alterar cargo próprio -> 403 Forbidden
+        res = self.client.put("/api/auth/me", json={"cargo": "Diretor de Projetos"}, headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res.status_code, 403)
+        self.assertIn("alteração de cargo", res.json()["detail"].lower())
+
+        # 4. Atualização cadastral legítima (apenas nome) -> 200 OK
+        res = self.client.put("/api/auth/me", json={"nome": "Alice Mizuki Updated"}, headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["nome"], "Alice Mizuki Updated")
+        self.assertEqual(res.json()["role"], "assessor")
+        self.assertEqual(res.json()["area"], "Projetos")
+
+    def test_08_admin_hierarchy_control(self):
+        """Endpoints /api/admin/users são exclusivos para presidente e diretor (403 para assessores e gerentes)"""
+        token_assessor = self.tokens["assessor_projetos"]
+        token_gerente = self.tokens["gerente"]
+        token_presidente = self.tokens["presidente"]
+        token_diretor = self.tokens["diretor"]
+
+        # 1. Assessor tentando listar ou editar membros via admin -> 403
+        res = self.client.get("/api/admin/users", headers={"Authorization": f"Bearer {token_assessor}"})
+        self.assertEqual(res.status_code, 403)
+
+        res = self.client.put("/api/admin/users/alice.mizuki@edvjr.com.br", json={"cargo": "Consultora"}, headers={"Authorization": f"Bearer {token_assessor}"})
+        self.assertEqual(res.status_code, 403)
+
+        # 2. Gerente tentando editar membro via admin -> 403
+        res = self.client.put("/api/admin/users/alice.mizuki@edvjr.com.br", json={"cargo": "Consultora"}, headers={"Authorization": f"Bearer {token_gerente}"})
+        self.assertEqual(res.status_code, 403)
+
+        # 3. Diretor listando todos os membros -> 200
+        res = self.client.get("/api/admin/users", headers={"Authorization": f"Bearer {token_diretor}"})
+        self.assertEqual(res.status_code, 200)
+        self.assertIsInstance(res.json(), list)
+        self.assertGreater(len(res.json()), 10)
+
+        # 4. Presidente promovendo ou ajustando cargo/setor de membro -> 200
+        res = self.client.put("/api/admin/users/alice.mizuki@edvjr.com.br", json={
+            "cargo": "Assessora Sênior de Projetos",
+            "setor": "Projetos / Patentes"
+        }, headers={"Authorization": f"Bearer {token_presidente}"})
+        self.assertEqual(res.status_code, 200)
+        updated = res.json()
+        self.assertEqual(updated["cargo"], "Assessora Sênior de Projetos")
+        self.assertEqual(updated["setor"], "Projetos / Patentes")
+
+    def test_09_vpgg_pdi_access_control(self):
+        """Módulo VPGG (/vpgg/pdis) restringe leitura e escrita estritamente a VPGG, Presidente e Diretores"""
+        token_proj = self.tokens["assessor_projetos"]
+        token_vpgg = self.tokens["assessor_vpgg"]
+        token_pres = self.tokens["presidente"]
+        token_dir = self.tokens["diretor"]
+
+        # 1. Membro fora da VPGG tentando cadastrar PDI -> 403 Forbidden
+        pdi_payload = {
+            "user_email": "estevao.coutinho@edvjr.com.br",
+            "area": "Comercial",
+            "objectives": "Desenvolver técnica de negociação consultiva e qualificação",
+            "development_ideas": "Estudo de metodologia SPIN Selling e simulações com clientes",
+            "deadline": "2026-06-30",
+            "status": "em_andamento"
+        }
+        res = self.client.post("/vpgg/pdis", json=pdi_payload, headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res.status_code, 403)
+        self.assertIn("Acesso negado", res.json()["detail"])
+
+        # 2. Membro fora da VPGG tentando listar PDIs -> 403 Forbidden
+        res = self.client.get("/vpgg/pdis", headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res.status_code, 403)
+
+        # 3. Assessor de VPGG cadastrando PDI -> 201 Created
+        res = self.client.post("/vpgg/pdis", json=pdi_payload, headers={"Authorization": f"Bearer {token_vpgg}"})
+        self.assertEqual(res.status_code, 201)
+        created_pdi = res.json()
+        self.assertEqual(created_pdi["user_email"], "estevao.coutinho@edvjr.com.br")
+        self.assertEqual(created_pdi["status"], "em_andamento")
+        pdi_id = created_pdi["id"]
+
+        # 4. Assessor de VPGG listando PDIs -> 200 OK
+        res = self.client.get("/vpgg/pdis", headers={"Authorization": f"Bearer {token_vpgg}"})
+        self.assertEqual(res.status_code, 200)
+        pdis_list = res.json()
+        self.assertTrue(any(p["id"] == pdi_id for p in pdis_list))
+
+        # 5. Diretor (ou Presidente) atualizando status do PDI -> 200 OK
+        res = self.client.put(f"/vpgg/pdis/{pdi_id}", json={"status": "concluido"}, headers={"Authorization": f"Bearer {token_dir}"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["status"], "concluido")
+
+        # 6. Presidente consultando listagem com filtro -> 200 OK
+        res = self.client.get(f"/vpgg/pdis?user_email=estevao.coutinho@edvjr.com.br", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res.status_code, 200)
+        self.assertGreater(len(res.json()), 0)
+
+    def test_10_vpgg_pdi_generation_engine_and_analytics(self):
+        """Motor de geração de trilhas (/vpgg/pdis/generate) gera planos customizados e estatísticas analíticas"""
+        token_proj = self.tokens["assessor_projetos"]
+        token_vpgg = self.tokens["assessor_vpgg"]
+        token_pres = self.tokens["presidente"]
+
+        # 1. Não-VPGG tentando gerar plano -> 403 Forbidden
+        res = self.client.post("/vpgg/pdis/generate", json={
+            "member_email": "estevao.coutinho@edvjr.com.br"
+        }, headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res.status_code, 403)
+
+        # 2. VPGG gerando plano estruturado para membro comercial -> 200 OK
+        res = self.client.post("/vpgg/pdis/generate", json={
+            "member_email": "estevao.coutinho@edvjr.com.br",
+            "foco_adicional": "Prospecção de Grandes Contas"
+        }, headers={"Authorization": f"Bearer {token_vpgg}"})
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "success")
+        
+        # Validar métricas consolidadas
+        self.assertIn("consolidado_geral", data)
+        self.assertIn("total_pdis_cadastrados", data["consolidado_geral"])
+        
+        # Validar plano sugerido
+        plano = data["plano_estruturado_sugerido"]
+        self.assertIn("hard_skills_prioritarias", plano)
+        self.assertIn("soft_skills_essenciais", plano)
+        self.assertIn("acoes_praticas_edv", plano)
+        self.assertIn("metas_com_prazos", plano)
+        self.assertTrue(any("Prospecção de Grandes Contas" in a for a in plano["acoes_praticas_edv"]))
+
+        # 3. Presidente consultando endpoint analítico -> 200 OK
+        res_analytics = self.client.get("/vpgg/pdis/analytics", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_analytics.status_code, 200)
+        analytics_data = res_analytics.json()
+        self.assertIn("consolidado_geral", analytics_data)
+        self.assertIn("distribuicao_status", analytics_data["consolidado_geral"])
 
 if __name__ == "__main__":
     unittest.main()

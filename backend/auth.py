@@ -145,3 +145,34 @@ def verify_area_access(target_area: str, user: Optional[dict] = None):
             )
         )
     return True
+
+def check_vpgg_access(user: dict) -> bool:
+    """
+    Retorna True se o usuário pertencer à área VPGG (assessor, gerente, diretor de VPGG)
+    ou possuir liderança global (presidente ou diretor).
+    """
+    if not user:
+        return False
+    role = (user.get("role") or "").lower().strip()
+    if role in {"presidente", "diretor"}:
+        return True
+    area = (user.get("area") or user.get("setor") or "").lower().strip()
+    return "vpgg" in area
+
+def verify_vpgg_access(current_user: dict = Depends(get_current_user)) -> dict:
+    """
+    Validação de Escopo VPGG (RBAC).
+    Restringe operações de PDIs e gestão de pessoas estritamente à equipe VPGG
+    ou à liderança executiva (Presidente e Diretores).
+    """
+    if not current_user or not check_vpgg_access(current_user):
+        role = current_user.get("role", "desconhecido") if current_user else "anônimo"
+        area = current_user.get("area", current_user.get("setor", "indefinida")) if current_user else "indefinida"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Acesso negado: Perfil '{role}' da área '{area}' não possui permissão para acessar o módulo de PDIs da VPGG. "
+                f"Recurso exclusivo para colaboradores da área de VPGG e liderança global (Presidente e Diretores)."
+            )
+        )
+    return current_user

@@ -257,6 +257,20 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
+
+    # 4. Tabela de Planos de Desenvolvimento Individual (PDI - VPGG)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS pdis (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_email TEXT NOT NULL,
+        area TEXT NOT NULL DEFAULT 'VPGG',
+        objectives TEXT NOT NULL,
+        development_ideas TEXT NOT NULL,
+        deadline TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'em_andamento',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
     conn.commit()
 
     # Sincronização da Whitelist oficial com roles estritos e áreas correspondentes
@@ -291,6 +305,24 @@ def get_user_by_email(email: str):
     if row:
         return dict(row)
     return None
+
+def get_user_by_id(user_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE id = ?;", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return None
+
+def get_all_users():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, email, nome, area, role, setor, cargo, created_at FROM users ORDER BY id ASC;")
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 if __name__ == "__main__":
     init_db()
