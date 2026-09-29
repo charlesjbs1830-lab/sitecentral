@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Correção: Uso de importações relativas para o pacote backend
-from .database import init_db, get_user_by_email
+from .database import get_user_by_email
 from .auth import (
     verify_password,
     create_access_token,
