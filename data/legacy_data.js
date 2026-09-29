@@ -1,6 +1,6 @@
 // Dados Oficiais Sincronizados do Google Drive EDV Jr. (Gestão 2026)
 window.EDV_LEGACY_DATA = {
-  "timestamp": "28/09/2026 18:36:16",
+  "timestamp": "28/09/2026 21:19:24",
   "rms": [
     {
       "id": "RM-001",
@@ -488,7 +488,7 @@ window.EDV_LEGACY_DATA = {
       "participantes": "Esther",
       "executado": "",
       "fase": "AG. CUMPRIMENTO DE EXIGÊNCIA",
-      "responsavel": "Thaís",
+      "responsavel": "Karol",
       "ultima_conferencia": "02/06/2026",
       "ultimo_contato": "SEM ACOMPANHAMENTO",
       "telefone": "(27)996211963 (Margarete)",
