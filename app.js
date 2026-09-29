@@ -1879,4 +1879,13 @@ function renderDashboardMetrics(data) {
     if (leadCountEl) {
         leadCountEl.textContent = data.leads.length;
     }
+}// Adicionar ao fluxo de inicialização em app.js
+const rmCountEl = document.getElementById("rm-count");
+if (rmCountEl) {
+    rmCountEl.textContent = rms.length;
+}
+
+const transactionCountEl = document.getElementById("transaction-count");
+if (transactionCountEl) {
+    transactionCountEl.textContent = transactions.length;
 }
