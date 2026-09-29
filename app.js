@@ -18,34 +18,34 @@ function getChecked(id, defVal) {
 // 1. MATRIZ DE ACESSO RESTRITO (WHITELIST OFICIAL - GESTÃO 2026)
 // ==============================================================================
 const membrosAutorizados = {
-  "charles.junior@edvjr.com.br": { nome: "Charles", setor: "Presidência", cargo: "Presidente Institucional", role: "ADMIN" },
-  "alice.mizuki@edvjr.com.br": { nome: "Alice Mizuki", setor: "Projetos / RMs", cargo: "Assessora de Projetos", role: "ANALYST" },
-  "alice.ney@edvjr.com.br": { nome: "Alice Ney", setor: "VPGG", cargo: "Vice-Presidente de Gestão", role: "ADMIN" },
-  "alicia.athayde@edvjr.com.br": { nome: "Alicia", setor: "Marketing", cargo: "Assessora de Conteúdo", role: "ANALYST" },
-  "aline.tartaglia@edvjr.com.br": { nome: "Aline", setor: "Jurídico", cargo: "Assessora de Contratos", role: "ANALYST" },
-  "amanda.bede@edvjr.com.br": { nome: "Amanda", setor: "Projetos / RMs", cargo: "Assessora de Projetos", role: "ANALYST" },
-  "karolina.krause@edvjr.com.br": { nome: "Ana Karolina", setor: "Jurídico", cargo: "Assessora de Compliance", role: "ANALYST" },
-  "estevao.coutinho@edvjr.com.br": { nome: "Estevão", setor: "Comercial", cargo: "Assessor de Vendas", role: "ANALYST" },
-  "evelyn.roldi@edvjr.com.br": { nome: "Evelyn", setor: "Marketing", cargo: "Diretora de Marketing", role: "MANAGER" },
-  "gabriel.orienrac@edvjr.com.br": { nome: "Cachorrão (Gabriel)", setor: "Projetos / RMs", cargo: "Assessor de Projetos", role: "ANALYST" },
-  "giulia.moulin@edvjr.com.br": { nome: "Giulia", setor: "VPGG", cargo: "Assessora de Gente & Gestão", role: "ANALYST" },
-  "guilherme.borges@edvjr.com.br": { nome: "Guilherme Borges", setor: "Comercial", cargo: "Assessor de Vendas", role: "ANALYST" },
-  "isadora.epichin@edvjr.com.br": { nome: "Isadora", setor: "Comercial / Vendas", cargo: "Diretora Comercial", role: "MANAGER" },
-  "joaop.lecco@edvjr.com.br": { nome: "Chillibão (João P.)", setor: "Marketing", cargo: "Assessor de Criação", role: "ANALYST" },
-  "marialice.bacelar@edvjr.com.br": { nome: "Maria Alice", setor: "Comercial", cargo: "Assessora de Negociação", role: "ANALYST" },
-  "mariaeduarda.dias@edvjr.com.br": { nome: "Maria Eduarda", setor: "VPGG", cargo: "Assessora de Gente & Gestão", role: "ANALYST" },
-  "maria.teixeira@edvjr.com.br": { nome: "Maria Luyza", setor: "Jurídico", cargo: "Assessora de Governança", role: "ANALYST" },
-  "marina.moretto@edvjr.com.br": { nome: "Marina", setor: "Tesouraria / CJA", cargo: "Diretora Financeira", role: "MANAGER" },
-  "marllon.oliveira@edvjr.com.br": { nome: "Marllon", setor: "Projetos / RMs", cargo: "Assessor de Projetos", role: "ANALYST" },
-  "pedro.barros@edvjr.com.br": { nome: "Pedro Barros", setor: "Comercial", cargo: "Assessor de Inbound", role: "ANALYST" },
-  "renato.moura@edvjr.com.br": { nome: "Renato", setor: "Projetos / RMs", cargo: "Assessor de Projetos", role: "ANALYST" },
-  "samuel.garcia@edvjr.com.br": { nome: "Samuel", setor: "Comercial / Radar", cargo: "Assessor de Prospecção", role: "ANALYST" },
-  "thais.junger@edvjr.com.br": { nome: "Thais", setor: "Projetos / RMs", cargo: "Gerente de Registro de Marca", role: "MANAGER" }
+  "charles.junior@edvjr.com.br": { nome: "Charles", area: "Presidência", setor: "Presidência", cargo: "Presidente Institucional", role: "presidente" },
+  "alice.mizuki@edvjr.com.br": { nome: "Alice Mizuki", area: "Projetos", setor: "Projetos / RMs", cargo: "Assessora de Projetos", role: "assessor" },
+  "alice.ney@edvjr.com.br": { nome: "Alice Ney", area: "VPGG", setor: "VPGG", cargo: "Vice-Presidente de Gestão", role: "diretor" },
+  "alicia.athayde@edvjr.com.br": { nome: "Alicia", area: "Marketing", setor: "Marketing", cargo: "Assessora de Conteúdo", role: "assessor" },
+  "aline.tartaglia@edvjr.com.br": { nome: "Aline", area: "Jurídico", setor: "Jurídico", cargo: "Assessora de Contratos", role: "assessor" },
+  "amanda.bede@edvjr.com.br": { nome: "Amanda", area: "Projetos", setor: "Projetos / RMs", cargo: "Assessora de Projetos", role: "assessor" },
+  "karolina.krause@edvjr.com.br": { nome: "Ana Karolina", area: "Jurídico", setor: "Jurídico", cargo: "Assessora de Compliance", role: "assessor" },
+  "estevao.coutinho@edvjr.com.br": { nome: "Estevão", area: "Comercial", setor: "Comercial", cargo: "Assessor de Vendas", role: "assessor" },
+  "evelyn.roldi@edvjr.com.br": { nome: "Evelyn", area: "Marketing", setor: "Marketing", cargo: "Diretora de Marketing", role: "diretor" },
+  "gabriel.orienrac@edvjr.com.br": { nome: "Cachorrão (Gabriel)", area: "Projetos", setor: "Projetos / RMs", cargo: "Assessor de Projetos", role: "assessor" },
+  "giulia.moulin@edvjr.com.br": { nome: "Giulia", area: "VPGG", setor: "VPGG", cargo: "Assessora de Gente & Gestão", role: "assessor" },
+  "guilherme.borges@edvjr.com.br": { nome: "Guilherme Borges", area: "Comercial", setor: "Comercial", cargo: "Assessor de Vendas", role: "assessor" },
+  "isadora.epichin@edvjr.com.br": { nome: "Isadora", area: "Comercial", setor: "Comercial / Vendas", cargo: "Diretora Comercial", role: "diretor" },
+  "joaop.lecco@edvjr.com.br": { nome: "Chillibão (João P.)", area: "Marketing", setor: "Marketing", cargo: "Assessor de Criação", role: "assessor" },
+  "marialice.bacelar@edvjr.com.br": { nome: "Maria Alice", area: "Comercial", setor: "Comercial", cargo: "Assessora de Negociação", role: "assessor" },
+  "mariaeduarda.dias@edvjr.com.br": { nome: "Maria Eduarda", area: "VPGG", setor: "VPGG", cargo: "Assessora de Gente & Gestão", role: "assessor" },
+  "maria.teixeira@edvjr.com.br": { nome: "Maria Luyza", area: "Jurídico", setor: "Jurídico", cargo: "Assessora de Governança", role: "assessor" },
+  "marina.moretto@edvjr.com.br": { nome: "Marina", area: "Tesouraria", setor: "Tesouraria / CJA", cargo: "Diretora Financeira", role: "diretor" },
+  "marllon.oliveira@edvjr.com.br": { nome: "Marllon", area: "Projetos", setor: "Projetos / RMs", cargo: "Assessor de Projetos", role: "assessor" },
+  "pedro.barros@edvjr.com.br": { nome: "Pedro Barros", area: "Comercial", setor: "Comercial", cargo: "Assessor de Inbound", role: "assessor" },
+  "renato.moura@edvjr.com.br": { nome: "Renato", area: "Projetos", setor: "Projetos / RMs", cargo: "Assessor de Projetos", role: "assessor" },
+  "samuel.garcia@edvjr.com.br": { nome: "Samuel", area: "Comercial", setor: "Comercial / Radar", cargo: "Assessor de Prospecção", role: "assessor" },
+  "thais.junger@edvjr.com.br": { nome: "Thais", area: "Projetos", setor: "Projetos / RMs", cargo: "Gerente de Registro de Marca", role: "gerente" }
 };
 
 const SESSION_STORAGE_KEY = 'edv_user_session';
 const AUTH_TOKEN_KEY = 'edv_auth_token';
-const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || !window.location.hostname)
   ? 'http://127.0.0.1:8000'
   : (window.EDV_API_BASE_URL || 'https://edbrain.onrender.com');
 let currentUserSession = null;
@@ -131,9 +131,10 @@ async function handleLoginSubmit(event) {
   const userData = {
     email: email,
     nome: membro.nome,
+    area: membro.area || membro.setor,
     setor: membro.setor,
     cargo: membro.cargo || 'Consultor(a)',
-    role: membro.role || 'ANALYST',
+    role: membro.role || 'assessor',
     loginTime: new Date().toISOString(),
     authMode: 'whitelist_fallback'
   };
@@ -214,33 +215,133 @@ function applyUserSession(user) {
   const avatarEl = document.getElementById('user-session-avatar');
 
   if (nomeEl) nomeEl.innerText = user.nome;
-  if (roleEl) roleEl.innerText = `${user.role} • ${user.setor}`;
+  const roleLabel = (user.role || 'assessor').toUpperCase();
+  const areaLabel = user.area || user.setor || 'EDV Jr.';
+  if (roleEl) roleEl.innerText = `${roleLabel} • ${areaLabel}`;
   if (avatarEl) {
     const initials = user.nome.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
     avatarEl.innerText = initials;
   }
 
-  setRBACTest(user.role, false);
+  setRBACTest(user.role || 'assessor', false);
+  applyRBACVisualRestrictions(user);
+
+  // Sincronizar dados em tempo real com o backend EDbrain
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (token) {
+    carregarTransacoesEDbrain();
+    carregarAvisosInstitucionais();
+  }
 }
 
 function setRBACTest(role, notify = true) {
-  ['admin', 'manager', 'analyst'].forEach(r => {
+  const normRole = (role || 'assessor').toLowerCase();
+  ['presidente', 'diretor', 'gerente', 'assessor'].forEach(r => {
     const btn = document.getElementById('role-' + r);
     if (btn) {
       btn.classList.remove('bg-white', 'text-slate-800', 'font-semibold', 'shadow-xs');
       btn.classList.add('text-slate-600');
     }
   });
-  const activeBtn = document.getElementById('role-' + role.toLowerCase());
+  const activeBtn = document.getElementById('role-' + normRole);
   if (activeBtn) {
     activeBtn.classList.remove('text-slate-600');
     activeBtn.classList.add('bg-white', 'text-slate-800', 'font-semibold', 'shadow-xs');
   }
   if (currentUserSession) {
-    currentUserSession.role = role;
+    currentUserSession.role = normRole;
+    applyRBACVisualRestrictions(currentUserSession);
   }
   if (notify) {
-    showToast(`Modo RBAC alterado: ${role}`);
+    showToast(`Modo RBAC alterado para: ${normRole}`);
+  }
+}
+
+function applyRBACVisualRestrictions(user) {
+  if (!user) return;
+  const role = (user.role || 'assessor').toLowerCase();
+  const area = user.area || user.setor || 'Presidência';
+
+  // 1. Atualizar Rodapé do Membro Autenticado
+  const roleEl = document.getElementById('user-session-role');
+  if (roleEl) {
+    const roleCapitalized = role.charAt(0).toUpperCase() + role.slice(1);
+    roleEl.innerText = `${roleCapitalized} • ${area}`;
+  }
+
+  // 2. Mural de Avisos - Publicação Restrita (Presidente, Diretor, Gerente)
+  const noticeFormContainer = document.getElementById('container-publicar-aviso');
+  const noticeAssessorMsg = document.getElementById('aviso-permissao-assessor-msg');
+  const canPublishNotice = ['presidente', 'diretor', 'gerente'].includes(role);
+
+  if (noticeFormContainer) {
+    if (canPublishNotice) {
+      noticeFormContainer.classList.remove('hidden');
+    } else {
+      noticeFormContainer.classList.add('hidden');
+    }
+  }
+  if (noticeAssessorMsg) {
+    if (!canPublishNotice) {
+      noticeAssessorMsg.classList.remove('hidden');
+    } else {
+      noticeAssessorMsg.classList.add('hidden');
+    }
+  }
+
+  // 3. Módulo Financeiro - Restrição de Seleção de Área Contábil
+  const txAreaSelect = document.getElementById('tx_area');
+  const txAreaBadge = document.getElementById('tx_area_badge');
+  const hasCrossAreaAccess = ['presidente', 'diretor'].includes(role);
+
+  if (txAreaSelect) {
+    if (hasCrossAreaAccess) {
+      // Habilitar todas as opções de área
+      Array.from(txAreaSelect.options).forEach(opt => opt.disabled = false);
+      txAreaSelect.disabled = false;
+      if (txAreaBadge) {
+        txAreaBadge.innerHTML = '<span class="inline-flex items-center gap-1.5 text-xs text-amber-700 font-bold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200"><i class="fa-solid fa-crown text-amber-500"></i> Acesso Global Cross-Area</span>';
+      }
+    } else {
+      // Bloquear e forçar a área atribuída ao usuário
+      let areaFound = false;
+      Array.from(txAreaSelect.options).forEach(opt => {
+        const match = opt.value.toLowerCase() === area.toLowerCase() || 
+                      area.toLowerCase().includes(opt.value.toLowerCase()) || 
+                      opt.value.toLowerCase().includes(area.toLowerCase());
+        if (match && !areaFound) {
+          opt.disabled = false;
+          txAreaSelect.value = opt.value;
+          areaFound = true;
+        } else {
+          opt.disabled = true;
+        }
+      });
+      if (txAreaBadge) {
+        txAreaBadge.innerHTML = `<span class="inline-flex items-center gap-1.5 text-xs text-blue-700 font-bold bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200"><i class="fa-solid fa-lock text-blue-500"></i> Área Vinculada: ${area}</span>`;
+      }
+    }
+  }
+
+  // 4. Módulo Financeiro - Indicador Visual de Teto de Alçada
+  const helperTeto = document.getElementById('tx_helper_teto');
+  if (helperTeto) {
+    if (role === 'assessor') {
+      helperTeto.innerHTML = `
+        <div class="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-xs font-medium">
+          <i class="fa-solid fa-triangle-exclamation text-amber-600 text-sm shrink-0"></i>
+          <span><strong>Teto de Alçada de Assessor:</strong> Limite máximo de <strong>R$ 1.000,00</strong> por lançamento. Lançamentos acima deste teto são rejeitados pelo EDbrain (HTTP 403 Forbidden) e exigem aprovação prévia de gerência ou diretoria.</span>
+        </div>
+      `;
+    } else {
+      const cargoLabel = role === 'gerente' ? 'Gerência' : (role === 'diretor' ? 'Diretoria' : 'Presidência');
+      helperTeto.innerHTML = `
+        <div class="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-xs font-medium">
+          <i class="fa-solid fa-circle-check text-emerald-600 text-sm shrink-0"></i>
+          <span><strong>Perfil de ${cargoLabel}:</strong> Habilitado para lançamentos corporativos sem restrição de teto de alçada.</span>
+        </div>
+      `;
+    }
   }
 }
 
@@ -291,6 +392,13 @@ function switchTab(tabId) {
     if (titleEl) titleEl.innerText = titles[tabId].title;
     if (subEl) subEl.innerText = titles[tabId].subtitle;
   }
+
+  // Atualizar dados ao vivo do EDbrain ao alternar abas
+  if (tabId === 'financeiro') {
+    carregarTransacoesEDbrain();
+  } else if (tabId === 'dashboard') {
+    carregarAvisosInstitucionais();
+  }
 }
 
 function switchComercialSubtab(subtab) {
@@ -309,6 +417,27 @@ function switchComercialSubtab(subtab) {
     if (radarView) radarView.classList.remove('hidden');
     if (btnPipe) { btnPipe.classList.remove('subtab-active'); btnPipe.classList.add('subtab-inactive'); }
     if (btnRadar) { btnRadar.classList.add('subtab-active'); btnRadar.classList.remove('subtab-inactive'); }
+  }
+}
+
+function switchFinanceiroSubtab(subtab) {
+  const edbrainView = document.getElementById('fin-sub-edbrain');
+  const legadoView = document.getElementById('fin-sub-legado');
+  const btnEdbrain = document.getElementById('subtab-fin-edbrain');
+  const btnLegado = document.getElementById('subtab-fin-legado');
+
+  if (subtab === 'edbrain') {
+    if (edbrainView) edbrainView.classList.remove('hidden');
+    if (legadoView) legadoView.classList.add('hidden');
+    if (btnEdbrain) { btnEdbrain.classList.add('subtab-active'); btnEdbrain.classList.remove('subtab-inactive'); }
+    if (btnLegado) { btnLegado.classList.remove('subtab-active'); btnLegado.classList.add('subtab-inactive'); }
+    carregarTransacoesEDbrain();
+  } else {
+    if (edbrainView) edbrainView.classList.add('hidden');
+    if (legadoView) legadoView.classList.remove('hidden');
+    if (btnEdbrain) { btnEdbrain.classList.remove('subtab-active'); btnEdbrain.classList.add('subtab-inactive'); }
+    if (btnLegado) { btnLegado.classList.add('subtab-active'); btnLegado.classList.remove('subtab-inactive'); }
+    if (typeof filtrarFluxoDataGrid === 'function') filtrarFluxoDataGrid();
   }
 }
 
@@ -721,6 +850,364 @@ function renderFluxoDataGrid() {
   setEl('totais-fluxo-rec', recTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
   setEl('totais-fluxo-desp', despTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
   setEl('totais-fluxo-saldo', saldo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+}
+
+// ==============================================================================
+// 3.4 MÓDULO FINANCEIRO EDBRAIN (LANÇAMENTO INDIRETO, TETO DE ALÇADA & CONSOLIDAÇÃO)
+// ==============================================================================
+let edbrainTransactions = [];
+
+function atualizarEstiloTipoTx() {
+  // Rádios visuais estilizados via classes Tailwind has-[:checked]
+}
+
+async function submeterTransacaoFinanceira(event) {
+  if (event) event.preventDefault();
+
+  const alertaContainer = document.getElementById('alerta-teto-container');
+  const alertaTexto = document.getElementById('alerta-teto-texto');
+  if (alertaContainer) alertaContainer.classList.add('hidden');
+
+  const tipo = document.querySelector('input[name="tx_tipo"]:checked')?.value || 'despesa';
+  const areaSelect = document.getElementById('tx_area');
+  const area = areaSelect ? areaSelect.value : (currentUserSession?.area || 'Tesouraria');
+  const categoriaInput = document.getElementById('tx_categoria');
+  const categoria = (categoriaInput?.value || '').trim();
+  const valorInput = document.getElementById('tx_valor');
+  const valor = parseFloat(valorInput?.value || 0);
+  const dataInput = document.getElementById('tx_data');
+  const data = dataInput?.value || new Date().toISOString().split('T')[0];
+  const descricaoInput = document.getElementById('tx_descricao');
+  const descricao = (descricaoInput?.value || '').trim();
+
+  if (!categoria) {
+    showToast("⚠️ Por favor, informe a categoria da movimentação.");
+    return;
+  }
+
+  if (!valor || valor <= 0) {
+    showToast("⚠️ O valor da transação deve ser positivo e superior a R$ 0,00.");
+    return;
+  }
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const payload = {
+    area: area,
+    type: tipo,
+    category: categoria,
+    amount: valor,
+    description: descricao,
+    date: data
+  };
+
+  const btnSubmit = document.getElementById('btn-submit-tx');
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gravando via EDbrain API...';
+  }
+
+  try {
+    const res = await fetch(API_BASE_URL + '/finance/transactions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.status === 201) {
+      const createdTx = await res.json();
+      showToast(`✅ Movimentação #${createdTx.id} registrada no SQLite com sucesso!`);
+      if (categoriaInput) categoriaInput.value = '';
+      if (valorInput) valorInput.value = '';
+      if (descricaoInput) descricaoInput.value = '';
+      if (alertaContainer) alertaContainer.classList.add('hidden');
+      await carregarTransacoesEDbrain();
+    } else if (res.status === 403) {
+      // TRATAMENTO IMPEDITIVO DO TETO DE ALÇADA (HTTP 403 FORBIDDEN)
+      const err = await res.json().catch(() => ({}));
+      const detailMsg = err.detail || 'Operação não autorizada pelo controle de alçada.';
+
+      if (alertaContainer && alertaTexto) {
+        alertaTexto.innerHTML = `
+          <div class="font-bold text-sm text-rose-800 flex items-center gap-2">
+            <i class="fa-solid fa-ban text-rose-600 text-lg shrink-0"></i>
+            <span>Operação Bloqueada: Teto de Alçada Excedido (HTTP 403 Forbidden)</span>
+          </div>
+          <p class="mt-1 text-xs text-rose-700 leading-relaxed">${detailMsg}</p>
+          <div class="mt-2 text-[11px] text-rose-800 bg-rose-100/80 p-2.5 rounded-lg border border-rose-300">
+            <strong>Instrução Corporativa EDV Jr.:</strong> Como assessor(a), lançamentos superiores a <strong>R$ 1.000,00</strong> não podem ser gravados diretamente. Solicite aprovação formal da Gerência de Registro de Marca (Thais Junger) ou da Diretoria Financeira (Marina Moretto / CJA).
+          </div>
+        `;
+        alertaContainer.classList.remove('hidden');
+        alertaContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      showToast(`⛔ Bloqueio de Alçada: ${detailMsg}`);
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Falha no lançamento: ${err.detail || 'Erro na requisição'}`);
+    }
+  } catch (err) {
+    console.warn("[EDbrain] Falha de comunicação com API:", err);
+    // Modo contingência offline
+    if (currentUserSession?.role === 'assessor' && valor > 1000) {
+      if (alertaContainer && alertaTexto) {
+        alertaTexto.innerHTML = `
+          <div class="font-bold text-sm text-rose-800 flex items-center gap-2">
+            <i class="fa-solid fa-ban text-rose-600 text-lg shrink-0"></i>
+            <span>Operação Bloqueada: Teto de Alçada de Assessor Excedido (Simulação Offline)</span>
+          </div>
+          <p class="mt-1 text-xs text-rose-700 leading-relaxed">
+            Lançamentos de R$ ${valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})} por assessores excedem o limite estatutário de R$ 1.000,00.
+          </p>
+        `;
+        alertaContainer.classList.remove('hidden');
+      }
+      showToast("⛔ Bloqueio de Alçada: Limite de R$ 1.000,00 excedido.");
+    } else {
+      showToast("⚠️ Servidor EDbrain offline. Não foi possível persistir no SQLite.");
+    }
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.innerHTML = '<i class="fa-solid fa-shield-halved"></i> Gravar Lançamento no EDbrain SQLite';
+    }
+  }
+}
+
+async function carregarTransacoesEDbrain() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + '/finance/transactions', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      edbrainTransactions = await res.json();
+      renderTransacoesEDbrain();
+    }
+  } catch (err) {
+    console.warn("[EDbrain] Falha ao consultar transações:", err.message);
+  }
+}
+
+function renderTransacoesEDbrain() {
+  const tbody = document.getElementById('datagrid-transacoes-edbrain');
+  if (!tbody) return;
+
+  const termoBusca = (document.getElementById('filtro-edbrain-tx-busca')?.value || '').toLowerCase().trim();
+  const filtroTipo = (document.getElementById('filtro-edbrain-tx-tipo')?.value || '').toLowerCase().trim();
+
+  let totalRec = 0;
+  let totalDesp = 0;
+
+  const filtrados = edbrainTransactions.filter(item => {
+    const matchTipo = !filtroTipo || (item.type || '').toLowerCase() === filtroTipo;
+    const matchBusca = !termoBusca ||
+      String(item.category || '').toLowerCase().includes(termoBusca) ||
+      String(item.description || '').toLowerCase().includes(termoBusca) ||
+      String(item.created_by || '').toLowerCase().includes(termoBusca) ||
+      String(item.area || '').toLowerCase().includes(termoBusca);
+    return matchTipo && matchBusca;
+  });
+
+  edbrainTransactions.forEach(item => {
+    const val = Number(item.amount) || 0;
+    if ((item.type || '').toLowerCase() === 'receita') {
+      totalRec += val;
+    } else {
+      totalDesp += val;
+    }
+  });
+
+  // Atualizar KPIs do EDbrain
+  const kpiCount = document.getElementById('kpi-edbrain-tx-count');
+  const kpiRec = document.getElementById('kpi-edbrain-tx-rec');
+  const kpiDesp = document.getElementById('kpi-edbrain-tx-desp');
+  const kpiSaldo = document.getElementById('kpi-edbrain-tx-saldo');
+
+  if (kpiCount) kpiCount.innerText = edbrainTransactions.length;
+  if (kpiRec) kpiRec.innerText = formatarMoedaBRL(totalRec);
+  if (kpiDesp) kpiDesp.innerText = formatarMoedaBRL(totalDesp);
+  if (kpiSaldo) {
+    const saldo = totalRec - totalDesp;
+    kpiSaldo.innerText = formatarMoedaBRL(saldo);
+    kpiSaldo.className = `text-xl font-bold font-mono ${saldo >= 0 ? 'text-emerald-700' : 'text-rose-700'} block mt-1`;
+  }
+
+  if (filtrados.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="px-4 py-8 text-center text-slate-400">
+          <i class="fa-solid fa-receipt text-3xl mb-2 block text-slate-300"></i>
+          <span>Nenhuma transação encontrada no SQLite para o filtro selecionado.</span>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = filtrados.map(tx => {
+    const isReceita = (tx.type || '').toLowerCase() === 'receita';
+    const badgeTipo = isReceita
+      ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">Receita</span>'
+      : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">Despesa</span>';
+
+    const valorColor = isReceita ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold';
+    const valorSinal = isReceita ? '+ ' : '- ';
+
+    return `
+      <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+        <td class="px-4 py-2.5 font-mono text-[11px] text-slate-500">#${tx.id}</td>
+        <td class="px-4 py-2.5 whitespace-nowrap text-slate-700 font-medium">${tx.date}</td>
+        <td class="px-4 py-2.5 whitespace-nowrap">${badgeTipo}</td>
+        <td class="px-4 py-2.5 whitespace-nowrap">
+          <span class="px-2 py-0.5 rounded bg-blue-50 text-blue-800 text-[10px] font-semibold border border-blue-200">${escapeHTML(tx.area)}</span>
+        </td>
+        <td class="px-4 py-2.5 font-medium text-slate-800">${escapeHTML(tx.category)}</td>
+        <td class="px-4 py-2.5 text-slate-600 max-w-xs truncate" title="${escapeHTML(tx.description || '')}">${escapeHTML(tx.description || '-')}</td>
+        <td class="px-4 py-2.5 text-slate-500 font-mono text-[11px]">${escapeHTML(tx.created_by)}</td>
+        <td class="px-4 py-2.5 text-right font-mono ${valorColor} whitespace-nowrap">${valorSinal}${formatarMoedaBRL(tx.amount)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ==============================================================================
+// 3.5 MURAL DE AVISOS INSTITUCIONAIS (EDBRAIN)
+// ==============================================================================
+let avisosInstitucionais = [];
+
+async function carregarAvisosInstitucionais() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + '/notices', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      avisosInstitucionais = await res.json();
+      renderAvisosMural();
+    }
+  } catch (err) {
+    console.warn("[EDbrain] Falha ao carregar mural de avisos:", err.message);
+  }
+}
+
+function renderAvisosMural() {
+  const container = document.getElementById('lista-avisos-mural');
+  if (!container) return;
+
+  const totalAvisosEl = document.getElementById('total-avisos-badge');
+  if (totalAvisosEl) totalAvisosEl.innerText = avisosInstitucionais.length;
+
+  if (avisosInstitucionais.length === 0) {
+    container.innerHTML = `
+      <div class="p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+        <i class="fa-solid fa-bullhorn text-2xl text-slate-300 mb-2 block"></i>
+        <p class="text-xs">Nenhum aviso institucional recente para a sua área no momento.</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = avisosInstitucionais.map(aviso => {
+    const isGlobal = !aviso.target_area;
+    const badgeEscopo = isGlobal
+      ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-300"><i class="fa-solid fa-earth-americas text-[9px]"></i> Geral EDV Jr.</span>'
+      : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300"><i class="fa-solid fa-bullseye text-[9px]"></i> Área: ${escapeHTML(aviso.target_area)}</span>`;
+
+    const dataFormatada = aviso.created_at ? new Date(aviso.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recente';
+
+    return `
+      <div class="p-4 bg-white rounded-xl border border-slate-200 shadow-xs hover:border-blue-300 transition space-y-2">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <div class="flex items-center gap-2">
+            ${badgeEscopo}
+            <h4 class="font-bold text-xs text-slate-900">${escapeHTML(aviso.title)}</h4>
+          </div>
+          <span class="text-[10px] text-slate-400 font-mono"><i class="fa-regular fa-clock"></i> ${dataFormatada}</span>
+        </div>
+        <p class="text-xs text-slate-600 leading-relaxed whitespace-pre-line">${escapeHTML(aviso.content)}</p>
+        <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+          <span><i class="fa-solid fa-feather-pointed text-blue-500"></i> Publicado por: <strong>${escapeHTML(aviso.author)}</strong></span>
+          <span class="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">EDbrain SQLite</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function submeterAvisoInstitucional(event) {
+  if (event) event.preventDefault();
+
+  const titleInput = document.getElementById('aviso_titulo');
+  const targetAreaSelect = document.getElementById('aviso_target_area');
+  const contentInput = document.getElementById('aviso_conteudo');
+
+  const title = (titleInput?.value || '').trim();
+  const targetArea = targetAreaSelect?.value || null;
+  const content = (contentInput?.value || '').trim();
+
+  if (!title || !content) {
+    showToast("⚠️ Título e conteúdo do comunicado são obrigatórios.");
+    return;
+  }
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const btnSubmit = document.getElementById('btn-submit-aviso');
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Publicando...';
+  }
+
+  try {
+    const res = await fetch(API_BASE_URL + '/notices', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({
+        title: title,
+        content: content,
+        target_area: targetArea ? targetArea : null
+      })
+    });
+
+    if (res.status === 201) {
+      showToast("📢 Comunicado publicado com sucesso no Mural Institucional!");
+      if (titleInput) titleInput.value = '';
+      if (contentInput) contentInput.value = '';
+      await carregarAvisosInstitucionais();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Falha ao publicar: ${err.detail || 'Acesso negado'}`);
+    }
+  } catch (err) {
+    console.error("Falha ao comunicar com EDbrain:", err);
+    showToast("⚠️ Servidor EDbrain offline. Não foi possível publicar.");
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.innerHTML = '<i class="fa-solid fa-paper-plane text-blue-400"></i> Publicar Comunicado no Mural';
+    }
+  }
+}
+
+function escapeHTML(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 // --- 3.4 DATAGRID DE GESTÃO DE PESSOAS (VPGG) ---
@@ -1931,6 +2418,8 @@ function initApp() {
   initSeloEJDataGrid();
   updateDashboardKPIs();
   carregarEstado();
+  carregarTransacoesEDbrain();
+  carregarAvisosInstitucionais();
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
