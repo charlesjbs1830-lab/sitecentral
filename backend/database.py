@@ -271,6 +271,22 @@ def init_db():
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
+
+    # 5. Tabela de Follow-up de Clientes e CRM Comercial
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS client_followups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_name TEXT NOT NULL,
+        contact_person TEXT,
+        status TEXT NOT NULL DEFAULT 'prospeccao' CHECK(status IN ('prospeccao', 'negociacao', 'fechado', 'perdido')),
+        interaction_type TEXT,
+        notes TEXT,
+        next_followup_date TEXT,
+        area TEXT NOT NULL DEFAULT 'Comercial',
+        created_by TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
     conn.commit()
 
     # Sincronização da Whitelist oficial com roles estritos e áreas correspondentes
@@ -323,6 +339,16 @@ def get_all_users():
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+def get_followup_by_id(followup_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM client_followups WHERE id = ?;", (followup_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return dict(row)
+    return None
 
 if __name__ == "__main__":
     init_db()

@@ -378,5 +378,128 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         self.assertIn("consolidado_geral", analytics_data)
         self.assertIn("distribuicao_status", analytics_data["consolidado_geral"])
 
+    def test_11_crm_followup_creation_and_area_isolation(self):
+        """Validação de inserção e isolamento de área (RBAC) no CRM Comercial"""
+        token_com = self.tokens["assessor_comercial"]
+        token_proj = self.tokens["assessor_projetos"]
+        token_pres = self.tokens["presidente"]
+
+        # 1. Assessor Comercial cadastra follow-up legítimo na sua área -> 201 Created
+        payload_com = {
+            "client_name": "Padaria Alfa Ltda",
+            "contact_person": "Carlos Silva",
+            "status": "prospeccao",
+            "interaction_type": "WhatsApp",
+            "notes": "Primeiro contato comercial via Radar e triagem fiscal",
+            "next_followup_date": "2026-10-15",
+            "area": "Comercial"
+        }
+        res = self.client.post("/crm/followups", json=payload_com, headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res.status_code, 201)
+        data = res.json()
+        self.assertEqual(data["client_name"], "Padaria Alfa Ltda")
+        self.assertEqual(data["status"], "prospeccao")
+        self.assertEqual(data["area"], "Comercial")
+        self.assertTrue(data["id"] > 0)
+
+        # 2. Assessor de Projetos tenta cadastrar lead na área Comercial -> 403 Forbidden
+        payload_cross = {
+            "client_name": "Empresa Invasora",
+            "status": "prospeccao",
+            "area": "Comercial"
+        }
+        res_cross = self.client.post("/crm/followups", json=payload_cross, headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res_cross.status_code, 403)
+        self.assertIn("Acesso negado", res_cross.json()["detail"])
+
+        # 3. Tentativa de cadastro com status inválido -> 400 Bad Request
+        payload_invalid_status = {
+            "client_name": "Cliente Teste",
+            "status": "desconhecido",
+            "area": "Comercial"
+        }
+        res_inv = self.client.post("/crm/followups", json=payload_invalid_status, headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_inv.status_code, 400)
+
+        # 4. Tentativa de cadastro sem nome de cliente -> 400 ou 422
+        res_no_name = self.client.post("/crm/followups", json={"client_name": ""}, headers={"Authorization": f"Bearer {token_com}"})
+        self.assertIn(res_no_name.status_code, [400, 422])
+
+        # 5. Presidente com privilégio cross-area cadastrando em qualquer setor -> 201 Created
+        payload_pres = {
+            "client_name": "Holding Delta S.A.",
+            "contact_person": "Dra. Renata",
+            "status": "negociacao",
+            "interaction_type": "Reunião Presencial",
+            "notes": "Negociação institucional de parceria",
+            "next_followup_date": "2026-10-20",
+            "area": "Comercial"
+        }
+        res_pres = self.client.post("/crm/followups", json=payload_pres, headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_pres.status_code, 201)
+        self.assertEqual(res_pres.json()["client_name"], "Holding Delta S.A.")
+
+    def test_12_crm_followup_listing_and_rbac_filtering(self):
+        """Validação de listagem filtrada por área no CRM e visão global para liderança"""
+        token_com = self.tokens["assessor_comercial"]
+        token_proj = self.tokens["assessor_projetos"]
+        token_pres = self.tokens["presidente"]
+
+        # 1. Assessor de Projetos cadastra follow-up na sua própria área
+        payload_proj = {
+            "client_name": "Startup Tech Beta",
+            "contact_person": "Lucas",
+            "status": "prospeccao",
+            "interaction_type": "Email",
+            "notes": "Análise de viabilidade técnica de registro de software",
+            "next_followup_date": "2026-10-18",
+            "area": "Projetos"
+        }
+        res_p = self.client.post("/crm/followups", json=payload_proj, headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res_p.status_code, 201)
+        proj_id = res_p.json()["id"]
+
+        # 2. Assessor Comercial lista follow-ups -> deve ver apenas Comercial
+        res_com_list = self.client.get("/crm/followups", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_com_list.status_code, 200)
+        items_com = res_com_list.json()
+        names_com = [item["client_name"] for item in items_com]
+        self.assertIn("Padaria Alfa Ltda", names_com)
+        self.assertNotIn("Startup Tech Beta", names_com)
+
+        # 3. Assessor de Projetos lista follow-ups -> deve ver apenas Projetos
+        res_proj_list = self.client.get("/crm/followups", headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res_proj_list.status_code, 200)
+        items_proj = res_proj_list.json()
+        names_proj = [item["client_name"] for item in items_proj]
+        self.assertIn("Startup Tech Beta", names_proj)
+        self.assertNotIn("Padaria Alfa Ltda", names_proj)
+
+        # 4. Assessor tentando forçar consulta em outra área via query param -> 403 Forbidden
+        res_forbidden = self.client.get("/crm/followups?area=Projetos", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_forbidden.status_code, 403)
+
+        # 5. Presidente com visão global -> vê todas as áreas consolidadas
+        res_pres_list = self.client.get("/crm/followups", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_pres_list.status_code, 200)
+        names_all = [item["client_name"] for item in res_pres_list.json()]
+        self.assertIn("Padaria Alfa Ltda", names_all)
+        self.assertIn("Startup Tech Beta", names_all)
+        self.assertIn("Holding Delta S.A.", names_all)
+
+        # 6. Atualização de status e notas via PUT /crm/followups/{id} -> 200 OK
+        res_update = self.client.put(f"/crm/followups/{proj_id}", json={
+            "status": "negociacao",
+            "notes": "Parecer de anterioridade favorável enviado ao cliente."
+        }, headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res_update.status_code, 200)
+        self.assertEqual(res_update.json()["status"], "negociacao")
+
+        # 7. Assessor de outra área tentando atualizar -> 403 Forbidden
+        res_update_forb = self.client.put(f"/crm/followups/{proj_id}", json={
+            "status": "perdido"
+        }, headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_update_forb.status_code, 403)
+
 if __name__ == "__main__":
     unittest.main()

@@ -21,6 +21,7 @@ from database import (
     get_user_by_email,
     get_user_by_id,
     get_all_users,
+    get_followup_by_id,
     get_connection,
     VALID_ROLES
 )
@@ -30,6 +31,7 @@ from auth import (
     get_current_user,
     require_role,
     verify_area_access,
+    check_area_access,
     verify_vpgg_access,
     check_vpgg_access
 )
@@ -46,8 +48,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="EDV Jr. - EDbrain Security & Core Backend",
-    version="2.2.0",
-    description="Backend oficial da EDV Jr. com SQLite, JWT, RBAC, Módulo Financeiro, Mural de Avisos e PDIs (VPGG).",
+    version="2.3.0",
+    description="Backend oficial da EDV Jr. com SQLite, JWT, RBAC, Módulo Financeiro, Mural de Avisos, PDIs (VPGG) e CRM Comercial.",
     lifespan=lifespan
 )
 
@@ -155,6 +157,38 @@ class PDIResponse(BaseModel):
 class PDIGenerateRequest(BaseModel):
     member_email: str = Field(..., description="E-mail corporativo do membro para geração da trilha")
     foco_adicional: Optional[str] = Field(None, description="Foco customizado opcional (ex: liderança, oratória, vendas)")
+
+VALID_CRM_STATUSES = {"prospeccao", "negociacao", "fechado", "perdido"}
+
+class ClientFollowupCreate(BaseModel):
+    client_name: str = Field(..., min_length=1, description="Nome da empresa ou cliente (OBRIGATÓRIO)")
+    contact_person: Optional[str] = Field(None, description="Nome do contato principal")
+    status: Optional[str] = Field("prospeccao", description="Status do ciclo comercial ('prospeccao', 'negociacao', 'fechado', 'perdido')")
+    interaction_type: Optional[str] = Field(None, description="Tipo de interação (ex: Reunião, WhatsApp, Email, Proposta Enviada)")
+    notes: Optional[str] = Field(None, description="Observações detalhadas sobre o andamento")
+    next_followup_date: Optional[str] = Field(None, description="Data agendada para o próximo contato (YYYY-MM-DD)")
+    area: Optional[str] = Field(None, description="Área responsável pelo lead/projeto")
+
+class ClientFollowupUpdate(BaseModel):
+    client_name: Optional[str] = None
+    contact_person: Optional[str] = None
+    status: Optional[str] = None
+    interaction_type: Optional[str] = None
+    notes: Optional[str] = None
+    next_followup_date: Optional[str] = None
+    area: Optional[str] = None
+
+class ClientFollowupResponse(BaseModel):
+    id: int
+    client_name: str
+    contact_person: Optional[str] = None
+    status: str
+    interaction_type: Optional[str] = None
+    notes: Optional[str] = None
+    next_followup_date: Optional[str] = None
+    area: str
+    created_by: str
+    created_at: Optional[str] = None
 
 # ==============================================================================
 # 1. AUTENTICAÇÃO, PERFIL E BLOQUEIO DE AUTO-PROMOÇÃO (RBAC SHIELD)
@@ -948,7 +982,217 @@ async def get_pdi_analytics_endpoint(
     return _build_pdi_analytics_and_trail(target_email, None)
 
 # ==============================================================================
-# 6. DADOS OPERACIONAIS E AUDITORIA
+# 6. MÓDULO DE FOLLOW-UP DE CLIENTES E CRM COMERCIAL (EDbrain)
+# ==============================================================================
+
+@app.post(
+    "/crm/followups",
+    response_model=ClientFollowupResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Registrar interação/follow-up de cliente (CRM Comercial)"
+)
+@app.post(
+    "/api/crm/followups",
+    response_model=ClientFollowupResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False
+)
+async def create_client_followup(
+    payload: ClientFollowupCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Cadastra um novo follow-up no pipeline comercial com persistência no SQLite.
+    Aplica validação de escopo de área (RBAC): assessores e gerentes só podem registrar
+    na sua própria área; presidente e diretor possuem acesso irrestrito cross-area.
+    """
+    # 1. Validação de nome do cliente
+    if not payload.client_name or not payload.client_name.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O nome do cliente é obrigatório para registrar o follow-up."
+        )
+
+    # 2. Validação estrita de status do ciclo comercial
+    raw_status = (payload.status or "prospeccao").lower().strip()
+    if raw_status not in VALID_CRM_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Status '{payload.status}' inválido. Valores permitidos: {sorted(list(VALID_CRM_STATUSES))}."
+        )
+
+    # 3. Validação de Escopo de Área (RBAC)
+    target_area = payload.area.strip() if payload.area and payload.area.strip() else (current_user.get("area") or current_user.get("setor") or "Comercial")
+    verify_area_access(target_area, current_user)
+
+    # 4. Inserção segura na base relacional SQLite
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO client_followups (
+            client_name, contact_person, status, interaction_type, notes, next_followup_date, area, created_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+    """, (
+        payload.client_name.strip(),
+        payload.contact_person.strip() if payload.contact_person else None,
+        raw_status,
+        payload.interaction_type.strip() if payload.interaction_type else None,
+        payload.notes.strip() if payload.notes else None,
+        payload.next_followup_date.strip() if payload.next_followup_date else None,
+        target_area,
+        current_user.get("email") or current_user.get("nome")
+    ))
+    conn.commit()
+    followup_id = cursor.lastrowid
+    cursor.execute("SELECT * FROM client_followups WHERE id = ?;", (followup_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    return dict(row)
+
+@app.get(
+    "/crm/followups",
+    response_model=List[ClientFollowupResponse],
+    summary="Listar interações comerciais com escopo por área (ou visão global para diretoria/presidência)"
+)
+@app.get(
+    "/api/crm/followups",
+    response_model=List[ClientFollowupResponse],
+    include_in_schema=False
+)
+async def list_client_followups(
+    area: Optional[str] = Query(None, description="Filtrar por área (ex: Comercial, Projetos)"),
+    status: Optional[str] = Query(None, description="Filtrar por status do ciclo comercial"),
+    client_name: Optional[str] = Query(None, description="Filtrar por nome do cliente ou empresa"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Retorna o histórico de follow-ups filtrado conforme o escopo RBAC do colaborador.
+    - Presidente e Diretores: Acesso global irrestrito transversal a todas as áreas.
+    - Gerentes e Assessores: Visualização restrita estritamente à sua área corporativa.
+    """
+    user_role = (current_user.get("role") or "").lower().strip()
+    user_area = (current_user.get("area") or current_user.get("setor") or "").strip()
+
+    if user_role in {"presidente", "diretor"}:
+        effective_area = area.strip() if area and area.strip() else None
+    else:
+        if area and not check_area_access(area, current_user):
+            verify_area_access(area, current_user)  # Dispara 403 Forbidden se tentar ver outra área
+        effective_area = user_area
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    query = "SELECT * FROM client_followups WHERE 1=1"
+    params = []
+
+    if effective_area:
+        query += " AND LOWER(area) = LOWER(?)"
+        params.append(effective_area)
+
+    if status:
+        query += " AND LOWER(status) = LOWER(?)"
+        params.append(status.lower().strip())
+
+    if client_name:
+        query += " AND LOWER(client_name) LIKE LOWER(?)"
+        params.append(f"%{client_name.strip()}%")
+
+    query += " ORDER BY id DESC;"
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+
+    return [dict(r) for r in rows]
+
+@app.put(
+    "/crm/followups/{followup_id}",
+    response_model=ClientFollowupResponse,
+    summary="Atualizar follow-up comercial existente"
+)
+@app.put(
+    "/api/crm/followups/{followup_id}",
+    response_model=ClientFollowupResponse,
+    include_in_schema=False
+)
+async def update_client_followup(
+    followup_id: int,
+    payload: ClientFollowupUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Atualiza status, observações ou detalhes de um follow-up existente,
+    respeitando as regras de escopo por área.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM client_followups WHERE id = ?;", (followup_id,))
+    existing = cursor.fetchone()
+    if not existing:
+        conn.close()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Follow-up #{followup_id} não encontrado."
+        )
+
+    # Verificar permissão sobre a área do registro existente
+    verify_area_access(existing["area"], current_user)
+
+    updates = []
+    params = []
+
+    if payload.client_name is not None:
+        if not payload.client_name.strip():
+            conn.close()
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nome do cliente não pode ser vazio.")
+        updates.append("client_name = ?")
+        params.append(payload.client_name.strip())
+
+    if payload.contact_person is not None:
+        updates.append("contact_person = ?")
+        params.append(payload.contact_person.strip())
+
+    if payload.status is not None:
+        st = payload.status.lower().strip()
+        if st not in VALID_CRM_STATUSES:
+            conn.close()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Status '{payload.status}' inválido. Permitidos: {sorted(list(VALID_CRM_STATUSES))}."
+            )
+        updates.append("status = ?")
+        params.append(st)
+
+    if payload.interaction_type is not None:
+        updates.append("interaction_type = ?")
+        params.append(payload.interaction_type.strip())
+
+    if payload.notes is not None:
+        updates.append("notes = ?")
+        params.append(payload.notes.strip())
+
+    if payload.next_followup_date is not None:
+        updates.append("next_followup_date = ?")
+        params.append(payload.next_followup_date.strip())
+
+    if payload.area is not None:
+        new_area = payload.area.strip()
+        verify_area_access(new_area, current_user)
+        updates.append("area = ?")
+        params.append(new_area)
+
+    if updates:
+        params.append(followup_id)
+        cursor.execute(f"UPDATE client_followups SET {', '.join(updates)} WHERE id = ?;", params)
+        conn.commit()
+
+    cursor.execute("SELECT * FROM client_followups WHERE id = ?;", (followup_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row)
+
+# ==============================================================================
+# 7. DADOS OPERACIONAIS E AUDITORIA
 # ==============================================================================
 
 @app.get("/api/data/operational", summary="Entrega protegida dos dados operacionais (Google Drive Sync)")
@@ -1008,10 +1252,11 @@ async def health_check():
     return {
         "status": "online",
         "service": "EDV Jr. EDbrain API",
-        "version": "2.2.0",
+        "version": "2.3.0",
         "cost": "0.00 BRL (Custo Zero - Open Source / Local SQLite)",
-        "security": "BCrypt + JWT + Strict RBAC + Self-Promotion Shield + VPGG PDIs"
+        "security": "BCrypt + JWT + Strict RBAC + Self-Promotion Shield + VPGG PDIs + CRM Follow-up"
     }
+
 
 if __name__ == "__main__":
     import uvicorn
