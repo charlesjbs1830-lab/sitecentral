@@ -44,33 +44,85 @@ const membrosAutorizados = {
 };
 
 const SESSION_STORAGE_KEY = 'edv_user_session';
+const AUTH_TOKEN_KEY = 'edv_auth_token';
+const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? 'http://127.0.0.1:8000'
+  : (window.EDV_API_BASE_URL || 'http://127.0.0.1:8000');
+
 let currentUserSession = null;
 
-function initAuth() {
+async function initAuth() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
   const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
+
   if (savedSession) {
     try {
       const userData = JSON.parse(savedSession);
       applyUserSession(userData);
       showAppScreen();
+
+      // Se possuir token JWT, sincronizar dados operacionais protegidos em segundo plano
+      if (token) {
+        carregarDadosOperacionaisProtegidos(token).catch(function() {
+          console.info("[Auth] Servidor local offline. Utilizando cache operacional.");
+        });
+      }
       return;
     } catch (e) {
       localStorage.removeItem(SESSION_STORAGE_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
     }
   }
   showLoginScreen();
 }
 
-function handleLoginSubmit(event) {
+async function handleLoginSubmit(event) {
   if (event) event.preventDefault();
   const emailInput = document.getElementById('emailMembro');
+  const senhaInput = document.getElementById('senhaMembro');
   const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
+  const senha = senhaInput ? senhaInput.value : 'edv2026!';
 
   if (!email) {
     showLoginError("Por favor, digite seu e-mail corporativo.");
     return;
   }
 
+  // 1. TENTATIVA DE AUTENTICAÇÃO NO BACKEND FASTAPI (BCRYPT + JWT + RBAC)
+  try {
+    const resp = await fetch(API_BASE_URL + '/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, password: senha })
+    });
+
+    if (resp.ok) {
+      const authData = await resp.json();
+      const token = authData.access_token;
+      const user = authData.user;
+
+      localStorage.setItem(AUTH_TOKEN_KEY, token);
+      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
+      applyUserSession(user);
+
+      // Obter payload protegido de dados operacionais (legacy_data.json)
+      await carregarDadosOperacionaisProtegidos(token);
+
+      showAppScreen();
+      showToast(`🔐 Autenticado via JWT com sucesso! (${user.role} • ${user.setor})`);
+      return;
+    } else {
+      const errJson = await resp.json().catch(function() { return {}; });
+      if (resp.status === 401) {
+        showLoginError(`❌ Falha de Acesso: ${errJson.detail || 'Credenciais inválidas.'}`);
+        return;
+      }
+    }
+  } catch (netErr) {
+    console.warn("[Auth Backend] Servidor FastAPI offline na porta 8000. Utilizando contingência local (GitHub Pages).");
+  }
+
+  // 2. MODO CONTINGÊNCIA (EXECUÇÃO ESTÁTICA GITHUB PAGES / OFFLINE)
   const membro = membrosAutorizados[email];
   if (!membro) {
     showLoginError("❌ E-mail não autorizado na Whitelist da EDV Jr. Verifique com a Diretoria ou VPGG.");
@@ -83,23 +135,52 @@ function handleLoginSubmit(event) {
     setor: membro.setor,
     cargo: membro.cargo || 'Consultor(a)',
     role: membro.role || 'ANALYST',
-    loginTime: new Date().toISOString()
+    loginTime: new Date().toISOString(),
+    authMode: 'whitelist_fallback'
   };
 
   localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(userData));
   applyUserSession(userData);
   showAppScreen();
-  showToast(`👋 Bem-vindo(a), ${userData.nome}!`);
+  showToast(`👋 Bem-vindo(a), ${userData.nome}! (Modo Whitelist Local)`);
+}
+
+async function carregarDadosOperacionaisProtegidos(token) {
+  try {
+    const res = await fetch(API_BASE_URL + '/api/data/operational', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (res.ok) {
+      const payload = await res.json();
+      window.EDV_LEGACY_DATA = payload;
+
+      // Atualizar todos os DataGrids com dados protegidos validados pelo servidor
+      if (typeof initCRMDataGrid === 'function') initCRMDataGrid();
+      if (typeof initRMsDataGrid === 'function') initRMsDataGrid();
+      if (typeof initFluxoDataGrid === 'function') initFluxoDataGrid();
+      if (typeof initVPGGDataGrid === 'function') initVPGGDataGrid();
+      if (typeof initSeloEJDataGrid === 'function') initSeloEJDataGrid();
+      if (typeof updateDashboardKPIs === 'function') updateDashboardKPIs();
+
+      console.log(`[Segurança] Dados operacionais carregados com sucesso via token JWT (${payload.rms ? payload.rms.length : 0} RMs, ${payload.crm_leads ? payload.crm_leads.length : 0} Leads).`);
+      return payload;
+    }
+  } catch (e) {
+    console.warn("[Segurança] Falha ao consultar endpoint protegido:", e.message);
+  }
 }
 
 function quickLogin(email) {
   const emailInput = document.getElementById('emailMembro');
+  const senhaInput = document.getElementById('senhaMembro');
   if (emailInput) emailInput.value = email;
+  if (senhaInput) senhaInput.value = 'edv2026!';
   handleLoginSubmit(null);
 }
 
 function logout() {
   localStorage.removeItem(SESSION_STORAGE_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
   currentUserSession = null;
   showLoginScreen();
   showToast("Sessão encerrada com sucesso.");
