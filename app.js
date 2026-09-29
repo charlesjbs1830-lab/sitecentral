@@ -45,9 +45,12 @@ const membrosAutorizados = {
 
 const SESSION_STORAGE_KEY = 'edv_user_session';
 const AUTH_TOKEN_KEY = 'edv_auth_token';
-const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || !window.location.hostname)
-  ? 'http://127.0.0.1:8000'
-  : (window.EDV_API_BASE_URL || 'https://edbrain.onrender.com');
+const PROD_API_URL = 'https://edbrain.onrender.com';
+const LOCAL_API_URL = 'http://127.0.0.1:8000';
+
+const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? LOCAL_API_URL
+  : (window.EDV_API_BASE_URL || PROD_API_URL);
 let currentUserSession = null;
 
 async function initAuth() {
@@ -231,6 +234,16 @@ function applyUserSession(user) {
   if (token) {
     carregarTransacoesEDbrain();
     carregarAvisosInstitucionais();
+    carregarFollowupsCRM();
+    popularSelectsVPGG();
+    const roleLower = (user.role || 'assessor').toLowerCase();
+    const areaLower = (user.area || user.setor || '').toLowerCase();
+    const isLeadership = ['presidente', 'diretor'].includes(roleLower);
+    const isVPGG = isLeadership || areaLower.includes('vpgg');
+    if (isVPGG) {
+      carregarPDIsVPGG();
+      carregarAnalyticsVPGG();
+    }
   }
 }
 
@@ -296,14 +309,12 @@ function applyRBACVisualRestrictions(user) {
 
   if (txAreaSelect) {
     if (hasCrossAreaAccess) {
-      // Habilitar todas as opções de área
       Array.from(txAreaSelect.options).forEach(opt => opt.disabled = false);
       txAreaSelect.disabled = false;
       if (txAreaBadge) {
         txAreaBadge.innerHTML = '<span class="inline-flex items-center gap-1.5 text-xs text-amber-700 font-bold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200"><i class="fa-solid fa-crown text-amber-500"></i> Acesso Global Cross-Area</span>';
       }
     } else {
-      // Bloquear e forçar a área atribuída ao usuário
       let areaFound = false;
       Array.from(txAreaSelect.options).forEach(opt => {
         const match = opt.value.toLowerCase() === area.toLowerCase() || 
@@ -343,6 +354,84 @@ function applyRBACVisualRestrictions(user) {
       `;
     }
   }
+
+  // 5. Controle de Visibilidade de Abas e Isolamento Setorial (RBAC Dinâmico)
+  const isLeadership = ['presidente', 'diretor'].includes(role);
+  const isVPGG = isLeadership || area.toLowerCase().includes('vpgg');
+  const isPresidencia = isLeadership || area.toLowerCase().includes('presid');
+
+  const navVPGG = document.getElementById('nav-vpgg');
+  const navAuditoria = document.getElementById('nav-auditoria');
+  const navPresidencia = document.getElementById('nav-presidencia');
+
+  if (navVPGG) {
+    if (isVPGG) navVPGG.classList.remove('hidden');
+    else navVPGG.classList.add('hidden');
+  }
+
+  if (navAuditoria) {
+    if (isLeadership) navAuditoria.classList.remove('hidden');
+    else navAuditoria.classList.add('hidden');
+  }
+
+  if (navPresidencia) {
+    if (isPresidencia) navPresidencia.classList.remove('hidden');
+    else navPresidencia.classList.add('hidden');
+  }
+
+  // Se o usuário estiver atualmente em uma aba agora restrita, redirecionar para o dashboard
+  const currentActiveNav = document.querySelector('button.tab-active');
+  if (currentActiveNav) {
+    const currentTabId = currentActiveNav.id.replace('nav-', '');
+    if ((currentTabId === 'vpgg' && !isVPGG) ||
+        (currentTabId === 'auditoria' && !isLeadership) ||
+        (currentTabId === 'presidencia' && !isPresidencia)) {
+      switchTab('dashboard');
+    }
+  }
+
+  // 6. Módulo VPGG - Isolamento Visual de Acesso
+  const vpggNegado = document.getElementById('vpgg-acesso-negado');
+  const vpggAutorizado = document.getElementById('vpgg-conteudo-autorizado');
+  if (vpggNegado && vpggAutorizado) {
+    if (isVPGG) {
+      vpggNegado.classList.add('hidden');
+      vpggAutorizado.classList.remove('hidden');
+    } else {
+      vpggNegado.classList.remove('hidden');
+      vpggAutorizado.classList.add('hidden');
+    }
+  }
+
+  // 7. Módulo CRM Follow-ups - Restrição de Seleção de Área
+  const fuAreaSelect = document.getElementById('fu_area');
+  const fuAreaBadge = document.getElementById('fu_area_badge');
+  if (fuAreaSelect) {
+    if (isLeadership) {
+      Array.from(fuAreaSelect.options).forEach(opt => opt.disabled = false);
+      fuAreaSelect.disabled = false;
+      if (fuAreaBadge) {
+        fuAreaBadge.innerHTML = '<span class="inline-flex items-center gap-1.5 text-xs text-amber-700 font-bold bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200"><i class="fa-solid fa-crown text-amber-500"></i> Gestão Global de Follow-ups</span>';
+      }
+    } else {
+      let areaFound = false;
+      Array.from(fuAreaSelect.options).forEach(opt => {
+        const match = opt.value.toLowerCase() === area.toLowerCase() || 
+                      area.toLowerCase().includes(opt.value.toLowerCase()) || 
+                      opt.value.toLowerCase().includes(area.toLowerCase());
+        if (match && !areaFound) {
+          opt.disabled = false;
+          fuAreaSelect.value = opt.value;
+          areaFound = true;
+        } else {
+          opt.disabled = true;
+        }
+      });
+      if (fuAreaBadge) {
+        fuAreaBadge.innerHTML = `<span class="inline-flex items-center gap-1.5 text-xs text-sky-700 font-bold bg-sky-50 px-2.5 py-1 rounded-lg border border-sky-200"><i class="fa-solid fa-lock text-sky-500"></i> Área Vinculada: ${area}</span>`;
+      }
+    }
+  }
 }
 
 // ==============================================================================
@@ -351,12 +440,12 @@ function applyRBACVisualRestrictions(user) {
 const titles = {
   'dashboard': { title: 'Painel Executivo Integrado', subtitle: 'Visão global dos eixos estratégicos da EDV Jr.' },
   'presidencia': { title: 'Presidência & Selo EJ', subtitle: 'Governança jurídica, parcerias federadas e metas do PE 25-27.' },
-  'comercial': { title: 'Módulo Comercial & CRM', subtitle: 'Pipeline de vendas de marcas e motor de prospecção do Radar.' },
+  'comercial': { title: 'Módulo Comercial & CRM', subtitle: 'Pipeline de vendas de marcas, motor de prospecção do Radar e Follow-ups.' },
   'copys': { title: 'Playbook de Mensagens & Follow-up', subtitle: 'Modelos testados de copy para Instagram, WhatsApp e LinkedIn.' },
   'marketing': { title: 'Marketing & Campanhas Estratégicas', subtitle: 'Ações de vendas, Maré de Vendas, Reels e Parcerias.' },
   'projetos': { title: 'Módulo de Projetos (INPI)', subtitle: 'Acompanhamento contínuo da RPI e prazos fatais de 60 dias.' },
   'financeiro': { title: 'Módulo Tesouraria & Fluxo de Caixa', subtitle: 'Controle de honorários parcelados e custas federais (Padrão CJA).' },
-  'vpgg': { title: 'Gente & Gestão (VPGG)', subtitle: 'Assiduidade nas Ágoras, PDI, One-on-Ones e clima da empresa.' },
+  'vpgg': { title: 'Gente & Gestão (VPGG)', subtitle: 'Assiduidade nas Ágoras, PDI, Trilhas de Desenvolvimento e Clima.' },
   'tutoriais': { title: 'Hub de Tutoriais & Base de Conhecimento', subtitle: 'Manuais passo a passo salvos no Drive e capacitações gravadas da EDV Jr.' },
   'planilhas': { title: 'Central de Planilhas & Legado', subtitle: 'Repositório setorizado de planilhas e acervo histórico de 10 anos.' },
   'auditoria': { title: 'Auditoria de Ações & Telemetria', subtitle: 'Rastreabilidade de transações por membro e controle RBAC.' }
@@ -368,6 +457,21 @@ const tabsList = [
 ];
 
 function switchTab(tabId) {
+  const role = (currentUserSession?.role || 'assessor').toLowerCase();
+  const area = (currentUserSession?.area || currentUserSession?.setor || '').toLowerCase();
+  const isLeadership = ['presidente', 'diretor'].includes(role);
+  const isVPGG = isLeadership || area.includes('vpgg');
+  const isPresidencia = isLeadership || area.includes('presid');
+
+  if (tabId === 'auditoria' && !isLeadership) {
+    showToast("🔒 Acesso à auditoria restrito à Presidência e Diretorias.");
+    return;
+  }
+  if (tabId === 'presidencia' && !isPresidencia) {
+    showToast("🔒 Acesso restrito à Presidência e Diretorias.");
+    return;
+  }
+
   tabsList.forEach(id => {
     const view = document.getElementById('view-' + id);
     const nav = document.getElementById('nav-' + id);
@@ -398,25 +502,82 @@ function switchTab(tabId) {
     carregarTransacoesEDbrain();
   } else if (tabId === 'dashboard') {
     carregarAvisosInstitucionais();
+  } else if (tabId === 'comercial') {
+    carregarFollowupsCRM();
+  } else if (tabId === 'vpgg') {
+    if (isVPGG) {
+      carregarPDIsVPGG();
+      carregarAnalyticsVPGG();
+      popularSelectsVPGG();
+    }
   }
 }
 
 function switchComercialSubtab(subtab) {
   const pipeView = document.getElementById('comercial-sub-pipeline');
   const radarView = document.getElementById('comercial-sub-radar');
+  const fuView = document.getElementById('comercial-sub-followups');
   const btnPipe = document.getElementById('subtab-com-pipeline');
   const btnRadar = document.getElementById('subtab-com-radar');
+  const btnFu = document.getElementById('subtab-com-followups');
+
+  [pipeView, radarView, fuView].forEach(el => el && el.classList.add('hidden'));
+  [btnPipe, btnRadar, btnFu].forEach(btn => {
+    if (btn) {
+      btn.classList.remove('subtab-active');
+      btn.classList.add('subtab-inactive');
+    }
+  });
 
   if (subtab === 'pipeline') {
     if (pipeView) pipeView.classList.remove('hidden');
-    if (radarView) radarView.classList.add('hidden');
     if (btnPipe) { btnPipe.classList.add('subtab-active'); btnPipe.classList.remove('subtab-inactive'); }
-    if (btnRadar) { btnRadar.classList.remove('subtab-active'); btnRadar.classList.add('subtab-inactive'); }
-  } else {
-    if (pipeView) pipeView.classList.add('hidden');
+  } else if (subtab === 'radar') {
     if (radarView) radarView.classList.remove('hidden');
-    if (btnPipe) { btnPipe.classList.remove('subtab-active'); btnPipe.classList.add('subtab-inactive'); }
     if (btnRadar) { btnRadar.classList.add('subtab-active'); btnRadar.classList.remove('subtab-inactive'); }
+  } else if (subtab === 'followups') {
+    if (fuView) fuView.classList.remove('hidden');
+    if (btnFu) { btnFu.classList.add('subtab-active'); btnFu.classList.remove('subtab-inactive'); }
+    carregarFollowupsCRM();
+  }
+}
+
+function switchVPGGSubtab(subtab) {
+  const pdiView = document.getElementById('vpgg-sub-pdis');
+  const trilhaView = document.getElementById('vpgg-sub-trilhas');
+  const analyticsView = document.getElementById('vpgg-sub-analytics');
+  const membroView = document.getElementById('vpgg-sub-membros');
+
+  const btnPdi = document.getElementById('subtab-vpgg-pdis');
+  const btnTrilha = document.getElementById('subtab-vpgg-trilhas');
+  const btnAnalytics = document.getElementById('subtab-vpgg-analytics');
+  const btnMembro = document.getElementById('subtab-vpgg-membros');
+
+  [pdiView, trilhaView, analyticsView, membroView].forEach(el => el && el.classList.add('hidden'));
+  [btnPdi, btnTrilha, btnAnalytics, btnMembro].forEach(btn => {
+    if (btn) {
+      btn.classList.remove('subtab-active');
+      btn.classList.add('subtab-inactive');
+    }
+  });
+
+  if (subtab === 'pdis') {
+    if (pdiView) pdiView.classList.remove('hidden');
+    if (btnPdi) { btnPdi.classList.add('subtab-active'); btnPdi.classList.remove('subtab-inactive'); }
+    carregarPDIsVPGG();
+    popularSelectsVPGG();
+  } else if (subtab === 'trilhas') {
+    if (trilhaView) trilhaView.classList.remove('hidden');
+    if (btnTrilha) { btnTrilha.classList.add('subtab-active'); btnTrilha.classList.remove('subtab-inactive'); }
+    popularSelectsVPGG();
+  } else if (subtab === 'analytics') {
+    if (analyticsView) analyticsView.classList.remove('hidden');
+    if (btnAnalytics) { btnAnalytics.classList.add('subtab-active'); btnAnalytics.classList.remove('subtab-inactive'); }
+    carregarAnalyticsVPGG();
+  } else if (subtab === 'membros') {
+    if (membroView) membroView.classList.remove('hidden');
+    if (btnMembro) { btnMembro.classList.add('subtab-active'); btnMembro.classList.remove('subtab-inactive'); }
+    if (typeof filtrarVPGGDataGrid === 'function') filtrarVPGGDataGrid();
   }
 }
 
@@ -2407,6 +2568,868 @@ function carregarEstado() {
 }
 
 // ==============================================================================
+// 4.5 MÓDULO DE CRM & FOLLOW-UPS DE CLIENTES (EDbrain /crm/followups)
+// ==============================================================================
+let crmFollowupsList = [];
+
+async function carregarFollowupsCRM() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + '/crm/followups', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      crmFollowupsList = await res.json();
+      atualizarKPIsFollowups();
+      filtrarTabelaFollowups();
+    } else {
+      console.warn("[CRM Followups] Resposta da API:", res.status);
+    }
+  } catch (err) {
+    console.warn("[CRM Followups] Falha ao consultar interações comerciais:", err.message);
+  }
+}
+
+function atualizarKPIsFollowups() {
+  let prospeccao = 0, negociacao = 0, fechado = 0, perdido = 0;
+  crmFollowupsList.forEach(fu => {
+    const s = (fu.status || '').toLowerCase().trim();
+    if (s === 'prospeccao') prospeccao++;
+    else if (s === 'negociacao') negociacao++;
+    else if (s === 'fechado') fechado++;
+    else if (s === 'perdido') perdido++;
+  });
+
+  const total = crmFollowupsList.length;
+  const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
+  setEl('kpi-fu-total', total);
+  setEl('kpi-fu-prospeccao', prospeccao);
+  setEl('kpi-fu-negociacao', negociacao);
+  setEl('kpi-fu-fechado', fechado);
+
+  const badgeEl = document.getElementById('fu-count-badge');
+  if (badgeEl) badgeEl.innerText = `${total} registro${total === 1 ? '' : 's'}`;
+}
+
+function filtrarTabelaFollowups() {
+  const busca = (document.getElementById('filtro-fu-busca')?.value || '').toLowerCase().trim();
+  const statusFiltro = (document.getElementById('filtro-fu-status')?.value || '').toLowerCase().trim();
+
+  const filtrados = crmFollowupsList.filter(fu => {
+    const matchStatus = !statusFiltro || (fu.status || '').toLowerCase().trim() === statusFiltro;
+    const matchBusca = !busca ||
+      String(fu.client_name || '').toLowerCase().includes(busca) ||
+      String(fu.contact_person || '').toLowerCase().includes(busca) ||
+      String(fu.notes || '').toLowerCase().includes(busca) ||
+      String(fu.area || '').toLowerCase().includes(busca) ||
+      String(fu.created_by || '').toLowerCase().includes(busca);
+    return matchStatus && matchBusca;
+  });
+
+  renderTabelaFollowups(filtrados);
+}
+
+function renderTabelaFollowups(itens) {
+  const tbody = document.getElementById('tabela-crm-followups');
+  if (!tbody) return;
+
+  if (!itens || itens.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" class="p-8 text-center text-slate-400">
+          <i class="fa-solid fa-address-book text-2xl text-slate-300 mb-2 block"></i>
+          <span>Nenhum follow-up de cliente encontrado no banco de dados.</span>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  const statusMap = {
+    'prospeccao': { label: 'Prospecção', class: 'bg-sky-100 text-sky-800 border-sky-300' },
+    'negociacao': { label: 'Negociação', class: 'bg-amber-100 text-amber-800 border-amber-300' },
+    'fechado': { label: 'Fechado', class: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+    'perdido': { label: 'Perdido', class: 'bg-rose-100 text-rose-800 border-rose-300' }
+  };
+
+  tbody.innerHTML = itens.map(fu => {
+    const stConfig = statusMap[(fu.status || '').toLowerCase()] || { label: fu.status, class: 'bg-slate-100 text-slate-700 border-slate-300' };
+    const dataNext = fu.next_followup_date ? fu.next_followup_date : '<span class="text-slate-400 italic">Não agendado</span>';
+    const contact = fu.contact_person ? escapeHTML(fu.contact_person) : '<span class="text-slate-400 italic">N/A</span>';
+    const channel = fu.interaction_type ? escapeHTML(fu.interaction_type) : '<span class="text-slate-400 italic">Geral</span>';
+    const notes = fu.notes ? escapeHTML(fu.notes) : '-';
+
+    return `
+      <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+        <td class="px-4 py-3 font-semibold text-slate-800">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-building text-slate-400 text-xs"></i>
+            <span>${escapeHTML(fu.client_name)}</span>
+          </div>
+        </td>
+        <td class="px-4 py-3 text-slate-600">${contact}</td>
+        <td class="px-4 py-3 whitespace-nowrap">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${stConfig.class}">
+            ${stConfig.label}
+          </span>
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap">
+          <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-medium border border-slate-200">
+            ${channel}
+          </span>
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap font-mono text-[11px] text-slate-600">
+          <i class="fa-regular fa-calendar text-slate-400 mr-1"></i>${dataNext}
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap">
+          <span class="px-2 py-0.5 rounded bg-sky-50 text-sky-800 text-[10px] font-semibold border border-sky-200">
+            ${escapeHTML(fu.area || 'Comercial')}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-slate-500 font-mono text-[11px] whitespace-nowrap">
+          ${escapeHTML(fu.created_by || '-')}
+        </td>
+        <td class="px-4 py-3 text-slate-600 max-w-xs truncate" title="${notes}">
+          ${notes}
+        </td>
+        <td class="px-4 py-3 text-center whitespace-nowrap">
+          <select onchange="atualizarStatusFollowup(${fu.id}, this.value)" class="text-[11px] border border-slate-300 rounded px-2 py-1 bg-white font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500">
+            <option value="prospeccao" ${fu.status === 'prospeccao' ? 'selected' : ''}>Prospecção</option>
+            <option value="negociacao" ${fu.status === 'negociacao' ? 'selected' : ''}>Negociação</option>
+            <option value="fechado" ${fu.status === 'fechado' ? 'selected' : ''}>Fechado</option>
+            <option value="perdido" ${fu.status === 'perdido' ? 'selected' : ''}>Perdido</option>
+          </select>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function submeterFollowupCRM(event) {
+  if (event) event.preventDefault();
+
+  const clientNameInput = document.getElementById('fu_client_name');
+  const contactPersonInput = document.getElementById('fu_contact_person');
+  const statusSelect = document.getElementById('fu_status');
+  const interactionTypeSelect = document.getElementById('fu_interaction_type');
+  const nextDateInput = document.getElementById('fu_next_date');
+  const areaSelect = document.getElementById('fu_area');
+  const notesInput = document.getElementById('fu_notes');
+
+  const clientName = (clientNameInput?.value || '').trim();
+  if (!clientName) {
+    showToast("⚠️ O nome do cliente ou empresa é obrigatório.");
+    return;
+  }
+
+  const payload = {
+    client_name: clientName,
+    contact_person: (contactPersonInput?.value || '').trim() || null,
+    status: statusSelect?.value || 'prospeccao',
+    interaction_type: interactionTypeSelect?.value || 'WhatsApp',
+    next_followup_date: nextDateInput?.value || null,
+    area: areaSelect?.value || currentUserSession?.area || 'Comercial',
+    notes: (notesInput?.value || '').trim() || null
+  };
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const btnSubmit = document.getElementById('btn-submit-fu');
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando...';
+  }
+
+  try {
+    const res = await fetch(API_BASE_URL + '/crm/followups', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.status === 201) {
+      showToast(`✅ Follow-up de "${clientName}" registrado no CRM!`);
+      if (clientNameInput) clientNameInput.value = '';
+      if (contactPersonInput) contactPersonInput.value = '';
+      if (nextDateInput) nextDateInput.value = '';
+      if (notesInput) notesInput.value = '';
+      await carregarFollowupsCRM();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Falha ao registrar follow-up: ${err.detail || 'Erro na requisição'}`);
+    }
+  } catch (err) {
+    console.error("Falha ao registrar follow-up:", err);
+    showToast("⚠️ Servidor EDbrain offline. Não foi possível registrar.");
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Registrar Follow-up no CRM</span>';
+    }
+  }
+}
+
+async function atualizarStatusFollowup(id, novoStatus) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + '/crm/followups/' + id, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({ status: novoStatus })
+    });
+
+    if (res.ok) {
+      showToast(`✅ Status do follow-up #${id} atualizado para "${novoStatus}"!`);
+      const item = crmFollowupsList.find(f => f.id === id);
+      if (item) item.status = novoStatus;
+      atualizarKPIsFollowups();
+      filtrarTabelaFollowups();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Falha ao atualizar status: ${err.detail || 'Erro na operação'}`);
+      await carregarFollowupsCRM();
+    }
+  } catch (err) {
+    console.error("Falha ao atualizar status follow-up:", err);
+    showToast("⚠️ Servidor EDbrain offline.");
+  }
+}
+
+// ==============================================================================
+// 4.6 MÓDULO DE PDIS, TRILHAS E ANALYTICS DA VPGG (EDbrain /vpgg/pdis)
+// ==============================================================================
+let vpggPDIsList = [];
+window.ULTIMA_TRILHA_GERADA = null;
+
+function popularSelectsVPGG() {
+  const pdiSelect = document.getElementById('pdi_user_email');
+  const trilhaSelect = document.getElementById('trilha_member_email');
+  const filtroMembroSelect = document.getElementById('filtro-pdi-membro');
+
+  const membros = Object.entries(membrosAutorizados).map(([email, info]) => ({
+    email,
+    nome: info.nome,
+    area: info.area || info.setor || 'Geral',
+    cargo: info.cargo || 'Consultor(a)',
+    role: info.role || 'assessor'
+  })).sort((a, b) => a.nome.localeCompare(b.nome));
+
+  if (pdiSelect && pdiSelect.options.length <= 1) {
+    pdiSelect.innerHTML = '<option value="">-- Selecione o colaborador (23 colaboradores) --</option>';
+    membros.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.email;
+      opt.textContent = `${m.nome} (${m.area} • ${m.cargo})`;
+      pdiSelect.appendChild(opt);
+    });
+  }
+
+  if (trilhaSelect && trilhaSelect.options.length <= 1) {
+    trilhaSelect.innerHTML = '<option value="">-- Escolha um colaborador para gerar a trilha --</option>';
+    membros.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.email;
+      opt.textContent = `${m.nome} - ${m.area} (${m.cargo})`;
+      trilhaSelect.appendChild(opt);
+    });
+  }
+
+  if (filtroMembroSelect && filtroMembroSelect.options.length <= 1) {
+    filtroMembroSelect.innerHTML = '<option value="">Todos os Colaboradores</option>';
+    membros.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.email;
+      opt.textContent = `${m.nome} (${m.area})`;
+      filtroMembroSelect.appendChild(opt);
+    });
+  }
+}
+
+function aoSelecionarMembroPDI() {
+  const pdiSelect = document.getElementById('pdi_user_email');
+  const areaInput = document.getElementById('pdi_area');
+  if (!pdiSelect || !areaInput) return;
+
+  const email = pdiSelect.value.trim().toLowerCase();
+  const membro = membrosAutorizados[email];
+  if (membro) {
+    areaInput.value = membro.area || membro.setor || 'VPGG';
+  } else {
+    areaInput.value = 'VPGG';
+  }
+}
+
+async function carregarPDIsVPGG() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + '/vpgg/pdis', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      vpggPDIsList = await res.json();
+      const badgeEl = document.getElementById('pdi-count-badge');
+      if (badgeEl) badgeEl.innerText = `${vpggPDIsList.length} PDI${vpggPDIsList.length === 1 ? '' : 's'}`;
+      filtrarTabelaPDIs();
+    }
+  } catch (err) {
+    console.warn("[VPGG PDIs] Falha ao carregar PDIs:", err.message);
+  }
+}
+
+function filtrarTabelaPDIs() {
+  const membroFiltro = (document.getElementById('filtro-pdi-membro')?.value || '').toLowerCase().trim();
+  const statusFiltro = (document.getElementById('filtro-pdi-status')?.value || '').toLowerCase().trim();
+
+  const filtrados = vpggPDIsList.filter(pdi => {
+    const matchMembro = !membroFiltro || (pdi.user_email || '').toLowerCase().trim() === membroFiltro;
+    const matchStatus = !statusFiltro || (pdi.status || '').toLowerCase().trim() === statusFiltro;
+    return matchMembro && matchStatus;
+  });
+
+  renderTabelaPDIs(filtrados);
+}
+
+function renderTabelaPDIs(itens) {
+  const tbody = document.getElementById('tabela-vpgg-pdis');
+  if (!tbody) return;
+
+  if (!itens || itens.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="p-8 text-center text-slate-400">
+          <i class="fa-solid fa-clipboard-user text-2xl text-slate-300 mb-2 block"></i>
+          <span>Nenhum Plano de Desenvolvimento Individual (PDI) cadastrado para este filtro.</span>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  const statusMap = {
+    'em_andamento': { label: 'Em Andamento', class: 'bg-amber-100 text-amber-800 border-amber-300' },
+    'planejado': { label: 'Planejado', class: 'bg-sky-100 text-sky-800 border-sky-300' },
+    'concluido': { label: 'Concluído', class: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+    'pausado': { label: 'Pausado', class: 'bg-slate-100 text-slate-700 border-slate-300' }
+  };
+
+  tbody.innerHTML = itens.map(pdi => {
+    const stConfig = statusMap[(pdi.status || '').toLowerCase()] || { label: pdi.status, class: 'bg-slate-100 text-slate-700 border-slate-300' };
+    const membroInfo = membrosAutorizados[(pdi.user_email || '').toLowerCase()];
+    const nomeExibicao = membroInfo ? membroInfo.nome : (pdi.user_email ? pdi.user_email.split('@')[0] : 'Colaborador');
+    const emailExibicao = pdi.user_email ? escapeHTML(pdi.user_email) : '-';
+    const areaExibicao = pdi.area ? escapeHTML(pdi.area) : (membroInfo?.area || 'VPGG');
+    const deadline = pdi.deadline ? pdi.deadline : '-';
+    const objectives = pdi.objectives ? escapeHTML(pdi.objectives) : '-';
+    const ideas = pdi.development_ideas ? escapeHTML(pdi.development_ideas) : '-';
+
+    return `
+      <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+        <td class="px-4 py-3">
+          <div class="font-bold text-slate-800">${escapeHTML(nomeExibicao)}</div>
+          <div class="text-[10px] text-slate-400 font-mono">${emailExibicao}</div>
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap">
+          <span class="px-2 py-0.5 rounded bg-purple-50 text-purple-800 text-[10px] font-semibold border border-purple-200">
+            ${areaExibicao}
+          </span>
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${stConfig.class}">
+            ${stConfig.label}
+          </span>
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap font-mono text-[11px] text-slate-600">
+          <i class="fa-regular fa-clock text-slate-400 mr-1"></i>${deadline}
+        </td>
+        <td class="px-4 py-3 text-slate-700 max-w-xs truncate" title="${objectives}">
+          ${objectives}
+        </td>
+        <td class="px-4 py-3 text-slate-600 max-w-xs truncate" title="${ideas}">
+          ${ideas}
+        </td>
+        <td class="px-4 py-3 text-center whitespace-nowrap">
+          <select onchange="atualizarStatusPDI(${pdi.id}, this.value)" class="text-[11px] border border-slate-300 rounded px-2 py-1 bg-white font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-purple-500">
+            <option value="em_andamento" ${pdi.status === 'em_andamento' ? 'selected' : ''}>Em Andamento</option>
+            <option value="planejado" ${pdi.status === 'planejado' ? 'selected' : ''}>Planejado</option>
+            <option value="concluido" ${pdi.status === 'concluido' ? 'selected' : ''}>Concluído</option>
+            <option value="pausado" ${pdi.status === 'pausado' ? 'selected' : ''}>Pausado</option>
+          </select>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function submeterNovoPDI(event) {
+  if (event) event.preventDefault();
+
+  const userEmailSelect = document.getElementById('pdi_user_email');
+  const areaInput = document.getElementById('pdi_area');
+  const deadlineInput = document.getElementById('pdi_deadline');
+  const statusSelect = document.getElementById('pdi_status');
+  const objectivesInput = document.getElementById('pdi_objectives');
+  const ideasInput = document.getElementById('pdi_ideas');
+
+  const userEmail = (userEmailSelect?.value || '').trim().toLowerCase();
+  const objectives = (objectivesInput?.value || '').trim();
+  const ideas = (ideasInput?.value || '').trim();
+  const deadline = (deadlineInput?.value || '').trim();
+
+  if (!userEmail) {
+    showToast("⚠️ Selecione o colaborador para o PDI.");
+    return;
+  }
+  if (!objectives || !ideas || !deadline) {
+    showToast("⚠️ Preencha todos os campos obrigatórios do PDI.");
+    return;
+  }
+
+  const payload = {
+    user_email: userEmail,
+    area: areaInput?.value || 'VPGG',
+    deadline: deadline,
+    status: statusSelect?.value || 'em_andamento',
+    objectives: objectives,
+    development_ideas: ideas
+  };
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const btnSubmit = document.getElementById('btn-submit-pdi');
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gravando PDI...';
+  }
+
+  try {
+    const res = await fetch(API_BASE_URL + '/vpgg/pdis', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.status === 201) {
+      showToast("🎯 Plano de Desenvolvimento Individual gravado no SQLite!");
+      if (objectivesInput) objectivesInput.value = '';
+      if (ideasInput) ideasInput.value = '';
+      if (deadlineInput) deadlineInput.value = '';
+      await carregarPDIsVPGG();
+      await carregarAnalyticsVPGG();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Falha ao salvar PDI: ${err.detail || 'Erro na requisição'}`);
+    }
+  } catch (err) {
+    console.error("Falha ao salvar PDI:", err);
+    showToast("⚠️ Servidor EDbrain offline.");
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Salvar PDI no EDbrain</span>';
+    }
+  }
+}
+
+async function atualizarStatusPDI(pdiId, novoStatus) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + '/vpgg/pdis/' + pdiId, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({ status: novoStatus })
+    });
+
+    if (res.ok) {
+      showToast(`✅ Status do PDI #${pdiId} atualizado para "${novoStatus}"!`);
+      const item = vpggPDIsList.find(p => p.id === pdiId);
+      if (item) item.status = novoStatus;
+      filtrarTabelaPDIs();
+      carregarAnalyticsVPGG();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Falha ao atualizar PDI: ${err.detail || 'Erro na operação'}`);
+      await carregarPDIsVPGG();
+    }
+  } catch (err) {
+    console.error("Falha ao atualizar PDI:", err);
+    showToast("⚠️ Servidor EDbrain offline.");
+  }
+}
+
+async function acionarGeradorTrilha() {
+  const memberSelect = document.getElementById('trilha_member_email');
+  const focoInput = document.getElementById('trilha_foco');
+  const email = (memberSelect?.value || '').trim().toLowerCase();
+
+  if (!email) {
+    showToast("⚠️ Selecione um colaborador para gerar a trilha.");
+    return;
+  }
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const btn = document.getElementById('btn-gerar-trilha');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processando Trilha com IA...';
+  }
+
+  try {
+    const res = await fetch(API_BASE_URL + '/vpgg/pdis/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({
+        member_email: email,
+        foco_adicional: (focoInput?.value || '').trim() || null
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      window.ULTIMA_TRILHA_GERADA = data;
+      renderResultadoTrilha(data);
+      showToast("🚀 Trilha de desenvolvimento calibrada com sucesso!");
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Falha na geração da trilha: ${err.detail || 'Erro na requisição'}`);
+    }
+  } catch (err) {
+    console.error("Falha ao acionar motor de trilhas:", err);
+    showToast("⚠️ Servidor EDbrain offline.");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> <span>Gerar Trilha Estruturada</span>';
+    }
+  }
+}
+
+function renderResultadoTrilha(data) {
+  const container = document.getElementById('resultado-trilha-container');
+  if (!container) return;
+
+  const membro = data.membro_avaliado || {};
+  const plano = data.plano_estruturado_sugerido || {};
+
+  const hardSkillsHtml = (plano.hard_skills_prioritarias || []).map(s => `
+    <li class="flex items-start gap-2">
+      <i class="fa-solid fa-check text-emerald-500 mt-0.5 text-xs shrink-0"></i>
+      <span>${escapeHTML(s)}</span>
+    </li>
+  `).join('');
+
+  const softSkillsHtml = (plano.soft_skills_essenciais || []).map(s => `
+    <li class="flex items-start gap-2">
+      <i class="fa-solid fa-star text-amber-500 mt-0.5 text-xs shrink-0"></i>
+      <span>${escapeHTML(s)}</span>
+    </li>
+  `).join('');
+
+  const acoesHtml = (plano.acoes_praticas_edv || []).map(a => `
+    <li class="flex items-start gap-2">
+      <i class="fa-solid fa-arrow-right text-blue-500 mt-0.5 text-xs shrink-0"></i>
+      <span>${escapeHTML(a)}</span>
+    </li>
+  `).join('');
+
+  const marcosHtml = (plano.metas_com_prazos || []).map(m => `
+    <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
+      <span class="font-medium text-slate-800">${escapeHTML(m.marco)}</span>
+      <span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded text-[10px] font-bold font-mono">D + ${m.prazo_dias} dias</span>
+    </div>
+  `).join('');
+
+  container.innerHTML = `
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-300">
+            ${escapeHTML(membro.area || 'VPGG')} • ${escapeHTML(membro.cargo || 'Membro')}
+          </span>
+          <span class="text-xs text-slate-400 font-mono">(${escapeHTML(membro.email)})</span>
+        </div>
+        <h4 class="text-lg font-black text-slate-900 mt-1">${escapeHTML(membro.nome)}</h4>
+        <p class="text-xs text-slate-600 mt-0.5"><strong>Diretriz Hierárquica:</strong> ${escapeHTML(plano.diretriz_hierarquica || '')}</p>
+      </div>
+      <button type="button" onclick="transferirTrilhaAtualParaPDI()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition self-start md:self-auto">
+        <i class="fa-solid fa-file-import"></i>
+        <span>Transferir para Formulário de PDI</span>
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="p-4 bg-purple-50/50 rounded-xl border border-purple-200 space-y-2">
+        <h5 class="font-bold text-xs text-purple-900 flex items-center gap-2">
+          <i class="fa-solid fa-code text-purple-600"></i> Hard Skills Prioritárias
+        </h5>
+        <ul class="text-xs text-slate-700 space-y-2">
+          ${hardSkillsHtml}
+        </ul>
+      </div>
+
+      <div class="p-4 bg-amber-50/50 rounded-xl border border-amber-200 space-y-2">
+        <h5 class="font-bold text-xs text-amber-900 flex items-center gap-2">
+          <i class="fa-solid fa-heart text-amber-600"></i> Soft Skills Essenciais
+        </h5>
+        <ul class="text-xs text-slate-700 space-y-2">
+          ${softSkillsHtml}
+        </ul>
+      </div>
+    </div>
+
+    <div class="space-y-2">
+      <h5 class="font-bold text-xs text-slate-800 flex items-center gap-2">
+        <i class="fa-solid fa-list-check text-blue-600"></i> Ações Práticas & Entregáveis EDV Jr.
+      </h5>
+      <ul class="text-xs text-slate-700 space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
+        ${acoesHtml}
+      </ul>
+    </div>
+
+    <div class="space-y-2">
+      <h5 class="font-bold text-xs text-slate-800 flex items-center gap-2">
+        <i class="fa-regular fa-calendar-check text-emerald-600"></i> Marcos Temporais de Execução
+      </h5>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        ${marcosHtml}
+      </div>
+    </div>
+  `;
+
+  container.classList.remove('hidden');
+  container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function transferirTrilhaAtualParaPDI() {
+  if (!window.ULTIMA_TRILHA_GERADA) {
+    showToast("⚠️ Nenhuma trilha gerada recentemente para transferir.");
+    return;
+  }
+
+  const data = window.ULTIMA_TRILHA_GERADA;
+  const membro = data.membro_avaliado || {};
+  const plano = data.plano_estruturado_sugerido || {};
+
+  // Alternar para a sub-aba de PDIs
+  switchVPGGSubtab('pdis');
+
+  const pdiSelect = document.getElementById('pdi_user_email');
+  const objectivesInput = document.getElementById('pdi_objectives');
+  const ideasInput = document.getElementById('pdi_ideas');
+  const deadlineInput = document.getElementById('pdi_deadline');
+
+  if (pdiSelect && membro.email) {
+    pdiSelect.value = membro.email.toLowerCase();
+    aoSelecionarMembroPDI();
+  }
+
+  if (objectivesInput) {
+    const objs = plano.objetivos_sugeridos || [
+      `Consolidar domínio das rotinas técnicas de ${membro.area || 'VPGG'}`,
+      'Atingir 100% de pontualidade nas entregas corporativas da EDV Jr.'
+    ];
+    objectivesInput.value = objs.map(o => '• ' + o).join('\n');
+  }
+
+  if (ideasInput) {
+    const acoes = (plano.acoes_praticas_edv || []).map(a => '• ' + a).join('\n');
+    const hards = (plano.hard_skills_prioritarias || []).map(h => '• ' + h).join('\n');
+    ideasInput.value = `AÇÕES PRÁTICAS EDV JR.:\n${acoes}\n\nHARD SKILLS:\n${hards}`;
+  }
+
+  if (deadlineInput) {
+    // Prazo sugerido: 90 dias a contar de hoje
+    const d = new Date();
+    d.setDate(d.getDate() + 90);
+    deadlineInput.value = d.toISOString().split('T')[0];
+  }
+
+  showToast("✅ Trilha transferida para o formulário de PDI com sucesso!");
+  const formEl = document.getElementById('form-novo-pdi');
+  if (formEl) formEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function carregarAnalyticsVPGG() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + '/vpgg/pdis/analytics', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const consolidado = data.consolidado_geral || {};
+      const total = consolidado.total_pdis_cadastrados || 0;
+      const taxa = consolidado.taxa_conclusao_pct || 0;
+      const dist = consolidado.distribuicao_status || {};
+
+      const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
+      setEl('analytics-total-pdis', total);
+      setEl('analytics-taxa-conclusao', `${taxa.toFixed(1)}%`);
+      setEl('analytics-em-andamento', dist.em_andamento || 0);
+      setEl('analytics-planejados', dist.planejado || 0);
+
+      renderAnalyticsStatusBars(dist, total);
+    }
+  } catch (err) {
+    console.warn("[VPGG Analytics] Falha ao carregar métricas:", err.message);
+  }
+}
+
+function renderAnalyticsStatusBars(dist, total) {
+  const container = document.getElementById('analytics-status-bars');
+  if (!container) return;
+
+  const statuses = [
+    { key: 'em_andamento', label: 'Em Andamento', color: 'bg-amber-500', text: 'text-amber-800' },
+    { key: 'concluido', label: 'Concluído', color: 'bg-emerald-500', text: 'text-emerald-800' },
+    { key: 'planejado', label: 'Planejado', color: 'bg-blue-500', text: 'text-blue-800' },
+    { key: 'pausado', label: 'Pausado', color: 'bg-slate-400', text: 'text-slate-800' }
+  ];
+
+  container.innerHTML = statuses.map(st => {
+    const count = dist[st.key] || 0;
+    const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+    return `
+      <div class="space-y-1">
+        <div class="flex items-center justify-between text-xs font-semibold">
+          <span class="${st.text}">${st.label}</span>
+          <span class="font-mono text-slate-500">${count} (${pct}%)</span>
+        </div>
+        <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+          <div class="${st.color} h-2 rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ==============================================================================
+// 4.7 MODAL DE PERFIL SEGURO & BLINDAGEM DE AUTO-PROMOÇÃO (/api/auth/me)
+// ==============================================================================
+async function abrirModalPerfil() {
+  const modal = document.getElementById('modal-meu-perfil');
+  if (!modal) return;
+
+  let user = currentUserSession || {};
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  // Consultar dados atualizados do /api/auth/me no backend se token presente
+  if (token) {
+    try {
+      const res = await fetch(API_BASE_URL + '/api/auth/me', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (res.ok) {
+        const liveUser = await res.json();
+        user = { ...user, ...liveUser };
+        currentUserSession = user;
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
+      }
+    } catch (e) {
+      console.warn("[Perfil] Falha ao consultar /api/auth/me:", e.message);
+    }
+  }
+
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+  setVal('perfil_email', user.email || '');
+  setVal('perfil_nome', user.nome || '');
+  setVal('perfil_role', (user.role || 'assessor').toUpperCase());
+  setVal('perfil_area', user.area || user.setor || 'EDV Jr.');
+  setVal('perfil_setor', user.setor || user.area || 'EDV Jr.');
+  setVal('perfil_cargo', user.cargo || (user.role ? user.role + ' de ' + (user.area || 'EDV') : 'Consultor(a)'));
+
+  const avatarPreview = document.getElementById('perfil-avatar-preview');
+  if (avatarPreview && user.nome) {
+    const initials = user.nome.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    avatarPreview.innerText = initials;
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function fecharModalPerfil() {
+  const modal = document.getElementById('modal-meu-perfil');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function salvarPerfilUsuario(event) {
+  if (event) event.preventDefault();
+
+  const nomeInput = document.getElementById('perfil_nome');
+  const novoNome = (nomeInput?.value || '').trim();
+
+  if (!novoNome) {
+    showToast("⚠️ O nome de exibição não pode ser vazio.");
+    return;
+  }
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const btnSubmit = document.getElementById('btn-salvar-perfil');
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Salvando no EDbrain...';
+  }
+
+  try {
+    const res = await fetch(API_BASE_URL + '/api/auth/me', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({ nome: novoNome })
+    });
+
+    if (res.ok) {
+      const updatedUser = await res.json();
+      if (currentUserSession) {
+        currentUserSession.nome = updatedUser.nome;
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(currentUserSession));
+        applyUserSession(currentUserSession);
+      }
+      showToast("✅ Nome de exibição atualizado com sucesso no EDbrain!");
+      fecharModalPerfil();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Bloqueio de Segurança: ${err.detail || 'Operação não permitida'}`);
+    }
+  } catch (err) {
+    console.error("Falha ao salvar perfil:", err);
+    showToast("⚠️ Servidor EDbrain offline. Não foi possível persistir.");
+  } finally {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> <span>Salvar Alterações de Nome</span>';
+    }
+  }
+}
+
+// ==============================================================================
 // 5. INICIALIZAÇÃO DEFINITIVA DO ECOSSISTEMA
 // ==============================================================================
 function initApp() {
@@ -2420,88 +3443,11 @@ function initApp() {
   carregarEstado();
   carregarTransacoesEDbrain();
   carregarAvisosInstitucionais();
+  carregarFollowupsCRM();
+  popularSelectsVPGG();
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
 if (document.readyState === 'interactive' || document.readyState === 'complete') {
   initApp();
-}
-// app.js - Ingestão do payload legado da EDV Jr.
-document.addEventListener("DOMContentLoaded", () => {
-    if (typeof LEGACY_DATA === 'undefined') {
-        console.error("Erro crítico: payload legacy_data.js não carregado.");
-        return;
-    }
-
-    const { rms, transactions, leads } = LEGACY_DATA;
-
-    // Inicialização de contadores e KPIs na interface
-    console.log(`[Carregamento Concluído] RMs: ${rms.length} | Transações: ${transactions.length} | Leads: ${leads.length}`);
-    
-    // Exemplo de população de indicadores visuais
-    renderDashboardMetrics({ rms, transactions, leads });
-});
-
-function renderDashboardMetrics(data) {
-    // Mapeamento de elementos no index.html
-    const leadCountEl = document.getElementById("lead-count");
-    if (leadCountEl) {
-        leadCountEl.textContent = data.leads.length;
-    }
-}// Adicionar ao fluxo de inicialização em app.js
-const rmCountEl = document.getElementById("rm-count");
-if (rmCountEl) {
-    rmCountEl.textContent = rms.length;
-}
-
-const transactionCountEl = document.getElementById("transaction-count");
-if (transactionCountEl) {
-    transactionCountEl.textContent = transactions.length;
-}
-document.addEventListener("DOMContentLoaded", () => {
-    if (typeof LEGACY_DATA === 'undefined') {
-        console.error("Erro crítico: payload legacy_data.js não carregado.");
-        return;
-    }
-
-    const { rms, transactions, leads } = LEGACY_DATA;
-
-    // Atualização de KPIs métricos
-    setElementText("lead-count", leads.length);
-    setElementText("rm-count", rms.length);
-    setElementText("transaction-count", transactions.length);
-
-    // Renderização tabular dos dados legados
-    renderList("lead-container", leads, lead => `
-        <div class="data-item">
-            <span><strong>${lead.Nome || 'Lead sem identificação'}</strong></span>
-            <span class="badge">Status: ${lead.Status || 'N/A'}</span>
-        </div>
-    `);
-
-    renderList("rm-container", rms, rm => `
-        <div class="data-item">
-            <span><strong>RM: ${rm.ID || rm.Codigo || 'Projeto'}</strong></span>
-            <span>${rm.Cliente || rm.Descricao || 'N/A'}</span>
-        </div>
-    `);
-
-    renderList("transaction-container", transactions, tx => `
-        <div class="data-item">
-            <span><strong>R$ ${tx.Valor || '0.00'}</strong></span>
-            <span>${tx.Categoria || 'Transação'}</span>
-        </div>
-    `);
-});
-
-function setElementText(id, text) {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
-}
-
-function renderList(containerId, items, templateFn) {
-    const container = document.getElementById(containerId);
-    if (container && items) {
-        container.innerHTML = items.slice(0, 15).map(templateFn).join('');
-    }
 }

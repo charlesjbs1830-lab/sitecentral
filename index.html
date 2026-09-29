@@ -225,18 +225,23 @@
 
       <!-- Rodapé do Membro Autenticado -->
       <div class="p-3 border-t border-slate-800 bg-[#071224]/80 flex items-center justify-between">
-        <div class="flex items-center gap-2.5 overflow-hidden">
-          <div id="user-session-avatar" class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-xs text-white border border-blue-400 shrink-0">
+        <div onclick="abrirModalPerfil()" title="Clique para ver e editar seu Perfil (RBAC)" class="flex items-center gap-2.5 overflow-hidden cursor-pointer hover:bg-slate-800/60 p-1 rounded-lg transition group">
+          <div id="user-session-avatar" class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-xs text-white border border-blue-400 shrink-0 group-hover:ring-2 group-hover:ring-blue-400">
             CJ
           </div>
           <div class="truncate">
-            <div id="user-session-name" class="text-xs font-semibold text-slate-200 truncate">Charles</div>
+            <div id="user-session-name" class="text-xs font-semibold text-slate-200 truncate group-hover:text-blue-300">Charles</div>
             <div id="user-session-role" class="text-[10px] text-blue-400 font-mono truncate">ADMIN • Presidência</div>
           </div>
         </div>
-        <button onclick="logout()" title="Encerrar Sessão (Logout)" class="text-slate-400 hover:text-rose-400 p-1.5 rounded hover:bg-slate-800 text-xs transition">
-          <i class="fa-solid fa-right-from-bracket"></i>
-        </button>
+        <div class="flex items-center gap-1">
+          <button onclick="abrirModalPerfil()" title="Meu Perfil (Blindagem RBAC)" class="text-slate-400 hover:text-blue-300 p-1.5 rounded hover:bg-slate-800 text-xs transition">
+            <i class="fa-solid fa-id-badge"></i>
+          </button>
+          <button onclick="logout()" title="Encerrar Sessão (Logout)" class="text-slate-400 hover:text-rose-400 p-1.5 rounded hover:bg-slate-800 text-xs transition">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </button>
+        </div>
       </div>
     </aside>
 
@@ -457,12 +462,16 @@
         <section id="view-comercial" class="hidden space-y-6">
           
           <!-- Seletor de Sub-Abas do Módulo Comercial -->
-          <div class="flex border-b border-slate-200 gap-4 text-xs font-bold">
-            <button onclick="switchComercialSubtab('pipeline')" id="subtab-com-pipeline" class="pb-3 subtab-active flex items-center gap-1.5">
+          <div class="flex border-b border-slate-200 gap-4 text-xs font-bold overflow-x-auto">
+            <button onclick="switchComercialSubtab('pipeline')" id="subtab-com-pipeline" class="pb-3 subtab-active flex items-center gap-1.5 whitespace-nowrap">
               <i class="fa-solid fa-table-list"></i> Pipeline & Base Ativa CRM (693 Leads)
             </button>
-            <button onclick="switchComercialSubtab('radar')" id="subtab-com-radar" class="pb-3 subtab-inactive flex items-center gap-1.5">
+            <button onclick="switchComercialSubtab('radar')" id="subtab-com-radar" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
               <i class="fa-solid fa-satellite-dish text-blue-600"></i> Radar de Prospecção Ativa (Scraper)
+            </button>
+            <button onclick="switchComercialSubtab('followups')" id="subtab-com-followups" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
+              <i class="fa-solid fa-handshake text-sky-600"></i> Follow-ups & CRM Relacional (SQLite)
+              <span id="badge-crm-followups" class="bg-sky-100 text-sky-800 text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold">0</span>
             </button>
           </div>
 
@@ -765,6 +774,181 @@
                   </div>
                 </div>
 
+              </div>
+            </div>
+
+          </div>
+
+          <!-- SUB-ABA C: CRM & FOLLOW-UPS DE CLIENTES (EDbrain /crm/followups) -->
+          <div id="comercial-sub-followups" class="hidden space-y-6">
+            
+            <!-- Cards de KPIs do CRM Relacional SQLite -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div class="glass-card rounded-xl p-4 border-l-4 border-blue-500">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Total Follow-ups</span>
+                <span id="kpi-fu-total" class="text-xl font-black text-slate-800">0</span>
+                <span class="text-[10px] text-slate-400 block mt-0.5">Base SQLite EDbrain</span>
+              </div>
+              <div class="glass-card rounded-xl p-4 border-l-4 border-sky-500">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Em Prospecção</span>
+                <span id="kpi-fu-prospeccao" class="text-xl font-black text-sky-600">0</span>
+                <span class="text-[10px] text-slate-400 block mt-0.5">Status Ativo</span>
+              </div>
+              <div class="glass-card rounded-xl p-4 border-l-4 border-amber-500">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Em Negociação</span>
+                <span id="kpi-fu-negociacao" class="text-xl font-black text-amber-600">0</span>
+                <span class="text-[10px] text-slate-400 block mt-0.5">Propostas em Análise</span>
+              </div>
+              <div class="glass-card rounded-xl p-4 border-l-4 border-emerald-500">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Fechados / Sucesso</span>
+                <span id="kpi-fu-fechado" class="text-xl font-black text-emerald-600">0</span>
+                <span class="text-[10px] text-slate-400 block mt-0.5">Contratos Convertidos</span>
+              </div>
+            </div>
+
+            <!-- Formulário de Registro de Novo Follow-up -->
+            <div class="glass-card rounded-xl p-5 border-t-4 border-sky-600 space-y-4">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-slate-100">
+                <div>
+                  <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                    ⚡ Registrar Novo Follow-up de Cliente
+                    <span class="text-[10px] bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full font-bold">API POST /crm/followups</span>
+                  </h3>
+                  <p class="text-xs text-slate-500 mt-0.5">Cadastre interações com clientes diretamente na base corporativa protegida com controle de escopo por área (RBAC).</p>
+                </div>
+                <div id="fu_area_badge">
+                  <!-- Indicador de área do usuário -->
+                </div>
+              </div>
+
+              <form id="form-novo-followup" onsubmit="submeterFollowupCRM(event)" class="space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+                  
+                  <!-- Nome do Cliente / Empresa -->
+                  <div class="lg:col-span-2">
+                    <label for="fu_client_name" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Cliente / Empresa *</label>
+                    <input type="text" id="fu_client_name" required placeholder="Ex: Padaria Bela Vista Ltda" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium">
+                  </div>
+
+                  <!-- Contato Principal -->
+                  <div class="lg:col-span-2">
+                    <label for="fu_contact_person" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Contato Principal</label>
+                    <input type="text" id="fu_contact_person" placeholder="Ex: João Ferreira (Sócio)" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  </div>
+
+                  <!-- Status do Ciclo Comercial -->
+                  <div class="lg:col-span-2">
+                    <label for="fu_status" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Status do Ciclo *</label>
+                    <select id="fu_status" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 font-semibold">
+                      <option value="prospeccao">🔵 Prospecção Inicial</option>
+                      <option value="negociacao">🟡 Em Negociação / Proposta</option>
+                      <option value="fechado">🟢 Fechado / Convertido</option>
+                      <option value="perdido">🔴 Perdido / Sem Interesse</option>
+                    </select>
+                  </div>
+
+                  <!-- Tipo de Interação -->
+                  <div class="lg:col-span-2">
+                    <label for="fu_interaction_type" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Canal de Interação</label>
+                    <select id="fu_interaction_type" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
+                      <option value="WhatsApp">💬 WhatsApp Corporativo</option>
+                      <option value="Reunião">🤝 Reunião Online / Presencial</option>
+                      <option value="Ligação">📞 Ligação Telefônica</option>
+                      <option value="Email">📧 E-mail Formal</option>
+                      <option value="Proposta Enviada">📑 Proposta Comercial Enviada</option>
+                      <option value="Instagram">📸 Direct Instagram</option>
+                      <option value="Outro">📌 Outro</option>
+                    </select>
+                  </div>
+
+                  <!-- Data do Próximo Contato -->
+                  <div class="lg:col-span-2">
+                    <label for="fu_next_date" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Próximo Contato (Agendamento)</label>
+                    <input type="date" id="fu_next_date" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  </div>
+
+                  <!-- Área Responsável -->
+                  <div class="lg:col-span-2">
+                    <label for="fu_area" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Área Responsável *</label>
+                    <select id="fu_area" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 font-semibold">
+                      <option value="Comercial">💼 Comercial & Vendas</option>
+                      <option value="Projetos">🛡️ Projetos / RMs</option>
+                      <option value="Presidência">🏛️ Presidência</option>
+                      <option value="Tesouraria">💰 Tesouraria</option>
+                      <option value="Marketing">📣 Marketing</option>
+                      <option value="VPGG">👥 VPGG</option>
+                      <option value="Jurídico">⚖️ Jurídico</option>
+                    </select>
+                  </div>
+
+                  <!-- Observações Detalhadas -->
+                  <div class="lg:col-span-6">
+                    <label for="fu_notes" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Histórico e Observações do Lead</label>
+                    <textarea id="fu_notes" rows="2" placeholder="Resumo da conversa, objeções levantadas pelo cliente, interesse em registro de marca, etc." class="w-full border border-slate-300 rounded-lg p-2.5 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"></textarea>
+                  </div>
+
+                </div>
+
+                <div class="flex justify-end pt-2">
+                  <button type="submit" id="btn-submit-fu" class="bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Registrar Follow-up no CRM</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Tabela DataGrid de Follow-ups (GET /crm/followups) -->
+            <div class="glass-card rounded-xl p-5 space-y-4">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                    📋 Acompanhamento de Follow-ups Comerciais
+                    <span id="fu-count-badge" class="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-mono font-bold">0 registros</span>
+                  </h3>
+                  <p class="text-xs text-slate-500 mt-0.5">Visão consolidada filtrada pelo escopo da sua área ou visão corporativa transversal para liderança.</p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                  <input type="text" id="filtro-fu-busca" oninput="filtrarTabelaFollowups()" placeholder="Buscar cliente, contato ou notas..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-56 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  <select id="filtro-fu-status" onchange="filtrarTabelaFollowups()" class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
+                    <option value="">Todos os Status</option>
+                    <option value="prospeccao">🔵 Prospecção</option>
+                    <option value="negociacao">🟡 Negociação</option>
+                    <option value="fechado">🟢 Fechado</option>
+                    <option value="perdido">🔴 Perdido</option>
+                  </select>
+                  <button onclick="carregarFollowupsCRM()" title="Recarregar" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs text-slate-700 font-bold transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrows-rotate text-sky-600"></i> Atualizar
+                  </button>
+                </div>
+              </div>
+
+              <!-- Tabela -->
+              <div class="overflow-x-auto max-h-[460px] border border-slate-200 rounded-lg">
+                <table class="w-full text-xs text-left datagrid-table">
+                  <thead class="bg-slate-50 text-slate-600 uppercase font-semibold border-b border-slate-200 sticky top-0">
+                    <tr>
+                      <th class="px-4 py-3">Cliente / Empresa</th>
+                      <th class="px-4 py-3">Contato</th>
+                      <th class="px-4 py-3">Status</th>
+                      <th class="px-4 py-3">Canal</th>
+                      <th class="px-4 py-3">Próximo Contato</th>
+                      <th class="px-4 py-3">Área</th>
+                      <th class="px-4 py-3">Registrado por</th>
+                      <th class="px-4 py-3">Observações</th>
+                      <th class="px-4 py-3 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tabela-crm-followups" class="divide-y divide-slate-100">
+                    <tr>
+                      <td colspan="9" class="p-8 text-center text-slate-400">
+                        <i class="fa-solid fa-spinner fa-spin text-xl text-sky-500 mb-2 block"></i>
+                        Carregando interações comerciais via EDbrain...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
 
@@ -1227,34 +1411,286 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
 
         </section>
 
-        <!-- 8. GESTÃO DE PESSOAS (VPGG) DATAGRID -->
+        <!-- 8. GESTÃO DE PESSOAS (VPGG) & MÓDULO DE PDIs (EDbrain) -->
         <section id="view-vpgg" class="hidden space-y-6">
-          <div class="glass-card rounded-xl p-5 border-t-4 border-purple-600">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h3 class="text-base font-bold text-slate-800">👥 Vice-Presidência de Gente & Gestão (DataGrid de Membros)</h3>
-                <p class="text-xs text-slate-500 mt-0.5">Assiduidade nas Ágoras, Planos de Desenvolvimento Individual (PDI) e One-on-Ones.</p>
-              </div>
-              <input type="text" id="filtro-vpgg-busca" oninput="filtrarVPGGDataGrid()" placeholder="Buscar membro ou setor..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-64 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          
+          <!-- BANNER DE ACESSO NEGADO (Para perfis não autorizados fora de VPGG) -->
+          <div id="vpgg-acesso-negado" class="hidden glass-card rounded-xl p-8 border-t-4 border-rose-600 text-center space-y-3">
+            <div class="w-14 h-14 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto text-2xl font-bold">
+              🔒
             </div>
+            <h3 class="text-lg font-bold text-slate-800">Acesso Restrito ao Módulo VPGG</h3>
+            <p class="text-xs text-slate-500 max-w-md mx-auto">
+              O módulo de Gestão de Pessoas, PDIs e Trilhas Estratégicas é restrito exclusivamente a membros da <strong>Vice-Presidência de Gente & Gestão (VPGG)</strong> e liderança global (Presidência e Diretorias).
+            </p>
+            <button onclick="switchTab('dashboard')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-sm">
+              Retornar ao Painel Geral
+            </button>
           </div>
 
-          <div class="glass-card rounded-xl overflow-hidden shadow-sm">
-            <div class="overflow-x-auto">
-              <table class="w-full text-xs text-left datagrid-table">
-                <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
-                  <tr>
-                    <th class="px-4 py-3">Membro</th>
-                    <th class="px-4 py-3">Setor</th>
-                    <th class="px-4 py-3">Cargo Institucional</th>
-                    <th class="px-4 py-3">Assiduidade nas Ágoras</th>
-                    <th class="px-4 py-3">Status do PDI</th>
-                    <th class="px-4 py-3">One-on-One</th>
-                  </tr>
-                </thead>
-                <tbody id="datagrid-vpgg-membros" class="divide-y divide-slate-100"></tbody>
-              </table>
+          <!-- CONTEÚDO AUTORIZADO DA VPGG -->
+          <div id="vpgg-conteudo-autorizado" class="space-y-6">
+            
+            <!-- Seletor de Sub-Abas da VPGG -->
+            <div class="flex border-b border-slate-200 gap-4 text-xs font-bold overflow-x-auto">
+              <button onclick="switchVPGGSubtab('pdis')" id="subtab-vpgg-pdis" class="pb-3 subtab-active flex items-center gap-1.5 whitespace-nowrap">
+                <i class="fa-solid fa-bullseye text-purple-600"></i> Gestão de PDIs (/vpgg/pdis)
+                <span id="badge-vpgg-pdis" class="bg-purple-100 text-purple-800 text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold">0</span>
+              </button>
+              <button onclick="switchVPGGSubtab('trilhas')" id="subtab-vpgg-trilhas" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
+                <i class="fa-solid fa-wand-magic-sparkles text-amber-500"></i> Motor de Trilhas (/vpgg/pdis/generate)
+              </button>
+              <button onclick="switchVPGGSubtab('analytics')" id="subtab-vpgg-analytics" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
+                <i class="fa-solid fa-chart-column text-blue-600"></i> Analytics & Estatísticas (/vpgg/pdis/analytics)
+              </button>
+              <button onclick="switchVPGGSubtab('membros')" id="subtab-vpgg-membros" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
+                <i class="fa-solid fa-users text-slate-500"></i> Membros da Empresa (DataGrid)
+              </button>
             </div>
+
+            <!-- SUB-ABA 1: GESTÃO DE PDIS (FORMULÁRIO + TABELA SQLITE) -->
+            <div id="vpgg-sub-pdis" class="space-y-6">
+              
+              <!-- Formulário de Cadastro de Novo PDI -->
+              <div class="glass-card rounded-xl p-5 border-t-4 border-purple-600 space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-slate-100">
+                  <div>
+                    <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                      🎯 Cadastrar Novo Plano de Desenvolvimento Individual (PDI)
+                      <span class="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full font-bold">POST /vpgg/pdis</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Defina metas estruturadas, entregáveis práticos e prazos para o ciclo de desenvolvimento de membros na EDV Jr.</p>
+                  </div>
+                  <button type="button" onclick="switchVPGGSubtab('trilhas')" class="text-xs text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition">
+                    <i class="fa-solid fa-wand-magic-sparkles text-purple-500"></i>
+                    <span>Usar Motor de Trilhas</span>
+                  </button>
+                </div>
+
+                <form id="form-novo-pdi" onsubmit="submeterNovoPDI(event)" class="space-y-4">
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+                    
+                    <!-- Membro Colaborador -->
+                    <div class="lg:col-span-3">
+                      <label for="pdi_user_email" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Colaborador Avaliado *</label>
+                      <select id="pdi_user_email" required onchange="aoSelecionarMembroPDI()" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-semibold">
+                        <option value="">-- Selecione o membro avaliado (23 colaboradores) --</option>
+                      </select>
+                    </div>
+
+                    <!-- Área do PDI -->
+                    <div class="lg:col-span-1">
+                      <label for="pdi_area" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Área</label>
+                      <input type="text" id="pdi_area" value="VPGG" readonly class="w-full border border-slate-200 bg-slate-50 rounded-lg px-3 py-2 text-xs text-slate-600 font-semibold">
+                    </div>
+
+                    <!-- Prazo Final -->
+                    <div class="lg:col-span-1">
+                      <label for="pdi_deadline" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Prazo Final *</label>
+                      <input type="date" id="pdi_deadline" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+
+                    <!-- Status -->
+                    <div class="lg:col-span-1">
+                      <label for="pdi_status" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Status *</label>
+                      <select id="pdi_status" required class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-semibold">
+                        <option value="em_andamento">🟡 Em Andamento</option>
+                        <option value="planejado">🔵 Planejado</option>
+                        <option value="concluido">🟢 Concluído</option>
+                        <option value="pausado">⚪ Pausado</option>
+                      </select>
+                    </div>
+
+                    <!-- Objetivos e Metas -->
+                    <div class="lg:col-span-3">
+                      <label for="pdi_objectives" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Objetivos & Metas de Desenvolvimento *</label>
+                      <textarea id="pdi_objectives" rows="3" required placeholder="Ex: Dominar procedimentos de busca de anterioridade no INPI e atingir 100% de assiduidade nas Ágoras." class="w-full border border-slate-300 rounded-lg p-2.5 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"></textarea>
+                    </div>
+
+                    <!-- Ideias de Desenvolvimento / Ações Práticas -->
+                    <div class="lg:col-span-3">
+                      <label for="pdi_ideas" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Ações Práticas & Entregáveis EDV Jr. *</label>
+                      <textarea id="pdi_ideas" rows="3" required placeholder="Ex: Conduzir 5 despachos de marca, participar de 1-on-1s mensais e apresentar um estudo de caso em reunião geral." class="w-full border border-slate-300 rounded-lg p-2.5 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"></textarea>
+                    </div>
+
+                  </div>
+
+                  <div class="flex justify-end pt-2">
+                    <button type="submit" id="btn-submit-pdi" class="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition">
+                      <i class="fa-solid fa-plus"></i>
+                      <span>Salvar PDI no EDbrain</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <!-- Tabela DataGrid de PDIs (GET /vpgg/pdis) -->
+              <div class="glass-card rounded-xl p-5 space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                      📋 Planos de Desenvolvimento Ativos
+                      <span id="pdi-count-badge" class="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-mono font-bold">0 PDIs</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Acompanhamento contínuo dos planos com atualização de status em tempo real.</p>
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-2">
+                    <select id="filtro-pdi-membro" onchange="filtrarTabelaPDIs()" class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                      <option value="">Todos os Colaboradores</option>
+                    </select>
+                    <select id="filtro-pdi-status" onchange="filtrarTabelaPDIs()" class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                      <option value="">Todos os Status</option>
+                      <option value="em_andamento">🟡 Em Andamento</option>
+                      <option value="planejado">🔵 Planejado</option>
+                      <option value="concluido">🟢 Concluído</option>
+                      <option value="pausado">⚪ Pausado</option>
+                    </select>
+                    <button onclick="carregarPDIsVPGG()" title="Recarregar" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs text-slate-700 font-bold transition flex items-center gap-1.5">
+                      <i class="fa-solid fa-arrows-rotate text-purple-600"></i> Atualizar
+                    </button>
+                  </div>
+                </div>
+
+                <div class="overflow-x-auto max-h-[460px] border border-slate-200 rounded-lg">
+                  <table class="w-full text-xs text-left datagrid-table">
+                    <thead class="bg-slate-50 text-slate-600 uppercase font-semibold border-b border-slate-200 sticky top-0">
+                      <tr>
+                        <th class="px-4 py-3">Colaborador</th>
+                        <th class="px-4 py-3">Área</th>
+                        <th class="px-4 py-3">Status</th>
+                        <th class="px-4 py-3">Prazo</th>
+                        <th class="px-4 py-3">Objetivos</th>
+                        <th class="px-4 py-3">Ações Práticas</th>
+                        <th class="px-4 py-3 text-center">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tabela-vpgg-pdis" class="divide-y divide-slate-100">
+                      <tr>
+                        <td colspan="7" class="p-8 text-center text-slate-400">
+                          <i class="fa-solid fa-spinner fa-spin text-xl text-purple-500 mb-2 block"></i>
+                          Carregando PDIs cadastrados no EDbrain...
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- SUB-ABA 2: MOTOR DE TRILHAS & IA HIERÁRQUICA (POST /vpgg/pdis/generate) -->
+            <div id="vpgg-sub-trilhas" class="hidden space-y-6">
+              <div class="glass-card rounded-xl p-5 border-t-4 border-amber-500 space-y-4">
+                <div class="pb-3 border-b border-slate-100">
+                  <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                    🚀 Motor de Geração de Trilhas de Desenvolvimento
+                    <span class="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">API POST /vpgg/pdis/generate</span>
+                  </h3>
+                  <p class="text-xs text-slate-500 mt-0.5">Gera automaticamente uma trilha estruturada (Hard & Soft Skills, Ações Práticas e Marcos Temporais) calibrada para a área e o cargo hierárquico do colaborador.</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div class="md:col-span-2">
+                    <label for="trilha_member_email" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Selecionar Membro *</label>
+                    <select id="trilha_member_email" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold">
+                      <option value="">-- Escolha um colaborador para gerar a trilha --</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="trilha_foco" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Foco Especial Opcional</label>
+                    <input type="text" id="trilha_foco" placeholder="Ex: Liderança, SPIN Selling, Oratória..." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                  </div>
+                </div>
+
+                <div class="flex justify-end">
+                  <button type="button" onclick="acionarGeradorTrilha()" id="btn-gerar-trilha" class="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>Gerar Trilha Estruturada</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Container de Resultado da Trilha Gerada -->
+              <div id="resultado-trilha-container" class="hidden glass-card rounded-xl p-6 border-t-4 border-emerald-500 space-y-6">
+                <!-- Injetado dinamicamente via JS -->
+              </div>
+            </div>
+
+            <!-- SUB-ABA 3: ANALYTICS & ESTATÍSTICAS (GET /vpgg/pdis/analytics) -->
+            <div id="vpgg-sub-analytics" class="hidden space-y-6">
+              
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div class="glass-card rounded-xl p-4 border-l-4 border-purple-500">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Total de PDIs</span>
+                  <span id="analytics-total-pdis" class="text-2xl font-black text-slate-800">0</span>
+                  <span class="text-[10px] text-slate-400 block mt-0.5">Cadastrados no SQLite</span>
+                </div>
+                <div class="glass-card rounded-xl p-4 border-l-4 border-emerald-500">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Taxa de Conclusão</span>
+                  <span id="analytics-taxa-conclusao" class="text-2xl font-black text-emerald-600">0.0%</span>
+                  <span class="text-[10px] text-slate-400 block mt-0.5">Planos Finalizados</span>
+                </div>
+                <div class="glass-card rounded-xl p-4 border-l-4 border-amber-500">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Em Andamento</span>
+                  <span id="analytics-em-andamento" class="text-2xl font-black text-amber-600">0</span>
+                  <span class="text-[10px] text-slate-400 block mt-0.5">Ciclos Ativos</span>
+                </div>
+                <div class="glass-card rounded-xl p-4 border-l-4 border-blue-500">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Planejados</span>
+                  <span id="analytics-planejados" class="text-2xl font-black text-blue-600">0</span>
+                  <span class="text-[10px] text-slate-400 block mt-0.5">Aguardando Início</span>
+                </div>
+              </div>
+
+              <div class="glass-card rounded-xl p-5 space-y-4">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div>
+                    <h3 class="text-base font-bold text-slate-800">📈 Distribuição de Status dos PDIs</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Métricas consolidadas em tempo real via endpoint <code>GET /vpgg/pdis/analytics</code>.</p>
+                  </div>
+                  <button onclick="carregarAnalyticsVPGG()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs text-slate-700 font-bold transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrows-rotate text-purple-600"></i> Atualizar Métricas
+                  </button>
+                </div>
+                <div id="analytics-status-bars" class="space-y-3 pt-2">
+                  <!-- Injetado dinamicamente -->
+                </div>
+              </div>
+
+            </div>
+
+            <!-- SUB-ABA 4: MEMBROS DA EMPRESA (DATAGRID LEGADO) -->
+            <div id="vpgg-sub-membros" class="hidden space-y-6">
+              <div class="glass-card rounded-xl p-5 border-t-4 border-purple-600">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h3 class="text-base font-bold text-slate-800">👥 Membros Corporativos da Gestão 2026</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Quadro geral de colaboradores e acompanhamento de assiduidade.</p>
+                  </div>
+                  <input type="text" id="filtro-vpgg-busca" oninput="filtrarVPGGDataGrid()" placeholder="Buscar membro ou setor..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-64 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+                </div>
+              </div>
+
+              <div class="glass-card rounded-xl overflow-hidden shadow-sm">
+                <div class="overflow-x-auto">
+                  <table class="w-full text-xs text-left datagrid-table">
+                    <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                      <tr>
+                        <th class="px-4 py-3">Membro</th>
+                        <th class="px-4 py-3">Setor</th>
+                        <th class="px-4 py-3">Cargo Institucional</th>
+                        <th class="px-4 py-3">Assiduidade nas Ágoras</th>
+                        <th class="px-4 py-3">Status do PDI</th>
+                        <th class="px-4 py-3">One-on-One</th>
+                      </tr>
+                    </thead>
+                    <tbody id="datagrid-vpgg-membros" class="divide-y divide-slate-100"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
           </div>
         </section>
 
@@ -1431,6 +1867,105 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
         <button onclick="closeTutorialReader()" class="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-4 py-2 rounded-lg">
           Fechar Leitor
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: MEU PERFIL & BLINDAGEM DE AUTO-PROMOÇÃO (/api/auth/me) -->
+  <div id="modal-meu-perfil" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-[#0b1d3a] text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div id="perfil-avatar-preview" class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white border border-blue-400 text-sm">
+            CJ
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Meu Perfil de Colaborador</h3>
+            <span class="text-[10px] text-blue-300 font-mono">EDbrain Security & Identity (RBAC)</span>
+          </div>
+        </div>
+        <button onclick="fecharModalPerfil()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4 text-xs">
+        
+        <!-- Banner de Blindagem de Auto-Promoção -->
+        <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 flex items-start gap-2.5">
+          <i class="fa-solid fa-shield-halved text-amber-600 text-base shrink-0 mt-0.5"></i>
+          <div>
+            <strong class="font-bold">Blindagem de Auto-Promoção (RBAC):</strong>
+            <p class="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+              Os campos de <strong>Cargo, Setor, Área e Papel (Role)</strong> são protegidos contra auto-alteração pelo servidor. Apenas a Presidência e Diretorias possuem privilégios administrativos para remanejamento via <code>/api/admin/users</code>.
+            </p>
+          </div>
+        </div>
+
+        <form id="form-meu-perfil" onsubmit="salvarPerfilUsuario(event)" class="space-y-3.5">
+          
+          <div>
+            <label class="block font-bold text-slate-700 uppercase tracking-wider mb-1 text-[11px]">E-mail Corporativo</label>
+            <input type="email" id="perfil_email" readonly disabled class="w-full bg-slate-100 border border-slate-200 rounded-lg p-2.5 text-slate-500 font-mono text-xs cursor-not-allowed">
+          </div>
+
+          <div>
+            <label for="perfil_nome" class="block font-bold text-slate-700 uppercase tracking-wider mb-1 text-[11px]">Nome de Exibição (Editável)</label>
+            <input type="text" id="perfil_nome" required class="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600">
+            <span class="text-[10px] text-slate-400 mt-0.5 block">Nome visível no mural de comunicados e auditoria.</span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-bold text-slate-700 uppercase tracking-wider mb-1 text-[11px]">Papel Hierárquico (Role)</label>
+              <div class="relative">
+                <input type="text" id="perfil_role" readonly disabled class="w-full bg-slate-100 border border-slate-200 rounded-lg p-2.5 pr-8 text-slate-500 font-bold uppercase text-[11px] cursor-not-allowed">
+                <span class="absolute right-2.5 top-2.5 text-slate-400 text-xs" title="Campo bloqueado pelo RBAC">🔒</span>
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 uppercase tracking-wider mb-1 text-[11px]">Área Corporativa</label>
+              <div class="relative">
+                <input type="text" id="perfil_area" readonly disabled class="w-full bg-slate-100 border border-slate-200 rounded-lg p-2.5 pr-8 text-slate-500 font-bold text-[11px] cursor-not-allowed">
+                <span class="absolute right-2.5 top-2.5 text-slate-400 text-xs" title="Campo bloqueado pelo RBAC">🔒</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block font-bold text-slate-700 uppercase tracking-wider mb-1 text-[11px]">Setor Operacional</label>
+              <div class="relative">
+                <input type="text" id="perfil_setor" readonly disabled class="w-full bg-slate-100 border border-slate-200 rounded-lg p-2.5 pr-8 text-slate-500 text-[11px] cursor-not-allowed">
+                <span class="absolute right-2.5 top-2.5 text-slate-400 text-xs" title="Campo bloqueado pelo RBAC">🔒</span>
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 uppercase tracking-wider mb-1 text-[11px]">Cargo Oficial</label>
+              <div class="relative">
+                <input type="text" id="perfil_cargo" readonly disabled class="w-full bg-slate-100 border border-slate-200 rounded-lg p-2.5 pr-8 text-slate-500 text-[11px] cursor-not-allowed">
+                <span class="absolute right-2.5 top-2.5 text-slate-400 text-xs" title="Campo bloqueado pelo RBAC">🔒</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Endpoint Conectado -->
+          <div class="pt-2 text-[10px] text-slate-400 border-t border-slate-100 flex items-center justify-between">
+            <span>Servidor EDbrain:</span>
+            <span class="font-mono text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">https://edbrain.onrender.com</span>
+          </div>
+
+          <div class="pt-3 border-t border-slate-200 flex items-center justify-between">
+            <button type="button" onclick="fecharModalPerfil()" class="text-xs text-slate-500 hover:text-slate-800 font-semibold px-3 py-2">
+              Cancelar
+            </button>
+            <button type="submit" id="btn-salvar-perfil" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-1.5 transition">
+              <i class="fa-solid fa-floppy-disk"></i>
+              <span>Salvar Alterações de Nome</span>
+            </button>
+          </div>
+        </form>
+
       </div>
     </div>
   </div>
