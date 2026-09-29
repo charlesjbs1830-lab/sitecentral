@@ -501,5 +501,86 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         }, headers={"Authorization": f"Bearer {token_com}"})
         self.assertEqual(res_update_forb.status_code, 403)
 
+    def test_13_cnpj_enrichment_and_scoring(self):
+        """Valida enriquecimento de CNPJ, Lead Score preditivo e novos atributos corporativos"""
+        token_com = self.tokens["assessor_comercial"]
+
+        payload = {
+            "client_name": "Indústria Metalúrgica Vitória",
+            "contact_person": "Engenheiro Marcos",
+            "status": "negociacao",
+            "interaction_type": "Reunião",
+            "notes": "Interesse em proteção de marca mista e patente industrial",
+            "next_followup_date": "2026-10-25",
+            "area": "Comercial",
+            "cnpj": "33.592.510/0001-54",
+            "cnae": "2411-0 - Metalurgia dos metais preciosos",
+            "company_size": "DEMAIS",
+            "address": "Av. Beira Mar, 1000 - Vitória - ES",
+            "estimated_value": 8500.0,
+            "tags": "#quente, #indústria, #alta_prioridade"
+        }
+        res = self.client.post("/crm/followups", json=payload, headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res.status_code, 201)
+        lead = res.json()
+        self.assertEqual(lead["client_name"], "Indústria Metalúrgica Vitória")
+        self.assertEqual(lead["cnpj"], "33.592.510/0001-54")
+        self.assertEqual(lead["company_size"], "DEMAIS")
+        self.assertEqual(lead["estimated_value"], 8500.0)
+        self.assertIn("#quente", lead["tags"])
+        # Score ponderado: negociação (70) + porte DEMAIS (15) + agendado (10) + value > 5000 (10) + tags (5) >= 80
+        self.assertGreaterEqual(lead["score"], 80)
+        self.assertIn("days_stagnant", lead)
+        self.assertIn("is_stagnant", lead)
+
+    def test_14_radar_advanced_search_and_filters(self):
+        """Valida o endpoint /crm/radar/search com múltiplos filtros compostos e escopo RBAC"""
+        token_com = self.tokens["assessor_comercial"]
+        token_proj = self.tokens["assessor_projetos"]
+        token_pres = self.tokens["presidente"]
+
+        # 1. Filtro por min_score >= 80 no escopo Comercial
+        res_high_score = self.client.get("/crm/radar/search?min_score=80&sort_by=score", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_high_score.status_code, 200)
+        leads = res_high_score.json()
+        self.assertTrue(len(leads) > 0)
+        for l in leads:
+            self.assertGreaterEqual(l["score"], 80)
+            self.assertEqual(l["area"], "Comercial")
+
+        # 2. Filtro por CNAE
+        res_cnae = self.client.get("/crm/radar/search?cnae=Metalurgia", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_cnae.status_code, 200)
+        cnae_leads = res_cnae.json()
+        self.assertTrue(len(cnae_leads) > 0)
+        self.assertIn("Indústria Metalúrgica Vitória", [l["client_name"] for l in cnae_leads])
+
+        # 3. Filtro por Tags
+        res_tags = self.client.get("/crm/radar/search?tags=quente", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_tags.status_code, 200)
+        tag_leads = res_tags.json()
+        self.assertTrue(len(tag_leads) > 0)
+
+        # 4. Assessor tentando filtrar área alheia no radar -> 403 Forbidden
+        res_forb = self.client.get("/crm/radar/search?area=Projetos", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_forb.status_code, 403)
+
+        # 5. Presidente com visão global -> vê todas as áreas
+        res_global = self.client.get("/crm/radar/search?sort_by=score", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_global.status_code, 200)
+        all_leads = res_global.json()
+        areas = {l["area"] for l in all_leads}
+        self.assertIn("Comercial", areas)
+        self.assertIn("Projetos", areas)
+
+    def test_15_cnpj_preview_route(self):
+        """Valida endpoint de pré-visualização de CNPJ (/crm/radar/cnpj/{cnpj})"""
+        token_com = self.tokens["assessor_comercial"]
+
+        # CNPJ com tamanho inválido -> 400
+        res_inv = self.client.get("/crm/radar/cnpj/123", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_inv.status_code, 400)
+        self.assertIn("14 dígitos", res_inv.json()["detail"])
+
 if __name__ == "__main__":
     unittest.main()

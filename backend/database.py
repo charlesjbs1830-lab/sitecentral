@@ -272,7 +272,7 @@ def init_db():
     );
     """)
 
-    # 5. Tabela de Follow-up de Clientes e CRM Comercial
+    # 5. Tabela de Follow-up de Clientes e CRM Comercial (Com Atributos Corporativos e Enriquecimento)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS client_followups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -283,10 +283,93 @@ def init_db():
         notes TEXT,
         next_followup_date TEXT,
         area TEXT NOT NULL DEFAULT 'Comercial',
+        cnpj TEXT,
+        cnae TEXT,
+        company_size TEXT,
+        address TEXT,
+        score INTEGER DEFAULT 50,
+        estimated_value REAL DEFAULT 0.0,
+        tags TEXT,
         created_by TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
+
+    # Migração segura de colunas corporativas para bases existentes
+    cursor.execute("PRAGMA table_info(client_followups);")
+    existing_followup_cols = [col[1] for col in cursor.fetchall()]
+    new_followup_cols = {
+        "cnpj": "TEXT",
+        "cnae": "TEXT",
+        "company_size": "TEXT",
+        "address": "TEXT",
+        "score": "INTEGER DEFAULT 50",
+        "estimated_value": "REAL DEFAULT 0.0",
+        "tags": "TEXT"
+    }
+    for col_name, col_def in new_followup_cols.items():
+        if col_name not in existing_followup_cols:
+            cursor.execute(f"ALTER TABLE client_followups ADD COLUMN {col_name} {col_def};")
+
+    # Índices de alta performance para Radar e CRM
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_followups_area_status ON client_followups(area, status);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_followups_cnpj ON client_followups(cnpj);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_followups_score ON client_followups(score);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_followups_next_date ON client_followups(next_followup_date);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_followups_created_at ON client_followups(created_at);")
+
+    # Tabela Virtual FTS5 para buscas textuais avançadas e compostas
+    try:
+        cursor.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS client_followups_fts USING fts5(
+            client_name,
+            contact_person,
+            notes,
+            cnpj,
+            cnae,
+            tags,
+            content='client_followups',
+            content_rowid='id'
+        );
+        """)
+
+        # Triggers de sincronização contínua FTS5
+        cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS client_followups_ai AFTER INSERT ON client_followups BEGIN
+          INSERT INTO client_followups_fts(rowid, client_name, contact_person, notes, cnpj, cnae, tags)
+          VALUES (new.id, new.client_name, new.contact_person, new.notes, new.cnpj, new.cnae, new.tags);
+        END;
+        """)
+
+        cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS client_followups_ad AFTER DELETE ON client_followups BEGIN
+          INSERT INTO client_followups_fts(client_followups_fts, rowid, client_name, contact_person, notes, cnpj, cnae, tags)
+          VALUES ('delete', old.id, old.client_name, old.contact_person, old.notes, old.cnpj, old.cnae, old.tags);
+        END;
+        """)
+
+        cursor.execute("""
+        CREATE TRIGGER IF NOT EXISTS client_followups_au AFTER UPDATE ON client_followups BEGIN
+          INSERT INTO client_followups_fts(client_followups_fts, rowid, client_name, contact_person, notes, cnpj, cnae, tags)
+          VALUES ('delete', old.id, old.client_name, old.contact_person, old.notes, old.cnpj, old.cnae, old.tags);
+          INSERT INTO client_followups_fts(rowid, client_name, contact_person, notes, cnpj, cnae, tags)
+          VALUES (new.id, new.client_name, new.contact_person, new.notes, new.cnpj, new.cnae, new.tags);
+        END;
+        """)
+
+        # Sincronizar registros legados no FTS5 se necessário
+        cursor.execute("SELECT COUNT(*) FROM client_followups_fts;")
+        fts_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM client_followups;")
+        raw_count = cursor.fetchone()[0]
+        if fts_count < raw_count:
+            cursor.execute("""
+            INSERT INTO client_followups_fts(rowid, client_name, contact_person, notes, cnpj, cnae, tags)
+            SELECT id, client_name, contact_person, notes, cnpj, cnae, tags FROM client_followups;
+            """)
+    except Exception as fts_err:
+        print(f"[SQLite FTS5] Aviso na configuração FTS5 (contigência LIKE ativa): {fts_err}")
+
     conn.commit()
 
     # Sincronização da Whitelist oficial com roles estritos e áreas correspondentes

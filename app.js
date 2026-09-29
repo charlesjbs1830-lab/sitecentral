@@ -2568,9 +2568,33 @@ function carregarEstado() {
 }
 
 // ==============================================================================
-// 4.5 MÓDULO DE CRM & FOLLOW-UPS DE CLIENTES (EDbrain /crm/followups)
+// 4.5 MÓDULO DE CRM & FOLLOW-UPS DE CLIENTES (EDbrain /crm/followups & /crm/radar)
 // ==============================================================================
 let crmFollowupsList = [];
+let editingFollowupId = null;
+
+function getInteractionIcon(type) {
+  const t = (type || '').toLowerCase();
+  if (t.includes('whatsapp')) return 'fa-brands fa-whatsapp text-emerald-500';
+  if (t.includes('reuni')) return 'fa-solid fa-handshake text-blue-500';
+  if (t.includes('liga') || t.includes('telef')) return 'fa-solid fa-phone text-sky-500';
+  if (t.includes('email') || t.includes('e-mail')) return 'fa-solid fa-envelope text-amber-500';
+  if (t.includes('proposta')) return 'fa-solid fa-file-contract text-purple-500';
+  if (t.includes('insta')) return 'fa-brands fa-instagram text-rose-500';
+  return 'fa-solid fa-comments text-slate-400';
+}
+
+function renderTagBadges(tags) {
+  if (!tags || !tags.trim()) {
+    return '<span class="text-slate-300 text-[10px] italic">Sem tags</span>';
+  }
+  const parts = tags.split(/[,;\s]+/).map(t => t.trim()).filter(Boolean);
+  if (parts.length === 0) return '<span class="text-slate-300 text-[10px] italic">Sem tags</span>';
+  return `<div class="flex flex-wrap gap-1">${parts.map(p => {
+    const formatted = p.startsWith('#') ? p : '#' + p;
+    return `<span class="px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[9px] font-semibold border border-purple-200 whitespace-nowrap">${escapeHTML(formatted)}</span>`;
+  }).join('')}</div>`;
+}
 
 async function carregarFollowupsCRM() {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
@@ -2594,40 +2618,192 @@ async function carregarFollowupsCRM() {
 }
 
 function atualizarKPIsFollowups() {
+  const total = crmFollowupsList.length;
   let prospeccao = 0, negociacao = 0, fechado = 0, perdido = 0;
+  let sumScore = 0, countEstagnados = 0, sumValor = 0;
+
   crmFollowupsList.forEach(fu => {
     const s = (fu.status || '').toLowerCase().trim();
     if (s === 'prospeccao') prospeccao++;
     else if (s === 'negociacao') negociacao++;
     else if (s === 'fechado') fechado++;
     else if (s === 'perdido') perdido++;
+
+    const score = (fu.score !== undefined && fu.score !== null) ? Number(fu.score) : 50;
+    sumScore += score;
+
+    const daysStagnant = fu.days_stagnant !== undefined ? Number(fu.days_stagnant) : 0;
+    if ((fu.is_stagnant || daysStagnant >= 14) && s !== 'fechado' && s !== 'perdido') {
+      countEstagnados++;
+    }
+
+    const val = parseFloat(fu.estimated_value) || 0;
+    sumValor += val;
   });
 
-  const total = crmFollowupsList.length;
+  const avgScore = total > 0 ? Math.round(sumScore / total) : 0;
   const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
+
   setEl('kpi-fu-total', total);
   setEl('kpi-fu-prospeccao', prospeccao);
   setEl('kpi-fu-negociacao', negociacao);
   setEl('kpi-fu-fechado', fechado);
+  setEl('kpi-fu-score-medio', `${avgScore} pts`);
+  setEl('kpi-fu-estagnados', countEstagnados);
+  setEl('kpi-fu-valor-total', `R$ ${sumValor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
   const badgeEl = document.getElementById('fu-count-badge');
   if (badgeEl) badgeEl.innerText = `${total} registro${total === 1 ? '' : 's'}`;
 }
 
+async function consultarCNPJFormulario(notify = true) {
+  const cnpjInput = document.getElementById('fu_cnpj');
+  const spinner = document.getElementById('fu_cnpj_spinner');
+  if (!cnpjInput) return;
+
+  const rawVal = cnpjInput.value.trim();
+  const clean = rawVal.replace(/\D/g, '');
+
+  if (!clean) {
+    if (notify) showToast("⚠️ Digite um CNPJ com 14 dígitos para consultar.");
+    return;
+  }
+
+  if (clean.length !== 14) {
+    if (notify) showToast("⚠️ CNPJ incompleto. O CNPJ deve conter exatamente 14 dígitos.");
+    return;
+  }
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  if (spinner) spinner.classList.remove('hidden');
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/crm/radar/cnpj/${clean}`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      
+      const clientNameInput = document.getElementById('fu_client_name');
+      const cnaeInput = document.getElementById('fu_cnae');
+      const sizeInput = document.getElementById('fu_company_size');
+      const addrInput = document.getElementById('fu_address');
+
+      if (clientNameInput && (!clientNameInput.value.trim() || clientNameInput.value.trim().toLowerCase().startsWith('lead'))) {
+        clientNameInput.value = data.nome_fantasia || data.razao_social || clientNameInput.value;
+      }
+      if (cnaeInput && data.cnae) cnaeInput.value = data.cnae;
+      if (sizeInput && data.company_size) sizeInput.value = data.company_size;
+      if (addrInput && data.address) addrInput.value = data.address;
+      if (cnpjInput && data.cnpj) cnpjInput.value = data.cnpj;
+
+      if (notify) {
+        showToast(`✅ CNPJ enriquecido: ${data.razao_social || data.nome_fantasia || 'Dados da empresa importados!'}`);
+      }
+    } else {
+      const err = await res.json().catch(() => ({}));
+      if (notify) {
+        showToast(`⚠️ CNPJ não localizado na BrasilAPI: ${err.detail || 'Verifique o número digitado'}`);
+      }
+    }
+  } catch (err) {
+    console.warn("[BrasilAPI Lookup] Erro na consulta:", err);
+    if (notify) showToast("⚠️ Falha de conexão ao consultar BrasilAPI.");
+  } finally {
+    if (spinner) spinner.classList.add('hidden');
+  }
+}
+
+function toggleFiltrosAvancados() {
+  const painel = document.getElementById('painel-filtros-avancados');
+  const btn = document.getElementById('btn-toggle-filtros');
+  if (!painel) return;
+
+  const isHidden = painel.classList.contains('hidden');
+  if (isHidden) {
+    painel.classList.remove('hidden');
+    if (btn) {
+      btn.classList.add('bg-sky-100', 'text-sky-800', 'border-sky-300');
+      btn.classList.remove('bg-slate-100', 'text-slate-700', 'border-slate-300');
+    }
+  } else {
+    painel.classList.add('hidden');
+    if (btn) {
+      btn.classList.remove('bg-sky-100', 'text-sky-800', 'border-sky-300');
+      btn.classList.add('bg-slate-100', 'text-slate-700', 'border-slate-300');
+    }
+  }
+}
+
 function filtrarTabelaFollowups() {
   const busca = (document.getElementById('filtro-fu-busca')?.value || '').toLowerCase().trim();
   const statusFiltro = (document.getElementById('filtro-fu-status')?.value || '').toLowerCase().trim();
+  const ordenacao = document.getElementById('filtro-fu-ordenacao')?.value || 'score';
+  const estagnacao = document.getElementById('filtro-fu-estagnacao')?.value || 'todos';
+  const minScore = parseInt(document.getElementById('filtro-fu-score-min')?.value || '0', 10);
+  const cnaeFiltro = (document.getElementById('filtro-fu-cnae')?.value || '').toLowerCase().trim();
+  const tagsFiltro = (document.getElementById('filtro-fu-tags')?.value || '').toLowerCase().trim();
 
-  const filtrados = crmFollowupsList.filter(fu => {
+  let filtrados = crmFollowupsList.filter(fu => {
     const matchStatus = !statusFiltro || (fu.status || '').toLowerCase().trim() === statusFiltro;
+    
+    const leadScore = (fu.score !== undefined && fu.score !== null) ? Number(fu.score) : 50;
+    const matchScore = leadScore >= minScore;
+
+    const daysStagnant = fu.days_stagnant !== undefined ? Number(fu.days_stagnant) : 0;
+    let matchEstagnacao = true;
+    if (estagnacao === 'estagnados') {
+      matchEstagnacao = daysStagnant >= 14;
+    } else if (estagnacao === 'criticos') {
+      matchEstagnacao = daysStagnant >= 30;
+    } else if (estagnacao === 'recentes') {
+      matchEstagnacao = daysStagnant <= 7;
+    }
+
+    const matchCnae = !cnaeFiltro || String(fu.cnae || '').toLowerCase().includes(cnaeFiltro);
+    const matchTags = !tagsFiltro || String(fu.tags || '').toLowerCase().includes(tagsFiltro);
+
     const matchBusca = !busca ||
       String(fu.client_name || '').toLowerCase().includes(busca) ||
       String(fu.contact_person || '').toLowerCase().includes(busca) ||
       String(fu.notes || '').toLowerCase().includes(busca) ||
       String(fu.area || '').toLowerCase().includes(busca) ||
-      String(fu.created_by || '').toLowerCase().includes(busca);
-    return matchStatus && matchBusca;
+      String(fu.created_by || '').toLowerCase().includes(busca) ||
+      String(fu.cnpj || '').toLowerCase().includes(busca) ||
+      String(fu.cnae || '').toLowerCase().includes(busca) ||
+      String(fu.address || '').toLowerCase().includes(busca) ||
+      String(fu.tags || '').toLowerCase().includes(busca);
+
+    return matchStatus && matchScore && matchEstagnacao && matchCnae && matchTags && matchBusca;
   });
+
+  // Ordenação inteligente
+  filtrados.sort((a, b) => {
+    if (ordenacao === 'estimated_value') {
+      return (parseFloat(b.estimated_value) || 0) - (parseFloat(a.estimated_value) || 0);
+    } else if (ordenacao === 'stagnant') {
+      return (Number(b.days_stagnant) || 0) - (Number(a.days_stagnant) || 0);
+    } else if (ordenacao === 'created_at') {
+      return (Number(b.id) || 0) - (Number(a.id) || 0);
+    } else {
+      // Default: Maior Lead Score (0 a 100)
+      const scoreA = (a.score !== undefined && a.score !== null) ? Number(a.score) : 50;
+      const scoreB = (b.score !== undefined && b.score !== null) ? Number(b.score) : 50;
+      return scoreB - scoreA;
+    }
+  });
+
+  const badgeEl = document.getElementById('fu-count-badge');
+  if (badgeEl) {
+    if (filtrados.length === crmFollowupsList.length) {
+      badgeEl.innerText = `${filtrados.length} registro${filtrados.length === 1 ? '' : 's'}`;
+    } else {
+      badgeEl.innerText = `${filtrados.length} de ${crmFollowupsList.length} leads`;
+    }
+  }
 
   renderTabelaFollowups(filtrados);
 }
@@ -2641,7 +2817,7 @@ function renderTabelaFollowups(itens) {
       <tr>
         <td colspan="9" class="p-8 text-center text-slate-400">
           <i class="fa-solid fa-address-book text-2xl text-slate-300 mb-2 block"></i>
-          <span>Nenhum follow-up de cliente encontrado no banco de dados.</span>
+          <span>Nenhum follow-up de cliente encontrado com os filtros aplicados.</span>
         </td>
       </tr>
     `;
@@ -2656,67 +2832,217 @@ function renderTabelaFollowups(itens) {
   };
 
   tbody.innerHTML = itens.map(fu => {
-    const stConfig = statusMap[(fu.status || '').toLowerCase()] || { label: fu.status, class: 'bg-slate-100 text-slate-700 border-slate-300' };
+    const rawSt = (fu.status || '').toLowerCase().trim();
+    const stConfig = statusMap[rawSt] || { label: fu.status, class: 'bg-slate-100 text-slate-700 border-slate-300' };
     const dataNext = fu.next_followup_date ? fu.next_followup_date : '<span class="text-slate-400 italic">Não agendado</span>';
     const contact = fu.contact_person ? escapeHTML(fu.contact_person) : '<span class="text-slate-400 italic">N/A</span>';
-    const channel = fu.interaction_type ? escapeHTML(fu.interaction_type) : '<span class="text-slate-400 italic">Geral</span>';
+    const channel = fu.interaction_type ? escapeHTML(fu.interaction_type) : 'Geral';
+    const channelIcon = getInteractionIcon(channel);
     const notes = fu.notes ? escapeHTML(fu.notes) : '-';
+
+    // Lead Score & Estagnação
+    const score = (fu.score !== undefined && fu.score !== null) ? Number(fu.score) : 50;
+    let scoreColor = 'bg-slate-100 text-slate-700 border-slate-300';
+    let scoreIcon = 'fa-chart-simple';
+    if (score >= 70) {
+      scoreColor = 'bg-emerald-100 text-emerald-800 border-emerald-300';
+      scoreIcon = 'fa-fire text-emerald-600';
+    } else if (score >= 40) {
+      scoreColor = 'bg-amber-100 text-amber-800 border-amber-300';
+      scoreIcon = 'fa-bolt text-amber-600';
+    } else {
+      scoreColor = 'bg-rose-100 text-rose-800 border-rose-300';
+      scoreIcon = 'fa-arrow-down text-rose-500';
+    }
+
+    const daysStagnant = fu.days_stagnant !== undefined ? Number(fu.days_stagnant) : 0;
+    const isStagnant = (fu.is_stagnant || daysStagnant >= 14) && rawSt !== 'fechado' && rawSt !== 'perdido';
+    const stagnantBadge = isStagnant
+      ? `<span class="inline-flex items-center gap-1 text-[9px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded-full mt-1" title="Sem contato há ${daysStagnant} dias"><i class="fa-solid fa-triangle-exclamation"></i> ${daysStagnant}d parado</span>`
+      : `<span class="text-[9px] text-slate-400 mt-0.5 block">${daysStagnant}d ativo</span>`;
+
+    const estVal = parseFloat(fu.estimated_value) || 0;
+    const valorFormatado = estVal > 0 
+      ? `R$ ${estVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : '<span class="text-slate-400 italic">R$ 0,00</span>';
 
     return `
       <tr class="hover:bg-slate-50 transition border-b border-slate-100">
-        <td class="px-4 py-3 font-semibold text-slate-800">
-          <div class="flex items-center gap-2">
+        <!-- 1. Score & Estagnação -->
+        <td class="px-3 py-3 text-center whitespace-nowrap">
+          <div class="inline-flex flex-col items-center">
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-black border flex items-center gap-1 shadow-xs ${scoreColor}">
+              <i class="fa-solid ${scoreIcon} text-[10px]"></i>
+              <span>${score}</span>
+            </span>
+            ${stagnantBadge}
+          </div>
+        </td>
+
+        <!-- 2. Cliente & Razão Social -->
+        <td class="px-4 py-3">
+          <div class="font-bold text-slate-800 text-xs flex items-center gap-1.5">
             <i class="fa-solid fa-building text-slate-400 text-xs"></i>
             <span>${escapeHTML(fu.client_name)}</span>
           </div>
+          ${fu.cnpj ? `<div class="text-[10px] text-slate-500 font-mono flex items-center gap-1 mt-0.5"><i class="fa-regular fa-id-card text-sky-500"></i> ${escapeHTML(fu.cnpj)}</div>` : ''}
+          ${fu.address ? `<div class="text-[10px] text-slate-400 truncate max-w-[220px] flex items-center gap-1 mt-0.5" title="${escapeHTML(fu.address)}"><i class="fa-solid fa-location-dot text-slate-300"></i> ${escapeHTML(fu.address)}</div>` : ''}
         </td>
-        <td class="px-4 py-3 text-slate-600">${contact}</td>
-        <td class="px-4 py-3 whitespace-nowrap">
-          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${stConfig.class}">
-            ${stConfig.label}
-          </span>
+
+        <!-- 3. Contato & Canal -->
+        <td class="px-3 py-3 whitespace-nowrap">
+          <div class="text-xs font-medium text-slate-700">${contact}</div>
+          <div class="mt-0.5">
+            <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-medium border border-slate-200 inline-flex items-center gap-1">
+              <i class="${channelIcon}"></i> ${channel}
+            </span>
+          </div>
         </td>
-        <td class="px-4 py-3 whitespace-nowrap">
-          <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-medium border border-slate-200">
-            ${channel}
-          </span>
-        </td>
-        <td class="px-4 py-3 whitespace-nowrap font-mono text-[11px] text-slate-600">
-          <i class="fa-regular fa-calendar text-slate-400 mr-1"></i>${dataNext}
-        </td>
-        <td class="px-4 py-3 whitespace-nowrap">
-          <span class="px-2 py-0.5 rounded bg-sky-50 text-sky-800 text-[10px] font-semibold border border-sky-200">
-            ${escapeHTML(fu.area || 'Comercial')}
-          </span>
-        </td>
-        <td class="px-4 py-3 text-slate-500 font-mono text-[11px] whitespace-nowrap">
-          ${escapeHTML(fu.created_by || '-')}
-        </td>
-        <td class="px-4 py-3 text-slate-600 max-w-xs truncate" title="${notes}">
-          ${notes}
-        </td>
-        <td class="px-4 py-3 text-center whitespace-nowrap">
-          <select onchange="atualizarStatusFollowup(${fu.id}, this.value)" class="text-[11px] border border-slate-300 rounded px-2 py-1 bg-white font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500">
-            <option value="prospeccao" ${fu.status === 'prospeccao' ? 'selected' : ''}>Prospecção</option>
-            <option value="negociacao" ${fu.status === 'negociacao' ? 'selected' : ''}>Negociação</option>
-            <option value="fechado" ${fu.status === 'fechado' ? 'selected' : ''}>Fechado</option>
-            <option value="perdido" ${fu.status === 'perdido' ? 'selected' : ''}>Perdido</option>
+
+        <!-- 4. Status Comercial -->
+        <td class="px-3 py-3 whitespace-nowrap">
+          <div class="mb-1">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold border ${stConfig.class}">
+              ${stConfig.label}
+            </span>
+          </div>
+          <select onchange="atualizarStatusFollowup(${fu.id}, this.value)" class="text-[10px] border border-slate-300 rounded px-1.5 py-0.5 bg-white font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500">
+            <option value="prospeccao" ${rawSt === 'prospeccao' ? 'selected' : ''}>🔵 Prospecção</option>
+            <option value="negociacao" ${rawSt === 'negociacao' ? 'selected' : ''}>🟡 Negociação</option>
+            <option value="fechado" ${rawSt === 'fechado' ? 'selected' : ''}>🟢 Fechado</option>
+            <option value="perdido" ${rawSt === 'perdido' ? 'selected' : ''}>🔴 Perdido</option>
           </select>
+        </td>
+
+        <!-- 5. CNAE & Porte -->
+        <td class="px-3 py-3 max-w-[180px]">
+          <div class="flex items-center gap-1.5 mb-0.5">
+            ${fu.company_size ? `<span class="px-1.5 py-0.2 rounded bg-sky-50 text-sky-800 text-[10px] font-bold border border-sky-200">${escapeHTML(fu.company_size)}</span>` : ''}
+            <span class="px-1.5 py-0.2 rounded bg-slate-50 text-slate-600 text-[9px] font-medium border border-slate-200">${escapeHTML(fu.area || 'Comercial')}</span>
+          </div>
+          <div class="text-[10px] text-slate-500 truncate" title="${escapeHTML(fu.cnae || 'CNAE não informado')}">
+            ${fu.cnae ? escapeHTML(fu.cnae) : '<span class="text-slate-300 italic">CNAE não inf.</span>'}
+          </div>
+        </td>
+
+        <!-- 6. Valor Estimado -->
+        <td class="px-3 py-3 text-right whitespace-nowrap font-mono text-xs font-semibold text-slate-800">
+          ${valorFormatado}
+        </td>
+
+        <!-- 7. Tags Comerciais -->
+        <td class="px-3 py-3 max-w-[150px]">
+          ${renderTagBadges(fu.tags)}
+        </td>
+
+        <!-- 8. Próximo Contato & Responsável -->
+        <td class="px-3 py-3 whitespace-nowrap font-mono text-[11px] text-slate-600">
+          <div class="flex items-center gap-1">
+            <i class="fa-regular fa-calendar text-slate-400"></i>
+            <span>${dataNext}</span>
+          </div>
+          ${fu.created_by ? `<div class="text-[9px] text-slate-400 font-mono mt-0.5 truncate max-w-[110px]" title="Responsável: ${escapeHTML(fu.created_by)}">${escapeHTML(fu.created_by)}</div>` : ''}
+        </td>
+
+        <!-- 9. Ações Rápidas -->
+        <td class="px-3 py-3 text-center whitespace-nowrap">
+          <div class="flex items-center justify-center gap-1">
+            <button onclick="preencherFormularioFollowup(${fu.id})" title="Editar Lead & Dados Fiscais" class="p-1.5 text-sky-600 hover:text-sky-800 hover:bg-sky-50 rounded-lg transition border border-transparent hover:border-sky-200">
+              <i class="fa-solid fa-pen-to-square text-xs"></i>
+            </button>
+            ${fu.notes ? `
+            <button onclick="alert('Histórico de ${escapeHTML(fu.client_name)}:\\n\\n' + decodeURIComponent('${encodeURIComponent(fu.notes)}'))" title="Ver Histórico/Notas" class="p-1.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition">
+              <i class="fa-regular fa-comment-dots text-xs"></i>
+            </button>` : ''}
+          </div>
         </td>
       </tr>
     `;
   }).join('');
 }
 
+function preencherFormularioFollowup(id) {
+  const fu = crmFollowupsList.find(f => f.id === id);
+  if (!fu) return;
+
+  editingFollowupId = id;
+
+  const setVal = (elemId, val) => {
+    const el = document.getElementById(elemId);
+    if (el) el.value = val !== null && val !== undefined ? val : '';
+  };
+
+  setVal('fu_cnpj', fu.cnpj || '');
+  setVal('fu_client_name', fu.client_name || '');
+  setVal('fu_contact_person', fu.contact_person || '');
+  setVal('fu_status', fu.status || 'prospeccao');
+  setVal('fu_interaction_type', fu.interaction_type || 'WhatsApp');
+  setVal('fu_next_date', fu.next_followup_date || '');
+  setVal('fu_estimated_value', fu.estimated_value || '');
+  setVal('fu_area', fu.area || 'Comercial');
+  setVal('fu_tags', fu.tags || '');
+  setVal('fu_cnae', fu.cnae || '');
+  setVal('fu_company_size', fu.company_size || '');
+  setVal('fu_address', fu.address || '');
+  setVal('fu_notes', fu.notes || '');
+
+  const btnSubmit = document.getElementById('btn-submit-fu');
+  if (btnSubmit) {
+    btnSubmit.classList.remove('bg-sky-600', 'hover:bg-sky-700');
+    btnSubmit.classList.add('bg-amber-600', 'hover:bg-amber-700');
+    btnSubmit.innerHTML = `<i class="fa-solid fa-check"></i> <span>Salvar Alterações (Lead #${id})</span>`;
+  }
+
+  let btnCancel = document.getElementById('btn-cancel-edit-fu');
+  if (!btnCancel && btnSubmit && btnSubmit.parentElement) {
+    btnCancel = document.createElement('button');
+    btnCancel.id = 'btn-cancel-edit-fu';
+    btnCancel.type = 'button';
+    btnCancel.className = 'bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs px-4 py-2.5 rounded-lg transition ml-2';
+    btnCancel.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancelar';
+    btnCancel.onclick = cancelarEdicaoFollowup;
+    btnSubmit.parentElement.appendChild(btnCancel);
+  }
+
+  const formElem = document.getElementById('form-novo-followup');
+  if (formElem) {
+    formElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  showToast(`✏️ Modo de edição ativado para o lead #${id} (${fu.client_name})`);
+}
+
+function cancelarEdicaoFollowup() {
+  editingFollowupId = null;
+  const form = document.getElementById('form-novo-followup');
+  if (form) form.reset();
+
+  const btnSubmit = document.getElementById('btn-submit-fu');
+  if (btnSubmit) {
+    btnSubmit.classList.remove('bg-amber-600', 'hover:bg-amber-700');
+    btnSubmit.classList.add('bg-sky-600', 'hover:bg-sky-700');
+    btnSubmit.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Registrar Follow-up no CRM</span>';
+  }
+
+  const btnCancel = document.getElementById('btn-cancel-edit-fu');
+  if (btnCancel) btnCancel.remove();
+}
+
 async function submeterFollowupCRM(event) {
   if (event) event.preventDefault();
 
   const clientNameInput = document.getElementById('fu_client_name');
+  const cnpjInput = document.getElementById('fu_cnpj');
   const contactPersonInput = document.getElementById('fu_contact_person');
   const statusSelect = document.getElementById('fu_status');
   const interactionTypeSelect = document.getElementById('fu_interaction_type');
   const nextDateInput = document.getElementById('fu_next_date');
+  const estimatedValueInput = document.getElementById('fu_estimated_value');
   const areaSelect = document.getElementById('fu_area');
+  const tagsInput = document.getElementById('fu_tags');
+  const cnaeInput = document.getElementById('fu_cnae');
+  const companySizeInput = document.getElementById('fu_company_size');
+  const addressInput = document.getElementById('fu_address');
   const notesInput = document.getElementById('fu_notes');
 
   const clientName = (clientNameInput?.value || '').trim();
@@ -2725,13 +3051,21 @@ async function submeterFollowupCRM(event) {
     return;
   }
 
+  const estVal = estimatedValueInput?.value ? parseFloat(estimatedValueInput.value) : 0.0;
+
   const payload = {
     client_name: clientName,
+    cnpj: (cnpjInput?.value || '').trim() || null,
     contact_person: (contactPersonInput?.value || '').trim() || null,
     status: statusSelect?.value || 'prospeccao',
     interaction_type: interactionTypeSelect?.value || 'WhatsApp',
     next_followup_date: nextDateInput?.value || null,
+    estimated_value: isNaN(estVal) ? 0.0 : estVal,
     area: areaSelect?.value || currentUserSession?.area || 'Comercial',
+    tags: (tagsInput?.value || '').trim() || null,
+    cnae: (cnaeInput?.value || '').trim() || null,
+    company_size: (companySizeInput?.value || '').trim() || null,
+    address: (addressInput?.value || '').trim() || null,
     notes: (notesInput?.value || '').trim() || null
   };
 
@@ -2739,12 +3073,16 @@ async function submeterFollowupCRM(event) {
   const btnSubmit = document.getElementById('btn-submit-fu');
   if (btnSubmit) {
     btnSubmit.disabled = true;
-    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando...';
+    btnSubmit.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${editingFollowupId ? 'Salvando...' : 'Registrando...'}`;
   }
 
   try {
-    const res = await fetch(API_BASE_URL + '/crm/followups', {
-      method: 'POST',
+    const isEdit = Boolean(editingFollowupId);
+    const endpoint = isEdit ? `${API_BASE_URL}/crm/followups/${editingFollowupId}` : `${API_BASE_URL}/crm/followups`;
+    const method = isEdit ? 'PUT' : 'POST';
+
+    const res = await fetch(endpoint, {
+      method: method,
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token
@@ -2752,24 +3090,23 @@ async function submeterFollowupCRM(event) {
       body: JSON.stringify(payload)
     });
 
-    if (res.status === 201) {
-      showToast(`✅ Follow-up de "${clientName}" registrado no CRM!`);
-      if (clientNameInput) clientNameInput.value = '';
-      if (contactPersonInput) contactPersonInput.value = '';
-      if (nextDateInput) nextDateInput.value = '';
-      if (notesInput) notesInput.value = '';
+    if (res.status === 201 || (isEdit && res.ok)) {
+      showToast(isEdit ? `✅ Follow-up #${editingFollowupId} atualizado com sucesso!` : `✅ Follow-up de "${clientName}" registrado no CRM!`);
+      cancelarEdicaoFollowup();
       await carregarFollowupsCRM();
     } else {
       const err = await res.json().catch(() => ({}));
-      showToast(`❌ Falha ao registrar follow-up: ${err.detail || 'Erro na requisição'}`);
+      showToast(`❌ Falha na operação: ${err.detail || 'Erro na requisição'}`);
     }
   } catch (err) {
-    console.error("Falha ao registrar follow-up:", err);
+    console.error("Falha ao registrar/atualizar follow-up:", err);
     showToast("⚠️ Servidor EDbrain offline. Não foi possível registrar.");
   } finally {
     if (btnSubmit) {
       btnSubmit.disabled = false;
-      btnSubmit.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Registrar Follow-up no CRM</span>';
+      if (!editingFollowupId) {
+        btnSubmit.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Registrar Follow-up no CRM</span>';
+      }
     }
   }
 }
@@ -2789,9 +3126,16 @@ async function atualizarStatusFollowup(id, novoStatus) {
     });
 
     if (res.ok) {
+      const updated = await res.json().catch(() => null);
       showToast(`✅ Status do follow-up #${id} atualizado para "${novoStatus}"!`);
-      const item = crmFollowupsList.find(f => f.id === id);
-      if (item) item.status = novoStatus;
+      const itemIndex = crmFollowupsList.findIndex(f => f.id === id);
+      if (itemIndex >= 0) {
+        if (updated) {
+          crmFollowupsList[itemIndex] = updated;
+        } else {
+          crmFollowupsList[itemIndex].status = novoStatus;
+        }
+      }
       atualizarKPIsFollowups();
       filtrarTabelaFollowups();
     } else {

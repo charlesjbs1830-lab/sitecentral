@@ -782,39 +782,54 @@
           <!-- SUB-ABA C: CRM & FOLLOW-UPS DE CLIENTES (EDbrain /crm/followups) -->
           <div id="comercial-sub-followups" class="hidden space-y-6">
             
-            <!-- Cards de KPIs do CRM Relacional SQLite -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div class="glass-card rounded-xl p-4 border-l-4 border-blue-500">
-                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Total Follow-ups</span>
-                <span id="kpi-fu-total" class="text-xl font-black text-slate-800">0</span>
-                <span class="text-[10px] text-slate-400 block mt-0.5">Base SQLite EDbrain</span>
+            <!-- Cards de KPIs do CRM Relacional SQLite & Radar Comercial -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+              <div class="glass-card rounded-xl p-3 border-l-4 border-blue-500">
+                <span class="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Total Leads</span>
+                <span id="kpi-fu-total" class="text-lg font-black text-slate-800">0</span>
+                <span class="text-[9px] text-slate-400 block mt-0.5">Base SQLite</span>
               </div>
-              <div class="glass-card rounded-xl p-4 border-l-4 border-sky-500">
-                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Em Prospecção</span>
-                <span id="kpi-fu-prospeccao" class="text-xl font-black text-sky-600">0</span>
-                <span class="text-[10px] text-slate-400 block mt-0.5">Status Ativo</span>
+              <div class="glass-card rounded-xl p-3 border-l-4 border-sky-500">
+                <span class="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Prospecção</span>
+                <span id="kpi-fu-prospeccao" class="text-lg font-black text-sky-600">0</span>
+                <span class="text-[9px] text-slate-400 block mt-0.5">Em Aberto</span>
               </div>
-              <div class="glass-card rounded-xl p-4 border-l-4 border-amber-500">
-                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Em Negociação</span>
-                <span id="kpi-fu-negociacao" class="text-xl font-black text-amber-600">0</span>
-                <span class="text-[10px] text-slate-400 block mt-0.5">Propostas em Análise</span>
+              <div class="glass-card rounded-xl p-3 border-l-4 border-amber-500">
+                <span class="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Negociação</span>
+                <span id="kpi-fu-negociacao" class="text-lg font-black text-amber-600">0</span>
+                <span class="text-[9px] text-slate-400 block mt-0.5">Propostas</span>
               </div>
-              <div class="glass-card rounded-xl p-4 border-l-4 border-emerald-500">
-                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Fechados / Sucesso</span>
-                <span id="kpi-fu-fechado" class="text-xl font-black text-emerald-600">0</span>
-                <span class="text-[10px] text-slate-400 block mt-0.5">Contratos Convertidos</span>
+              <div class="glass-card rounded-xl p-3 border-l-4 border-emerald-500">
+                <span class="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Fechados</span>
+                <span id="kpi-fu-fechado" class="text-lg font-black text-emerald-600">0</span>
+                <span class="text-[9px] text-slate-400 block mt-0.5">Convertidos</span>
+              </div>
+              <div class="glass-card rounded-xl p-3 border-l-4 border-purple-500">
+                <span class="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Score Médio</span>
+                <span id="kpi-fu-score-medio" class="text-lg font-black text-purple-600">0</span>
+                <span class="text-[9px] text-slate-400 block mt-0.5">Qualidade Funil</span>
+              </div>
+              <div class="glass-card rounded-xl p-3 border-l-4 border-rose-500">
+                <span class="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Estagnados</span>
+                <span id="kpi-fu-estagnados" class="text-lg font-black text-rose-600">0</span>
+                <span class="text-[9px] text-slate-400 block mt-0.5">&gt; 14 dias sem contato</span>
+              </div>
+              <div class="glass-card rounded-xl p-3 border-l-4 border-teal-500">
+                <span class="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Pipeline (R$)</span>
+                <span id="kpi-fu-valor-total" class="text-lg font-black text-teal-700">R$ 0,00</span>
+                <span class="text-[9px] text-slate-400 block mt-0.5">Valor Estimado</span>
               </div>
             </div>
 
-            <!-- Formulário de Registro de Novo Follow-up -->
+            <!-- Formulário de Registro de Novo Follow-up com Enriquecimento BrasilAPI -->
             <div class="glass-card rounded-xl p-5 border-t-4 border-sky-600 space-y-4">
               <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-slate-100">
                 <div>
                   <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
-                    ⚡ Registrar Novo Follow-up de Cliente
+                    ⚡ Registrar Novo Lead & Follow-up com BrasilAPI
                     <span class="text-[10px] bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full font-bold">API POST /crm/followups</span>
                   </h3>
-                  <p class="text-xs text-slate-500 mt-0.5">Cadastre interações com clientes diretamente na base corporativa protegida com controle de escopo por área (RBAC).</p>
+                  <p class="text-xs text-slate-500 mt-0.5">Preencha o CNPJ para enriquecimento automático de Razão Social, CNAE, Porte e Endereço Comercial com cálculo de Lead Score preditivo.</p>
                 </div>
                 <div id="fu_area_badge">
                   <!-- Indicador de área do usuário -->
@@ -824,9 +839,23 @@
               <form id="form-novo-followup" onsubmit="submeterFollowupCRM(event)" class="space-y-4">
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
                   
-                  <!-- Nome do Cliente / Empresa -->
+                  <!-- CNPJ com Enriquecimento Automático BrasilAPI -->
                   <div class="lg:col-span-2">
-                    <label for="fu_client_name" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Cliente / Empresa *</label>
+                    <label for="fu_cnpj" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                      <span>CNPJ da Empresa</span>
+                      <button type="button" onclick="consultarCNPJFormulario()" class="text-[10px] text-sky-600 hover:text-sky-800 font-bold underline flex items-center gap-1">
+                        <i class="fa-solid fa-bolt text-amber-500"></i> Buscar BrasilAPI
+                      </button>
+                    </label>
+                    <div class="relative">
+                      <input type="text" id="fu_cnpj" onblur="consultarCNPJFormulario(false)" placeholder="00.000.000/0000-00" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white font-mono focus:outline-none focus:ring-2 focus:ring-sky-500">
+                      <span id="fu_cnpj_spinner" class="hidden absolute right-2.5 top-2.5 text-xs text-sky-600"><i class="fa-solid fa-spinner fa-spin"></i></span>
+                    </div>
+                  </div>
+
+                  <!-- Nome do Cliente / Razão Social -->
+                  <div class="lg:col-span-2">
+                    <label for="fu_client_name" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Cliente / Razão Social *</label>
                     <input type="text" id="fu_client_name" required placeholder="Ex: Padaria Bela Vista Ltda" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium">
                   </div>
 
@@ -847,7 +876,7 @@
                     </select>
                   </div>
 
-                  <!-- Tipo de Interação -->
+                  <!-- Canal de Interação -->
                   <div class="lg:col-span-2">
                     <label for="fu_interaction_type" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Canal de Interação</label>
                     <select id="fu_interaction_type" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
@@ -867,6 +896,12 @@
                     <input type="date" id="fu_next_date" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
                   </div>
 
+                  <!-- Valor Estimado da Oportunidade -->
+                  <div class="lg:col-span-2">
+                    <label for="fu_estimated_value" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Valor Estimado (R$)</label>
+                    <input type="number" step="0.01" min="0" id="fu_estimated_value" placeholder="0.00" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white font-mono focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  </div>
+
                   <!-- Área Responsável -->
                   <div class="lg:col-span-2">
                     <label for="fu_area" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Área Responsável *</label>
@@ -879,6 +914,28 @@
                       <option value="VPGG">👥 VPGG</option>
                       <option value="Jurídico">⚖️ Jurídico</option>
                     </select>
+                  </div>
+
+                  <!-- Tags / Marcadores Estratégicos -->
+                  <div class="lg:col-span-2">
+                    <label for="fu_tags" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Tags Comerciais</label>
+                    <input type="text" id="fu_tags" placeholder="#quente, #indústria, #alta_prioridade" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
+                  </div>
+
+                  <!-- Metadados Corporativos Enriquecidos (CNAE, Porte, Endereço) -->
+                  <div class="lg:col-span-6 grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-sky-50/70 rounded-xl border border-sky-200">
+                    <div>
+                      <label for="fu_cnae" class="block text-[10px] font-bold text-slate-700 uppercase mb-1">CNAE Principal</label>
+                      <input type="text" id="fu_cnae" placeholder="Auto-preenchido via BrasilAPI" class="w-full border border-slate-200 bg-white rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    </div>
+                    <div>
+                      <label for="fu_company_size" class="block text-[10px] font-bold text-slate-700 uppercase mb-1">Porte Corporativo</label>
+                      <input type="text" id="fu_company_size" placeholder="ME, EPP, DEMAIS..." class="w-full border border-slate-200 bg-white rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    </div>
+                    <div>
+                      <label for="fu_address" class="block text-[10px] font-bold text-slate-700 uppercase mb-1">Endereço Comercial</label>
+                      <input type="text" id="fu_address" placeholder="Logradouro, Bairro, Município - UF" class="w-full border border-slate-200 bg-white rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    </div>
                   </div>
 
                   <!-- Observações Detalhadas -->
@@ -898,46 +955,102 @@
               </form>
             </div>
 
-            <!-- Tabela DataGrid de Follow-ups (GET /crm/followups) -->
+            <!-- Painel de Radar Avançado & Filtros Inteligentes -->
             <div class="glass-card rounded-xl p-5 space-y-4">
-              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-slate-100">
                 <div>
                   <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
-                    📋 Acompanhamento de Follow-ups Comerciais
+                    🎯 Radar Comercial Avançado & Lead Scoring
                     <span id="fu-count-badge" class="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-mono font-bold">0 registros</span>
                   </h3>
-                  <p class="text-xs text-slate-500 mt-0.5">Visão consolidada filtrada pelo escopo da sua área ou visão corporativa transversal para liderança.</p>
+                  <p class="text-xs text-slate-500 mt-0.5">Cruzamento multicritério de Lead Score (0 a 100), tempo de estagnação, CNAE e metadados com indexação FTS5.</p>
                 </div>
 
-                <div class="flex flex-wrap items-center gap-2">
-                  <input type="text" id="filtro-fu-busca" oninput="filtrarTabelaFollowups()" placeholder="Buscar cliente, contato ou notas..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-56 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
-                  <select id="filtro-fu-status" onchange="filtrarTabelaFollowups()" class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
+                <div class="flex items-center gap-2">
+                  <button type="button" onclick="toggleFiltrosAvancados()" id="btn-toggle-filtros" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-sliders text-sky-600"></i>
+                    <span>Filtros Avançados</span>
+                  </button>
+                  <button onclick="carregarFollowupsCRM()" title="Recarregar" class="px-3 py-1.5 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg text-xs text-sky-800 font-bold transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrows-rotate text-sky-600"></i> Atualizar Radar
+                  </button>
+                </div>
+              </div>
+
+              <!-- Barra Principal de Filtros -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Busca Textual (FTS5)</label>
+                  <input type="text" id="filtro-fu-busca" oninput="filtrarTabelaFollowups()" placeholder="Cliente, contato, CNPJ, notas..." class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
+                </div>
+
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Status Comercial</label>
+                  <select id="filtro-fu-status" onchange="filtrarTabelaFollowups()" class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 font-semibold">
                     <option value="">Todos os Status</option>
                     <option value="prospeccao">🔵 Prospecção</option>
                     <option value="negociacao">🟡 Negociação</option>
                     <option value="fechado">🟢 Fechado</option>
                     <option value="perdido">🔴 Perdido</option>
                   </select>
-                  <button onclick="carregarFollowupsCRM()" title="Recarregar" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs text-slate-700 font-bold transition flex items-center gap-1.5">
-                    <i class="fa-solid fa-arrows-rotate text-sky-600"></i> Atualizar
-                  </button>
+                </div>
+
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Ordenação Inteligente</label>
+                  <select id="filtro-fu-ordenacao" onchange="filtrarTabelaFollowups()" class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 font-semibold">
+                    <option value="score">🎯 Maior Lead Score (0 a 100)</option>
+                    <option value="estimated_value">💰 Maior Valor Estimado</option>
+                    <option value="stagnant">⏳ Mais Estagnados Primeiro</option>
+                    <option value="created_at">🕒 Mais Recentes</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tempo de Estagnação</label>
+                  <select id="filtro-fu-estagnacao" onchange="filtrarTabelaFollowups()" class="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500 font-semibold">
+                    <option value="todos">Todos os Leads</option>
+                    <option value="estagnados">⚠️ Estagnados (&ge; 14 dias)</option>
+                    <option value="criticos">🚨 Estagnação Crítica (&ge; 30 dias)</option>
+                    <option value="recentes">✨ Recentes (&le; 7 dias)</option>
+                  </select>
                 </div>
               </div>
 
-              <!-- Tabela -->
-              <div class="overflow-x-auto max-h-[460px] border border-slate-200 rounded-lg">
+              <!-- Painel Expandido de Filtros Secundários -->
+              <div id="painel-filtros-avancados" class="hidden pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Lead Score Mínimo</label>
+                  <select id="filtro-fu-score-min" onchange="filtrarTabelaFollowups()" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white">
+                    <option value="0">Qualquer Pontuação</option>
+                    <option value="80">🟢 Alta Prioridade (Score &ge; 80)</option>
+                    <option value="60">🟡 Médio/Alto (Score &ge; 60)</option>
+                    <option value="40">🟠 Regular (Score &ge; 40)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Filtro por CNAE / Setor</label>
+                  <input type="text" id="filtro-fu-cnae" oninput="filtrarTabelaFollowups()" placeholder="Ex: Metalurgia, Alimentação, 2411..." class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white">
+                </div>
+                <div>
+                  <label class="block text-[10px] font-bold text-slate-600 uppercase mb-1">Filtro por Tags</label>
+                  <input type="text" id="filtro-fu-tags" oninput="filtrarTabelaFollowups()" placeholder="Ex: #quente, #marca..." class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white">
+                </div>
+              </div>
+
+              <!-- Tabela Enriquecida -->
+              <div class="overflow-x-auto max-h-[500px] border border-slate-200 rounded-lg">
                 <table class="w-full text-xs text-left datagrid-table">
                   <thead class="bg-slate-50 text-slate-600 uppercase font-semibold border-b border-slate-200 sticky top-0">
                     <tr>
-                      <th class="px-4 py-3">Cliente / Empresa</th>
-                      <th class="px-4 py-3">Contato</th>
-                      <th class="px-4 py-3">Status</th>
-                      <th class="px-4 py-3">Canal</th>
-                      <th class="px-4 py-3">Próximo Contato</th>
-                      <th class="px-4 py-3">Área</th>
-                      <th class="px-4 py-3">Registrado por</th>
-                      <th class="px-4 py-3">Observações</th>
-                      <th class="px-4 py-3 text-center">Ações</th>
+                      <th class="px-3 py-3 text-center">Score</th>
+                      <th class="px-4 py-3">Cliente & Razão Social</th>
+                      <th class="px-3 py-3">Contato & Canal</th>
+                      <th class="px-3 py-3">Status</th>
+                      <th class="px-3 py-3">CNAE & Porte</th>
+                      <th class="px-3 py-3 text-right">Valor Estimado</th>
+                      <th class="px-3 py-3">Tags</th>
+                      <th class="px-3 py-3">Próximo Contato</th>
+                      <th class="px-3 py-3 text-center">Ações</th>
                     </tr>
                   </thead>
                   <tbody id="tabela-crm-followups" class="divide-y divide-slate-100">
