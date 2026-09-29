@@ -17,9 +17,7 @@ from pydantic import BaseModel, Field
 
 
 # Correção: Uso de importações relativas para o pacote backend
-from database import init_db, get_user_by_email
 from database import init_db, get_user_by_email, get_connection, VALID_ROLES
-feature/auth-backend
 from auth import (
     verify_password,
     create_access_token,
