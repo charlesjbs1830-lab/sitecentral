@@ -1857,3 +1857,26 @@ document.addEventListener('DOMContentLoaded', initApp);
 if (document.readyState === 'interactive' || document.readyState === 'complete') {
   initApp();
 }
+// app.js - Ingestão do payload legado da EDV Jr.
+document.addEventListener("DOMContentLoaded", () => {
+    if (typeof LEGACY_DATA === 'undefined') {
+        console.error("Erro crítico: payload legacy_data.js não carregado.");
+        return;
+    }
+
+    const { rms, transactions, leads } = LEGACY_DATA;
+
+    // Inicialização de contadores e KPIs na interface
+    console.log(`[Carregamento Concluído] RMs: ${rms.length} | Transações: ${transactions.length} | Leads: ${leads.length}`);
+    
+    // Exemplo de população de indicadores visuais
+    renderDashboardMetrics({ rms, transactions, leads });
+});
+
+function renderDashboardMetrics(data) {
+    // Mapeamento de elementos no index.html
+    const leadCountEl = document.getElementById("lead-count");
+    if (leadCountEl) {
+        leadCountEl.textContent = data.leads.length;
+    }
+}
