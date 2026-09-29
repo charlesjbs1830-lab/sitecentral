@@ -9,7 +9,7 @@ import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from .database import get_user_by_email
+from database import get_user_by_email
 
 # Chave secreta de 64 caracteres com alta entropia para HMAC-SHA256 (Custo Zero)
 SECRET_KEY = os.getenv("EDV_JWT_SECRET", "edv_junior_secure_jwt_token_secret_key_gestao_2026_enterprise_rbac_sig")
