@@ -196,3 +196,32 @@ header {
 .data-item:last-child {
     border-bottom: none;
 }
+
+/* Kanban Board & Stagnation Badges */
+.kanban-col {
+    min-height: 480px;
+    max-height: calc(100vh - 320px);
+    overflow-y: auto;
+}
+
+.kanban-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.kanban-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px -2px rgba(11, 29, 58, 0.12);
+}
+
+.badge-stagnant-30 {
+    background-color: #ffe4e6;
+    color: #9f1239;
+    border: 1px solid #fecdd3;
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.badge-stagnant-14 {
+    background-color: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}

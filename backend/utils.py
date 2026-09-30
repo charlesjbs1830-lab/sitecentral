@@ -129,3 +129,80 @@ def build_address_from_brasilapi(data: dict) -> Optional[str]:
     if data.get("cep"):
         addr_parts.append(f"CEP {data.get('cep')}")
     return " • ".join(addr_parts) if addr_parts else None
+
+def generate_commercial_pitch(lead: dict) -> dict:
+    """
+    Gerador Dinâmico de Pitches de Abordagem Consultiva (EDV Jr. Scripting Engine):
+    Processa metadados corporativos (CNAE, porte, razão social, nome fantasia, tags e notas)
+    para redigir abordagens de alta conversão para WhatsApp, Instagram DM e E-mail.
+    """
+    nome_exibicao = lead.get("nome_fantasia") or lead.get("client_name") or lead.get("razao_social") or "sua empresa"
+    contato = lead.get("contact_person") or "Gestor(a)"
+    cnae = lead.get("cnae") or "sua área de atuação"
+    porte = lead.get("company_size") or "empresa"
+    notes = lead.get("notes") or ""
+    tags = lead.get("tags") or ""
+
+    # Determinar segmento aproximado a partir do CNAE ou tags
+    segmento = "comércio e serviços"
+    cnae_lower = str(cnae).lower()
+    if any(k in cnae_lower for k in ["panific", "alimento", "restaurante", "bar", "cafe", "pizzaria"]):
+        segmento = "alimentação e gastronomia"
+    elif any(k in cnae_lower for k in ["estetica", "beleza", "salao", "odonto", "clinica", "saude"]):
+        segmento = "saúde e estética"
+    elif any(k in cnae_lower for k in ["mecanica", "veiculo", "auto", "pecas", "oficina"]):
+        segmento = "automotivo e mecânica"
+    elif any(k in cnae_lower for k in ["metalurg", "industria", "fabrica"]):
+        segmento = "indústria e manufatura"
+    elif any(k in cnae_lower for k in ["roupa", "moda", "calcado", "vestuario"]):
+        segmento = "moda e vestuário"
+    elif any(k in cnae_lower for k in ["tecnologia", "software", "ti", "digital", "comunic"]):
+        segmento = "tecnologia e inovação"
+
+    tese_juridica = (
+        f"A {nome_exibicao} atua no segmento de {segmento} ({porte}), onde a identidade de marca "
+        f"e a clientela fiel constituem os ativos intangíveis mais valiosos do negócio. Sob a Lei nº 9.279/96 (LPI), "
+        f"a propriedade sobre o nome e logotipo só se consolida pelo registro deferido no INPI (princípio da anterioridade). "
+        f"Operar sem o registro na classe específica expõe a empresa ao risco de notificação extrajudicial, "
+        f"perda definitiva do nome comercial e pagamento de indenizações a terceiros com registro prévio."
+    )
+
+    pitch_whatsapp = (
+        f"Olá, {contato}! Tudo bem? Aqui é da EDV Jr., consultoria jurídica da faculdade de Direito.\n\n"
+        f"Acompanhamos o destaque da *{nome_exibicao}* no setor de {segmento} e, em nosso levantamento semanal de mercado, "
+        f"identificamos que o nome e a marca de vocês podem estar desprotegidos perante o INPI nesta classe de atividade.\n\n"
+        f"Como empresa júnior do Movimento Empresa Júnior (MEJ), realizamos uma **pesquisa prévia de anterioridade e viabilidade de marca 100% gratuita** "
+        f"para apoiar o empresariado capixaba.\n\n"
+        f"Você teria 5 minutinhos hoje ou amanhã para enviarmos o relatório resumido de proteção da *{nome_exibicao}* sem nenhum compromisso?"
+    )
+
+    pitch_instagram = (
+        f"Olá, equipe da @{nome_exibicao}! Tudo bem com vocês?\n\n"
+        f"Admiro muito o trabalho e posicionamento que vocês construíram no mercado de {segmento}! 👏\n\n"
+        f"Faço parte da EDV Jr., a consultoria jurídica dos alunos de Direito, e notamos que a marca de vocês ainda não possui processo de registro formal averbado no INPI na classe de produtos/serviços principal.\n\n"
+        f"No Direito Marcário, quem registra primeiro é o dono da marca. Para prevenir que qualquer concorrente copie o nome de vocês, rodamos um diagnóstico gratuito de anterioridade para empresas da nossa região.\n\n"
+        f"Podemos enviar o resultado do diagnóstico para vocês darem uma olhada sem nenhum custo? Abraço!"
+    )
+
+    pitch_email = (
+        f"Prezado(a) {contato},\n\n"
+        f"Espero que este e-mail o encontre bem.\n\n"
+        f"Meu nome é da equipe comercial da EDV Jr., a empresa júnior de consultoria jurídica vinculada à Faculdade de Direito e federada à Brasil Júnior (MEJ).\n\n"
+        f"Identificamos que a {nome_exibicao} ({porte}) desempenha papel relevante no segmento de {segmento} ({cnae}). "
+        f"Contudo, em nossa varredura analítica de conformidade, observamos a ausência de registro marcário deferido para a sua denominação comercial junto ao Instituto Nacional da Propriedade Industrial (INPI).\n\n"
+        f"De acordo com a Lei de Propriedade Industrial (Lei 9.279/96), o registro é o único instrumento legal que assegura a exclusividade nacional do uso do nome e impede que concorrentes usem identidade similar.\n\n"
+        f"Gostaríamos de disponibilizar para a {nome_exibicao} um Relatório Técnico de Viabilidade Marcária Gratuito, acompanhado de supervisão técnica.\n\n"
+        f"Podemos agendar uma breve apresentação de 15 minutos nesta quinta ou sexta-feira?\n\n"
+        f"Atenciosamente,\n"
+        f"Equipe de Relações Comerciais & Propriedade Intelectual\n"
+        f"EDV Jr. • Consultoria Jurídica de Direito"
+    )
+
+    return {
+        "client_name": nome_exibicao,
+        "segmento": segmento,
+        "tese_juridica": tese_juridica,
+        "whatsapp": pitch_whatsapp,
+        "instagram": pitch_instagram,
+        "email": pitch_email
+    }

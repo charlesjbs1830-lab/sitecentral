@@ -502,8 +502,14 @@ function switchTab(tabId) {
     carregarTransacoesEDbrain();
   } else if (tabId === 'dashboard') {
     carregarAvisosInstitucionais();
+    carregarMetasPE();
   } else if (tabId === 'comercial') {
     carregarFollowupsCRM();
+  } else if (tabId === 'auditoria') {
+    if (isLeadership) {
+      carregarAuditLogs();
+      carregarStatusBackups();
+    }
   } else if (tabId === 'vpgg') {
     if (isVPGG) {
       carregarPDIsVPGG();
@@ -517,12 +523,15 @@ function switchComercialSubtab(subtab) {
   const pipeView = document.getElementById('comercial-sub-pipeline');
   const radarView = document.getElementById('comercial-sub-radar');
   const fuView = document.getElementById('comercial-sub-followups');
+  const kanbanView = document.getElementById('comercial-sub-kanban');
+
   const btnPipe = document.getElementById('subtab-com-pipeline');
   const btnRadar = document.getElementById('subtab-com-radar');
   const btnFu = document.getElementById('subtab-com-followups');
+  const btnKanban = document.getElementById('subtab-com-kanban');
 
-  [pipeView, radarView, fuView].forEach(el => el && el.classList.add('hidden'));
-  [btnPipe, btnRadar, btnFu].forEach(btn => {
+  [pipeView, radarView, fuView, kanbanView].forEach(el => el && el.classList.add('hidden'));
+  [btnPipe, btnRadar, btnFu, btnKanban].forEach(btn => {
     if (btn) {
       btn.classList.remove('subtab-active');
       btn.classList.add('subtab-inactive');
@@ -539,6 +548,10 @@ function switchComercialSubtab(subtab) {
     if (fuView) fuView.classList.remove('hidden');
     if (btnFu) { btnFu.classList.add('subtab-active'); btnFu.classList.remove('subtab-inactive'); }
     carregarFollowupsCRM();
+  } else if (subtab === 'kanban') {
+    if (kanbanView) kanbanView.classList.remove('hidden');
+    if (btnKanban) { btnKanban.classList.add('subtab-active'); btnKanban.classList.remove('subtab-inactive'); }
+    renderKanbanBoard(crmFollowupsList);
   }
 }
 
@@ -2609,6 +2622,7 @@ async function carregarFollowupsCRM() {
       crmFollowupsList = await res.json();
       atualizarKPIsFollowups();
       filtrarTabelaFollowups();
+      renderKanbanBoard(crmFollowupsList);
     } else {
       console.warn("[CRM Followups] Resposta da API:", res.status);
     }
@@ -2654,6 +2668,9 @@ function atualizarKPIsFollowups() {
 
   const badgeEl = document.getElementById('fu-count-badge');
   if (badgeEl) badgeEl.innerText = `${total} registro${total === 1 ? '' : 's'}`;
+
+  const badgeKanban = document.getElementById('badge-crm-kanban');
+  if (badgeKanban) badgeKanban.innerText = total;
 }
 
 async function consultarCNPJFormulario(notify = true) {
@@ -3056,6 +3073,9 @@ async function submeterFollowupCRM(event) {
   const companySizeInput = document.getElementById('fu_company_size');
   const addressInput = document.getElementById('fu_address');
   const notesInput = document.getElementById('fu_notes');
+  const impactScoreInput = document.getElementById('fu_impact_score');
+  const impactTypeSelect = document.getElementById('fu_impact_type');
+  const impactDescInput = document.getElementById('fu_impact_desc');
 
   const clientName = (clientNameInput?.value || '').trim();
   if (!clientName) {
@@ -3064,6 +3084,7 @@ async function submeterFollowupCRM(event) {
   }
 
   const estVal = estimatedValueInput?.value ? parseFloat(estimatedValueInput.value) : 0.0;
+  const impScore = impactScoreInput?.value ? parseInt(impactScoreInput.value, 10) : 0;
 
   const payload = {
     client_name: clientName,
@@ -3080,7 +3101,10 @@ async function submeterFollowupCRM(event) {
     cnae: (cnaeInput?.value || '').trim() || null,
     company_size: (companySizeInput?.value || '').trim() || null,
     address: (addressInput?.value || '').trim() || null,
-    notes: (notesInput?.value || '').trim() || null
+    notes: (notesInput?.value || '').trim() || null,
+    impact_score: isNaN(impScore) ? 0 : impScore,
+    impact_type: (impactTypeSelect?.value || '').trim() || null,
+    impact_description: (impactDescInput?.value || '').trim() || null
   };
 
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
@@ -3340,11 +3364,13 @@ async function submeterNovoPDI(event) {
   const statusSelect = document.getElementById('pdi_status');
   const objectivesInput = document.getElementById('pdi_objectives');
   const ideasInput = document.getElementById('pdi_ideas');
+  const compMejSelect = document.getElementById('pdi_competency_mej');
 
   const userEmail = (userEmailSelect?.value || '').trim().toLowerCase();
   const objectives = (objectivesInput?.value || '').trim();
   const ideas = (ideasInput?.value || '').trim();
   const deadline = (deadlineInput?.value || '').trim();
+  const compMej = (compMejSelect?.value || 'Gestão').trim();
 
   if (!userEmail) {
     showToast("⚠️ Selecione o colaborador para o PDI.");
@@ -3358,6 +3384,7 @@ async function submeterNovoPDI(event) {
   const payload = {
     user_email: userEmail,
     area: areaInput?.value || 'VPGG',
+    competency_mej: compMej,
     deadline: deadline,
     status: statusSelect?.value || 'em_andamento',
     objectives: objectives,
@@ -3994,6 +4021,700 @@ async function submeterIngestaoPublica(event) {
 }
 
 // ==============================================================================
+// 4.8 FUNIL KANBAN INTERATIVO, GERADOR DE PITCHES, PE BRASIL JR, AUDITORIA & BACKUPS
+// ==============================================================================
+
+// 1. RENDERIZAÇÃO DO QUADRO KANBAN
+function renderKanbanBoard(leads) {
+  const colProspeccao = document.getElementById('kanban-col-prospeccao');
+  const colNegociacao = document.getElementById('kanban-col-negociacao');
+  const colFechado = document.getElementById('kanban-col-fechado');
+  const colPerdido = document.getElementById('kanban-col-perdido');
+  if (!colProspeccao || !colNegociacao || !colFechado || !colPerdido) return;
+
+  const grupos = {
+    prospeccao: [],
+    negociacao: [],
+    fechado: [],
+    perdido: []
+  };
+
+  const totaisVal = {
+    prospeccao: 0,
+    negociacao: 0,
+    fechado: 0,
+    perdido: 0
+  };
+
+  (leads || []).forEach(lead => {
+    const st = (lead.status || 'prospeccao').toLowerCase().trim();
+    const targetGroup = grupos[st] ? st : 'prospeccao';
+    grupos[targetGroup].push(lead);
+    totaisVal[targetGroup] += parseFloat(lead.estimated_value) || 0;
+  });
+
+  // Atualizar contadores e somatórios nos cabeçalhos das colunas
+  const formatMoeda = val => 'R$ ' + val.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  ['prospeccao', 'negociacao', 'fechado', 'perdido'].forEach(key => {
+    const elCount = document.getElementById(`kanban-count-${key}`);
+    const elVal = document.getElementById(`kanban-val-${key}`);
+    if (elCount) elCount.innerText = grupos[key].length;
+    if (elVal) elVal.innerText = formatMoeda(totaisVal[key]);
+  });
+
+  const renderCard = (lead, currentStage) => {
+    const id = lead.id;
+    const nome = escapeHTML(lead.client_name || 'Sem Nome');
+    const fantasia = lead.nome_fantasia ? `<span class="text-[10px] text-slate-500 block truncate font-normal">"${escapeHTML(lead.nome_fantasia)}"</span>` : '';
+    const score = (lead.score !== undefined && lead.score !== null) ? Number(lead.score) : 50;
+    const scoreBadge = score >= 80 
+      ? '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">Score ' + score + '</span>'
+      : (score >= 50 
+        ? '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800">Score ' + score + '</span>'
+        : '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Score ' + score + '</span>');
+    
+    const valor = parseFloat(lead.estimated_value) || 0;
+    const valorBadge = valor > 0 
+      ? `<span class="text-[10px] font-mono font-bold text-slate-800">R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>`
+      : '<span class="text-[10px] text-slate-400 font-mono">Sem valor</span>';
+
+    const daysStagnant = lead.days_stagnant !== undefined ? Number(lead.days_stagnant) : 0;
+    let stagnationBadge = '';
+    if (currentStage !== 'fechado' && currentStage !== 'perdido') {
+      if (daysStagnant >= 30) {
+        stagnationBadge = `<span class="badge-stagnant-30 text-[9px] font-bold px-1.5 py-0.5 rounded-full block text-center mt-1">🚨 Crítico (${daysStagnant}d estagnado)</span>`;
+      } else if (daysStagnant >= 14 || lead.is_stagnant) {
+        stagnationBadge = `<span class="badge-stagnant-14 text-[9px] font-bold px-1.5 py-0.5 rounded-full block text-center mt-1">⏱️ Atenção (${daysStagnant}d estagnado)</span>`;
+      }
+    }
+
+    const porte = lead.company_size ? `<span class="text-[9px] bg-slate-100 text-slate-600 px-1 py-0.2 rounded font-mono">${escapeHTML(lead.company_size)}</span>` : '';
+    const cnae = lead.cnae ? `<span class="text-[9px] text-slate-500 truncate block max-w-[170px]" title="${escapeHTML(lead.cnae)}"><i class="fa-solid fa-briefcase text-[8px] text-slate-400 mr-0.5"></i>${escapeHTML(lead.cnae)}</span>` : '';
+
+    let moveButtons = '';
+    if (currentStage === 'prospeccao') {
+      moveButtons = `
+        <button onclick="moverEstagioKanban(${id}, 'negociacao')" class="px-2 py-1 text-[10px] font-bold rounded bg-amber-100 hover:bg-amber-200 text-amber-900 flex items-center gap-1 transition" title="Avançar para Negociação">
+          <span>Negociação</span> <i class="fa-solid fa-arrow-right text-[9px]"></i>
+        </button>
+      `;
+    } else if (currentStage === 'negociacao') {
+      moveButtons = `
+        <button onclick="moverEstagioKanban(${id}, 'prospeccao')" class="px-1.5 py-1 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition" title="Voltar para Prospecção">
+          <i class="fa-solid fa-arrow-left text-[9px]"></i>
+        </button>
+        <button onclick="moverEstagioKanban(${id}, 'fechado')" class="px-2 py-1 text-[10px] font-bold rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-900 flex items-center gap-1 transition" title="Marcar como Fechado">
+          <i class="fa-solid fa-check text-[9px]"></i> <span>Fechar</span>
+        </button>
+        <button onclick="moverEstagioKanban(${id}, 'perdido')" class="px-1.5 py-1 text-[10px] font-bold rounded bg-rose-100 hover:bg-rose-200 text-rose-800 transition" title="Marcar como Perdido">
+          <i class="fa-solid fa-xmark text-[9px]"></i>
+        </button>
+      `;
+    } else if (currentStage === 'fechado') {
+      moveButtons = `
+        <button onclick="moverEstagioKanban(${id}, 'negociacao')" class="px-2 py-1 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition" title="Reabrir Negociação">
+          <i class="fa-solid fa-arrow-rotate-left text-[9px]"></i> <span>Reabrir</span>
+        </button>
+      `;
+    } else if (currentStage === 'perdido') {
+      moveButtons = `
+        <button onclick="moverEstagioKanban(${id}, 'prospeccao')" class="px-2 py-1 text-[10px] font-bold rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition" title="Recuperar Oportunidade">
+          <i class="fa-solid fa-arrow-rotate-left text-[9px]"></i> <span>Recuperar</span>
+        </button>
+      `;
+    }
+
+    return `
+      <div class="kanban-card bg-white p-3 rounded-xl border border-slate-200 shadow-2xs space-y-2 text-xs">
+        <div class="flex items-start justify-between gap-1.5">
+          <div class="truncate flex-1">
+            <h5 class="font-bold text-slate-800 truncate" title="${nome}">${nome}</h5>
+            ${fantasia}
+          </div>
+          <div class="shrink-0 flex items-center gap-1">
+            ${scoreBadge}
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+          <div class="flex items-center gap-1">
+            ${porte}
+            ${cnae}
+          </div>
+          <div>${valorBadge}</div>
+        </div>
+
+        ${stagnationBadge}
+
+        <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+          <button onclick="abrirModalGeradorPitch(${id})" class="px-2 py-1 text-[10px] font-bold rounded bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1 transition" title="Gerar Roteiro Consultivo com Tese Jurídica">
+            <i class="fa-solid fa-bolt text-amber-500 text-[10px]"></i> <span>Pitch</span>
+          </button>
+          <div class="flex items-center gap-1">
+            ${moveButtons}
+          </div>
+        </div>
+      </div>
+    `;
+  };
+
+  colProspeccao.innerHTML = grupos.prospeccao.length ? grupos.prospeccao.map(l => renderCard(l, 'prospeccao')).join('') : '<div class="p-6 text-center text-slate-400 text-xs italic">Nenhum lead em prospecção</div>';
+  colNegociacao.innerHTML = grupos.negociacao.length ? grupos.negociacao.map(l => renderCard(l, 'negociacao')).join('') : '<div class="p-6 text-center text-slate-400 text-xs italic">Nenhum lead em negociação</div>';
+  colFechado.innerHTML = grupos.fechado.length ? grupos.fechado.map(l => renderCard(l, 'fechado')).join('') : '<div class="p-6 text-center text-slate-400 text-xs italic">Nenhum contrato fechado</div>';
+  colPerdido.innerHTML = grupos.perdido.length ? grupos.perdido.map(l => renderCard(l, 'perdido')).join('') : '<div class="p-6 text-center text-slate-400 text-xs italic">Nenhum lead perdido</div>';
+}
+
+// 2. MOVIMENTAÇÃO DE ESTÁGIO NO KANBAN
+async function moverEstagioKanban(leadId, novoStatus) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) {
+    showToast("⚠️ Autenticação necessária para alterar estágio.");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/crm/followups/${leadId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({ status: novoStatus })
+    });
+
+    if (res.ok) {
+      showToast(`✨ Estágio atualizado para "${novoStatus.toUpperCase()}"!`);
+      await carregarFollowupsCRM();
+      carregarMetasPE();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Falha ao mover estágio: ${err.detail || 'Erro na requisição'}`);
+    }
+  } catch (e) {
+    showToast("⚠️ Falha de comunicação com o servidor.");
+  }
+}
+
+// 3. GERADOR DINÂMICO DE PITCHES
+let currentPitchData = null;
+
+async function abrirModalGeradorPitch(leadId) {
+  const modal = document.getElementById('modal-gerador-pitch');
+  const title = document.getElementById('pitch-modal-lead-title');
+  const tese = document.getElementById('pitch-tese-juridica');
+  const txtWpp = document.getElementById('pitch-text-whatsapp');
+  const txtInsta = document.getElementById('pitch-text-instagram');
+  const txtEmail = document.getElementById('pitch-text-email');
+
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  if (title) title.innerText = `Gerando pitch para lead #${leadId}...`;
+  if (tese) tese.innerText = "Consultando base de inteligência jurídica...";
+  if (txtWpp) txtWpp.value = "";
+  if (txtInsta) txtInsta.value = "";
+  if (txtEmail) txtEmail.value = "";
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/crm/pitch/${leadId}`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      currentPitchData = data;
+      if (title) title.innerText = `${data.client_name} • ${data.segmento}`;
+      if (tese) tese.innerText = data.tese_juridica;
+      if (txtWpp) txtWpp.value = data.whatsapp;
+      if (txtInsta) txtInsta.value = data.instagram || data.instagram_dm || "";
+      if (txtEmail) txtEmail.value = data.email || data.email_formal || "";
+      switchPitchTab('whatsapp');
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Erro ao gerar pitch: ${err.detail || 'Falha na requisição'}`);
+      if (tese) tese.innerText = "Não foi possível gerar a tese jurídica para este registro.";
+    }
+  } catch (err) {
+    showToast("⚠️ Falha ao conectar ao servidor para gerar pitch.");
+  }
+}
+
+function fecharModalPitch() {
+  const modal = document.getElementById('modal-gerador-pitch');
+  if (modal) modal.classList.add('hidden');
+}
+
+function switchPitchTab(tab) {
+  const tabs = ['whatsapp', 'instagram', 'email'];
+  tabs.forEach(t => {
+    const btn = document.getElementById(`pitch-tab-${t}`);
+    const content = document.getElementById(`pitch-content-${t}`);
+    if (t === tab) {
+      if (btn) {
+        btn.classList.add('border-b-2', 'border-emerald-600', 'text-emerald-700');
+        btn.classList.remove('border-transparent', 'text-slate-500');
+      }
+      if (content) content.classList.remove('hidden');
+    } else {
+      if (btn) {
+        btn.classList.remove('border-b-2', 'border-emerald-600', 'text-emerald-700');
+        btn.classList.add('border-transparent', 'text-slate-500');
+      }
+      if (content) content.classList.add('hidden');
+    }
+  });
+}
+
+function copiarPitch(tipo) {
+  let texto = '';
+  if (tipo === 'whatsapp') {
+    texto = getVal('pitch-text-whatsapp');
+  } else if (tipo === 'instagram') {
+    texto = getVal('pitch-text-instagram');
+  } else if (tipo === 'email') {
+    texto = getVal('pitch-text-email');
+  } else if (tipo === 'tese') {
+    const el = document.getElementById('pitch-tese-juridica');
+    texto = el ? el.innerText : '';
+  }
+
+  if (!texto) {
+    showToast("Nenhum texto disponível para cópia.");
+    return;
+  }
+
+  navigator.clipboard.writeText(texto).then(() => {
+    showToast("📋 Roteiro copiado com sucesso para a área de transferência!");
+  }).catch(() => {
+    showToast("Texto selecionado para cópia.");
+  });
+}
+
+// 4. PAINEL DE INDICADORES PE BRASIL JÚNIOR (2024-2026)
+async function carregarMetasPE() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/strategy/pe-metrics`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      
+      // 1. Faturamento
+      const fatReal = data.faturamento_realizado || 0;
+      const fatMeta = data.faturamento_meta || 50000;
+      const fatPct = data.faturamento_percentual || 0;
+      const fatStatus = data.faturamento_status || 'off_track';
+      
+      const elFatReal = document.getElementById('pe-fat-realizado');
+      const elFatMeta = document.getElementById('pe-fat-meta');
+      const elFatBar = document.getElementById('pe-fat-bar');
+      const elFatPct = document.getElementById('pe-fat-pct');
+      const elFatStatus = document.getElementById('pe-fat-status');
+
+      if (elFatReal) elFatReal.innerText = `R$ ${fatReal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+      if (elFatMeta) elFatMeta.innerText = `R$ ${fatMeta.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+      if (elFatBar) elFatBar.style.width = `${Math.min(100, fatPct)}%`;
+      if (elFatPct) elFatPct.innerText = `${fatPct.toFixed(1)}% da meta anual`;
+      if (elFatStatus) {
+        elFatStatus.innerText = fatStatus === 'on_track' ? '🟢 No Ritmo' : (fatStatus === 'attention' ? '🟡 Atenção' : '🔴 Fora da Curva');
+        elFatStatus.className = fatStatus === 'on_track' ? 'text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800' : (fatStatus === 'attention' ? 'text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800' : 'text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800');
+      }
+
+      // 2. Projetos PAI
+      const paiReal = data.projetos_alto_impacto_realizados || 0;
+      const paiMeta = data.projetos_alto_impacto_meta || 10;
+      const paiPct = data.projetos_alto_impacto_percentual || 0;
+      const paiStatus = data.projetos_alto_impacto_status || 'off_track';
+
+      const elPaiReal = document.getElementById('pe-pai-realizado');
+      const elPaiMeta = document.getElementById('pe-pai-meta');
+      const elPaiBar = document.getElementById('pe-pai-bar');
+      const elPaiPct = document.getElementById('pe-pai-pct');
+      const elPaiStatus = document.getElementById('pe-pai-status');
+
+      if (elPaiReal) elPaiReal.innerText = `${paiReal} projeto${paiReal === 1 ? '' : 's'}`;
+      if (elPaiMeta) elPaiMeta.innerText = `${paiMeta} projetos`;
+      if (elPaiBar) elPaiBar.style.width = `${Math.min(100, paiPct)}%`;
+      if (elPaiPct) elPaiPct.innerText = `${paiPct.toFixed(1)}% da meta`;
+      if (elPaiStatus) {
+        elPaiStatus.innerText = paiStatus === 'on_track' ? '🟢 Concluído' : (paiStatus === 'attention' ? '🟡 Atenção' : '🔴 Acelerar');
+        elPaiStatus.className = paiStatus === 'on_track' ? 'text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800' : 'text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800';
+      }
+
+      // 3. Retenção
+      const retTaxa = data.retencao_membros_taxa || 91.3;
+      const retMeta = data.retencao_membros_meta || 80.0;
+      const retStatus = data.retencao_status || 'on_track';
+
+      const elRetTaxa = document.getElementById('pe-ret-taxa');
+      const elRetMeta = document.getElementById('pe-ret-meta');
+      const elRetBar = document.getElementById('pe-ret-bar');
+      const elRetStatus = document.getElementById('pe-ret-status');
+
+      if (elRetTaxa) elRetTaxa.innerText = `${retTaxa.toFixed(1)}%`;
+      if (elRetMeta) elRetMeta.innerText = `${retMeta.toFixed(1)}%`;
+      if (elRetBar) elRetBar.style.width = `${Math.min(100, retTaxa)}%`;
+      if (elRetStatus) {
+        elRetStatus.innerText = retStatus === 'on_track' ? '🟢 Acima da Meta' : '🔴 Atenção';
+        elRetStatus.className = retStatus === 'on_track' ? 'text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800' : 'text-[9px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800';
+      }
+
+      // 4. NPS
+      const npsMedia = data.nps_satisfacao_media || 89.5;
+      const npsMeta = data.nps_satisfacao_meta || 75.0;
+      const npsStatus = data.nps_status || 'on_track';
+
+      const elNpsValor = document.getElementById('pe-nps-valor');
+      const elNpsMeta = document.getElementById('pe-nps-meta');
+      const elNpsBar = document.getElementById('pe-nps-bar');
+      const elNpsStatus = document.getElementById('pe-nps-status');
+
+      if (elNpsValor) elNpsValor.innerText = `${npsMedia.toFixed(1)}`;
+      if (elNpsMeta) elNpsMeta.innerText = `${npsMeta.toFixed(1)}`;
+      if (elNpsBar) elNpsBar.style.width = `${Math.min(100, npsMedia)}%`;
+      if (elNpsStatus) {
+        elNpsStatus.innerText = npsStatus === 'on_track' ? '🟢 Excelente' : '🟡 Ajustar';
+        elNpsStatus.className = 'text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800';
+      }
+
+      // Alertas de Linha de Corte
+      const alertContainer = document.getElementById('pe-alertas-container');
+      if (alertContainer && data.alertas_linha_corte) {
+        alertContainer.innerHTML = data.alertas_linha_corte.map(a => `
+          <div class="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-xs flex items-center gap-2">
+            <i class="fa-solid fa-triangle-exclamation text-amber-600 text-sm shrink-0"></i>
+            <span><strong>Linha de Corte Federativa:</strong> ${escapeHTML(a)}</span>
+          </div>
+        `).join('');
+      }
+    }
+  } catch (e) {
+    console.warn("[PE Metrics] Falha ao carregar metas da estratégia:", e);
+  }
+}
+
+// 5. CENTRAL DE PLAYBOOKS & COMPLIANCE MEJ (POPs)
+async function abrirModalPOPs() {
+  const modal = document.getElementById('modal-compliance-pops');
+  const body = document.getElementById('pops-container-body');
+  if (!modal || !body) return;
+
+  modal.classList.remove('hidden');
+  body.innerHTML = '<div class="p-6 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin text-xl text-blue-600 mb-2 block"></i>Carregando playbooks operacionais do servidor...</div>';
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/compliance/pops`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      body.innerHTML = (data.pops || []).map(pop => `
+        <div class="glass-card rounded-xl p-4 border-l-4 border-blue-600 space-y-2">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-mono font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded">${escapeHTML(pop.codigo || pop.code)}</span>
+              <h4 class="font-bold text-slate-800 text-xs">${escapeHTML(pop.titulo)}</h4>
+            </div>
+            <span class="text-[10px] text-slate-500 font-semibold">${escapeHTML(pop.area)} • Fase: ${escapeHTML(pop.fase_crm)}</span>
+          </div>
+          <p class="text-slate-600 text-xs leading-relaxed">${escapeHTML(pop.objetivo)}</p>
+          <div class="pt-2 border-t border-slate-100">
+            <span class="text-[10px] font-bold text-slate-700 uppercase tracking-wider block mb-1">Passos Obrigatórios de Conformidade:</span>
+            <ul class="list-disc list-inside space-y-1 text-slate-600 text-[11px]">
+              ${(pop.passos_obrigatorios || []).map(p => `<li>${escapeHTML(p)}</li>`).join('')}
+            </ul>
+          </div>
+        </div>
+      `).join('');
+    } else {
+      body.innerHTML = '<div class="p-4 text-center text-rose-600">Falha ao consultar POPs no servidor.</div>';
+    }
+  } catch (e) {
+    body.innerHTML = '<div class="p-4 text-center text-rose-600">Erro de conexão ao carregar POPs.</div>';
+  }
+}
+
+function fecharModalPOPs() {
+  const modal = document.getElementById('modal-compliance-pops');
+  if (modal) modal.classList.add('hidden');
+}
+
+// 6. DOSSIÊ DE IMPACTO SOCIOECONÔMICO MEJ (3.5x MULTIPLICADOR)
+async function abrirModalImpactoMEJ() {
+  const modal = document.getElementById('modal-impacto-mej');
+  const tbody = document.getElementById('tabela-impacto-mej-body');
+  if (!modal || !tbody) return;
+
+  modal.classList.remove('hidden');
+  tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin text-xl text-emerald-600 mb-2 block"></i>Calculando impacto com multiplicador MEJ...</td></tr>';
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/crm/impact/report`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const resumo = data.resumo_executivo || {};
+      
+      const elContratos = document.getElementById('impacto-total-contratos');
+      const elReceita = document.getElementById('impacto-receita-direta');
+      const elImpacto = document.getElementById('impacto-economico-gerado');
+      const elHoras = document.getElementById('impacto-horas-consultoria');
+
+      if (elContratos) elContratos.innerText = resumo.total_contratos_fechados || 0;
+      if (elReceita) elReceita.innerText = `R$ ${(resumo.faturamento_direto_ej || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+      if (elImpacto) elImpacto.innerText = `R$ ${(resumo.impacto_economico_local_estimado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+      if (elHoras) elHoras.innerText = `${resumo.horas_consultoria_universitaria || 0}h`;
+
+      const projetos = data.projetos_consolidados || [];
+      if (projetos.length) {
+        tbody.innerHTML = projetos.map(p => `
+          <tr class="hover:bg-slate-50 transition">
+            <td class="px-3 py-2 font-bold text-slate-800">
+              ${escapeHTML(p.cliente)}
+              ${p.razao_social ? `<span class="block text-[10px] text-slate-400 font-normal truncate">${escapeHTML(p.razao_social)}</span>` : ''}
+            </td>
+            <td class="px-3 py-2 font-mono">${escapeHTML(p.porte || 'ME')}</td>
+            <td class="px-3 py-2 text-right font-mono font-bold text-slate-800">R$ ${(p.valor_contrato || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+            <td class="px-3 py-2 text-right font-mono font-bold text-emerald-700">R$ ${((p.valor_contrato || 0) * 3.5).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+            <td class="px-3 py-2 text-center">
+              <span class="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">${p.impact_score || p.score_impacto || 0}</span>
+            </td>
+            <td class="px-3 py-2 text-slate-600 truncate max-w-[200px]" title="${escapeHTML(p.tipo_impacto || p.impact_type || '')}">
+              ${escapeHTML(p.tipo_impacto || p.impact_type || 'Geração de Renda')}
+            </td>
+          </tr>
+        `).join('');
+      } else {
+        tbody.innerHTML = '<tr><td colspan="6" class="p-6 text-center text-slate-400">Nenhum contrato fechado com mensuração de impacto ainda. Feche oportunidades no Kanban para gerar o relatório!</td></tr>';
+      }
+    }
+  } catch (e) {
+    tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-rose-600">Erro ao carregar dossiê de impacto.</td></tr>';
+  }
+}
+
+function fecharModalImpactoMEJ() {
+  const modal = document.getElementById('modal-impacto-mej');
+  if (modal) modal.classList.add('hidden');
+}
+
+// 7. AUDITORIA FORENSE & CENTRAL DE BACKUPS SQLITE
+let auditLogsCache = [];
+
+async function carregarAuditLogs() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  const tbody = document.getElementById('datagrid-audit-logs');
+  const badge = document.getElementById('badge-total-audit-logs');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin text-xl text-blue-600 mb-2 block"></i>Consultando trilha de auditoria forense...</td></tr>';
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/audit-logs?limit=100`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      auditLogsCache = data.logs || [];
+      if (badge) badge.innerText = `${data.total || auditLogsCache.length} eventos`;
+      filtrarAuditLogs();
+    } else if (res.status === 403) {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-rose-600 font-bold"><i class="fa-solid fa-shield-halved text-xl mb-1 block"></i>Acesso Restrito: Auditoria forense exclusiva para Presidente e Diretores (RBAC).</td></tr>';
+    } else {
+      if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-rose-600">Falha ao consultar logs de auditoria.</td></tr>';
+    }
+  } catch (e) {
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-rose-600">Erro de conexão ao carregar auditoria.</td></tr>';
+  }
+}
+
+function filtrarAuditLogs() {
+  const tbody = document.getElementById('datagrid-audit-logs');
+  if (!tbody) return;
+
+  const userFilter = (getVal('filtro-audit-user') || '').toLowerCase().trim();
+  const actionFilter = (getVal('filtro-audit-action') || '').toUpperCase().trim();
+
+  const filtered = auditLogsCache.filter(log => {
+    if (userFilter && !(log.user_email || '').toLowerCase().includes(userFilter)) return false;
+    if (actionFilter && (log.action || '').toUpperCase() !== actionFilter) return false;
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">Nenhum evento localizado com os filtros aplicados.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(log => {
+    const isSecurity = log.action === 'SECURITY_VIOLATION_403' || log.status_code === 403;
+    const actionBadge = isSecurity 
+      ? `<span class="bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded font-bold">${escapeHTML(log.action)}</span>`
+      : `<span class="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded font-bold">${escapeHTML(log.action)}</span>`;
+
+    const statusBadge = log.status_code >= 400 
+      ? `<span class="text-rose-600 font-bold">${log.status_code}</span>`
+      : `<span class="text-emerald-600 font-bold">${log.status_code}</span>`;
+
+    return `
+      <tr class="hover:bg-slate-50 transition">
+        <td class="px-3 py-2 font-bold text-slate-700">#${log.id}</td>
+        <td class="px-3 py-2 text-slate-500 whitespace-nowrap">${escapeHTML(log.timestamp)}</td>
+        <td class="px-3 py-2 font-bold text-slate-800">${escapeHTML(log.user_email)}</td>
+        <td class="px-3 py-2">${actionBadge}</td>
+        <td class="px-3 py-2 text-slate-600 font-mono text-[10px]">${escapeHTML(log.resource)}</td>
+        <td class="px-3 py-2 text-center">${statusBadge}</td>
+        <td class="px-3 py-2 text-slate-400 font-mono">${escapeHTML(log.ip_address || '127.0.0.1')}</td>
+        <td class="px-3 py-2 text-slate-600 truncate max-w-[260px]" title="${escapeHTML(log.details || '')}">${escapeHTML(log.details || '-')}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function exportarAuditLogsCSV() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  fetch(`${API_BASE_URL}/api/admin/audit-logs/export`, {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(res => {
+    if (!res.ok) throw new Error("Acesso negado ou servidor indisponível");
+    return res.blob();
+  })
+  .then(blob => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit_logs_edbrain_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showToast("📥 Trilha forense exportada em CSV com sucesso!");
+  })
+  .catch(err => {
+    showToast(`❌ Falha na exportação: ${err.message}`);
+  });
+}
+
+async function carregarStatusBackups() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/backup/status`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const stats = data.telemetria || data.database || {};
+      
+      const elFile = document.getElementById('backup-db-filename');
+      const elSize = document.getElementById('backup-db-size');
+      const elTotal = document.getElementById('backup-total-snapshots');
+      const elList = document.getElementById('backup-snapshots-list');
+
+      if (elFile) elFile.innerText = stats.database_file || 'auth.db';
+      if (elSize) elSize.innerText = `${stats.size_kb || 0} KB`;
+      if (elTotal) elTotal.innerText = `${stats.total_backups || 0} snapshots`;
+
+      if (elList && stats.backups && stats.backups.length) {
+        elList.innerHTML = stats.backups.slice(0, 5).map(b => `
+          <div class="p-2 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-database text-slate-500 text-xs"></i>
+              <span class="font-mono font-bold text-slate-700">${escapeHTML(b.filename)}</span>
+            </div>
+            <div class="flex items-center gap-3 text-slate-500 font-mono text-[11px]">
+              <span>${(b.size_bytes / 1024).toFixed(1)} KB</span>
+              <span class="text-emerald-600 font-bold">Íntegro</span>
+            </div>
+          </div>
+        `).join('');
+      } else if (elList) {
+        elList.innerHTML = '<div class="text-[11px] text-slate-400 italic">Nenhum snapshot gravado ainda. Clique em "Criar Snapshot Imediato".</div>';
+      }
+    }
+  } catch (e) {
+    console.warn("[Backup] Falha ao carregar status:", e);
+  }
+}
+
+async function criarSnapshotBanco() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  const btn = document.getElementById('btn-snapshot-now');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Copiando...';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/admin/backup/snapshot`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      showToast(`📸 Snapshot criado: ${data.snapshot.filename} (${(data.snapshot.size_bytes / 1024).toFixed(1)} KB)`);
+      carregarStatusBackups();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Falha ao criar snapshot: ${err.detail || 'Acesso negado'}`);
+    }
+  } catch (e) {
+    showToast("⚠️ Erro de conexão ao disparar snapshot.");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-camera"></i> Criar Snapshot Imediato';
+    }
+  }
+}
+
+function baixarBancoOficial() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  fetch(`${API_BASE_URL}/api/admin/backup/download`, {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(res => {
+    if (!res.ok) throw new Error("Acesso negado ou banco não encontrado");
+    return res.blob();
+  })
+  .then(blob => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `auth_edbrain_${new Date().toISOString().slice(0, 10)}.db`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showToast("💾 Download do banco oficial SQLite iniciado!");
+  })
+  .catch(err => {
+    showToast(`❌ Falha no download: ${err.message}`);
+  });
+}
+
+// ==============================================================================
 // 5. INICIALIZAÇÃO DEFINITIVA DO ECOSSISTEMA
 // ==============================================================================
 function initApp() {
@@ -4009,6 +4730,7 @@ function initApp() {
   carregarAvisosInstitucionais();
   carregarFollowupsCRM();
   popularSelectsVPGG();
+  carregarMetasPE();
 }
 
 document.addEventListener('DOMContentLoaded', initApp);

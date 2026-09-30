@@ -726,5 +726,146 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         self.assertEqual(data_csv["total_received"], 1)
         self.assertGreaterEqual(data_csv["inserted"], 1)
 
+    def test_19_strategy_pe_metrics(self):
+        """Valida painel de indicadores estratégicos alinhados ao PE Brasil Júnior 2024-2026"""
+        token = self.tokens["assessor_comercial"]
+        res = self.client.get("/api/strategy/pe-metrics", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("faturamento_realizado", data)
+        self.assertIn("faturamento_meta", data)
+        self.assertIn("faturamento_status", data)
+        self.assertIn("projetos_alto_impacto_realizados", data)
+        self.assertIn("retencao_membros_taxa", data)
+        self.assertIn("nps_satisfacao_media", data)
+        self.assertIn("alertas_linha_corte", data)
+        self.assertIn(data["faturamento_status"], ["on_track", "attention", "off_track"])
+
+    def test_20_pdi_competency_mej(self):
+        """Valida persistência e agregação de competências MEJ no módulo de PDI da VPGG"""
+        token_vpgg = self.tokens["assessor_vpgg"]
+        payload = {
+            "user_email": "giulia.moulin@edvjr.com.br",
+            "competency_mej": "Liderança",
+            "objectives": "Desenvolver postura de liderança servidora em squads",
+            "development_ideas": "Conduzir reuniões gerais e leitura do livro Pipeline de Liderança",
+            "deadline": "2026-11-30",
+            "status": "em_andamento"
+        }
+        res = self.client.post("/vpgg/pdis", json=payload, headers={"Authorization": f"Bearer {token_vpgg}"})
+        self.assertEqual(res.status_code, 201)
+        data = res.json()
+        self.assertEqual(data["competency_mej"], "Liderança")
+
+        # Verifica distribuição na trilha
+        res_trail = self.client.get("/vpgg/pdis/analytics", headers={"Authorization": f"Bearer {token_vpgg}"})
+        self.assertEqual(res_trail.status_code, 200)
+        analytics = res_trail.json()
+        self.assertIn("distribuicao_competencias_mej", analytics)
+        self.assertIn("Liderança", analytics["distribuicao_competencias_mej"])
+
+    def test_21_commercial_pitch_generator(self):
+        """Valida geração inteligente de pitches comerciais (WhatsApp, Instagram DM, E-mail e Tese Jurídica)"""
+        token_com = self.tokens["assessor_comercial"]
+        payload = {
+            "client_name": "Padaria e Confeitaria Bella Massa LTDA",
+            "cnae": "1091-1/02",
+            "company_size": "ME",
+            "contact_person": "Silvia",
+            "notes": "Marca consolidada no bairro há 10 anos sem registro no INPI"
+        }
+        res = self.client.post("/crm/pitch/generate", json=payload, headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("whatsapp", data)
+        self.assertIn("instagram_dm", data)
+        self.assertIn("email_formal", data)
+        self.assertIn("tese_juridica", data)
+        self.assertIn("9.279/96", data["tese_juridica"])
+
+    def test_22_compliance_pops(self):
+        """Valida central de compliance e playbooks operacionais MEJ (POPs)"""
+        token = self.tokens["assessor_projetos"]
+        res = self.client.get("/api/compliance/pops", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertIn("pops", data)
+        pop_codes = [p["code"] for p in data["pops"]]
+        self.assertIn("POP-COM-01", pop_codes)
+        self.assertIn("POP-PROJ-02", pop_codes)
+        self.assertIn("POP-JUR-03", pop_codes)
+        self.assertIn("POP-VPGG-04", pop_codes)
+
+    def test_23_impact_report_mej(self):
+        """Valida módulo de cálculo e dossiê de impacto gerado com multiplicador 3.5x"""
+        token_com = self.tokens["assessor_comercial"]
+        
+        # Registrar lead fechado com impacto
+        lead_payload = {
+            "client_name": "Supermercado Popular Capixaba",
+            "status": "fechado",
+            "area": "Comercial",
+            "estimated_value": 4000.0,
+            "impact_score": 85,
+            "impact_type": "Desenvolvimento Local / Geração de Renda",
+            "impact_description": "Blindagem de marca de 30 colaboradores e expansão regional"
+        }
+        res_lead = self.client.post("/crm/followups", json=lead_payload, headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_lead.status_code, 201)
+
+        # Consulta relatório de impacto
+        res_rep = self.client.get("/crm/impact/report", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_rep.status_code, 200)
+        rep = res_rep.json()
+        self.assertGreaterEqual(rep["contratos_fechados"], 1)
+        self.assertGreaterEqual(rep["faturamento_direto"], 4000.0)
+        self.assertGreaterEqual(rep["impacto_economico_estimado_mej"], 14000.0) # 4000 * 3.5
+        self.assertIn("distribuicao_tipos", rep)
+
+    def test_24_audit_logs_security(self):
+        """Valida isolamento forense da trilha de auditoria: Assessor bloqueado (403), Diretoria autorizada"""
+        token_assessor = self.tokens["assessor_projetos"]
+        token_pres = self.tokens["presidente"]
+
+        # 1. Assessor tenta acessar audit logs -> 403 Forbidden
+        res_blocked = self.client.get("/api/admin/audit-logs", headers={"Authorization": f"Bearer {token_assessor}"})
+        self.assertEqual(res_blocked.status_code, 403)
+
+        # 2. Presidente acessa audit logs -> 200 OK
+        res_ok = self.client.get("/api/admin/audit-logs", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_ok.status_code, 200)
+        data = res_ok.json()
+        self.assertIn("logs", data)
+        self.assertGreater(data["total"], 0)
+
+        # 3. Exportação de auditoria em CSV
+        res_csv = self.client.get("/api/admin/audit-logs/export", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_csv.status_code, 200)
+        self.assertIn("text/csv", res_csv.headers["content-type"])
+        self.assertIn("ID;Timestamp;Email;Acao", res_csv.text)
+
+    def test_25_sqlite_backup_and_snapshot(self):
+        """Valida rotina zero-cost de snapshot atômico e governança de backup no SQLite"""
+        token_assessor = self.tokens["assessor_comercial"]
+        token_pres = self.tokens["presidente"]
+
+        # 1. Assessor tenta acionar snapshot -> 403 Forbidden
+        res_blocked = self.client.post("/api/admin/backup/snapshot", headers={"Authorization": f"Bearer {token_assessor}"})
+        self.assertEqual(res_blocked.status_code, 403)
+
+        # 2. Presidente aciona snapshot -> 200 OK
+        res_snap = self.client.post("/api/admin/backup/snapshot", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_snap.status_code, 200)
+        snap_data = res_snap.json()
+        self.assertEqual(snap_data["status"], "success")
+        self.assertIn("backup_auth_", snap_data["snapshot"]["filename"])
+        self.assertGreater(snap_data["snapshot"]["size_bytes"], 0)
+
+        # 3. Presidente consulta status dos backups
+        res_stat = self.client.get("/api/admin/backup/status", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_stat.status_code, 200)
+        stat_data = res_stat.json()
+        self.assertGreater(stat_data["database"]["total_backups"], 0)
+
 if __name__ == "__main__":
     unittest.main()

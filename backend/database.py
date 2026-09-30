@@ -7,6 +7,7 @@ transações financeiras e mural de avisos institucionais.
 import sqlite3
 import os
 import bcrypt
+from typing import Any, Optional, List, Dict
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "auth.db")
 
@@ -258,12 +259,13 @@ def init_db():
     );
     """)
 
-    # 4. Tabela de Planos de Desenvolvimento Individual (PDI - VPGG)
+    # 4. Tabela de Planos de Desenvolvimento Individual (PDI - VPGG com Modelo de Competências Brasil Júnior)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS pdis (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_email TEXT NOT NULL,
         area TEXT NOT NULL DEFAULT 'VPGG',
+        competency_mej TEXT DEFAULT 'Gestão',
         objectives TEXT NOT NULL,
         development_ideas TEXT NOT NULL,
         deadline TEXT NOT NULL,
@@ -272,7 +274,12 @@ def init_db():
     );
     """)
 
-    # 5. Tabela de Follow-up de Clientes e CRM Comercial (Com Atributos Corporativos, Razão Social e Nome Fantasia)
+    cursor.execute("PRAGMA table_info(pdis);")
+    existing_pdi_cols = [col[1] for col in cursor.fetchall()]
+    if "competency_mej" not in existing_pdi_cols:
+        cursor.execute("ALTER TABLE pdis ADD COLUMN competency_mej TEXT DEFAULT 'Gestão';")
+
+    # 5. Tabela de Follow-up de Clientes e CRM Comercial (Com Atributos Corporativos, Razão Social, Fantasia e Impacto MEJ)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS client_followups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -293,12 +300,15 @@ def init_db():
         score INTEGER DEFAULT 50,
         estimated_value REAL DEFAULT 0.0,
         tags TEXT,
+        impact_score INTEGER DEFAULT 0,
+        impact_type TEXT,
+        impact_description TEXT,
         created_by TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
 
-    # Migração segura de colunas corporativas para bases existentes
+    # Migração segura de colunas corporativas e de impacto para bases existentes
     cursor.execute("PRAGMA table_info(client_followups);")
     existing_followup_cols = [col[1] for col in cursor.fetchall()]
     new_followup_cols = {
@@ -311,11 +321,31 @@ def init_db():
         "tags": "TEXT",
         "razao_social": "TEXT",
         "nome_fantasia": "TEXT",
-        "normalized_name": "TEXT"
+        "normalized_name": "TEXT",
+        "impact_score": "INTEGER DEFAULT 0",
+        "impact_type": "TEXT",
+        "impact_description": "TEXT"
     }
     for col_name, col_def in new_followup_cols.items():
         if col_name not in existing_followup_cols:
             cursor.execute(f"ALTER TABLE client_followups ADD COLUMN {col_name} {col_def};")
+
+    # 6. Tabela de Trilha de Auditoria Imutável (Audit Logs Forense)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS audit_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_email TEXT NOT NULL,
+        action TEXT NOT NULL,
+        resource TEXT NOT NULL,
+        status_code INTEGER NOT NULL,
+        details TEXT,
+        ip_address TEXT,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_email);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp);")
 
     # Índices de alta performance para Radar e CRM
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_followups_area_status ON client_followups(area, status);")
@@ -461,6 +491,179 @@ def get_followup_by_id(followup_id: int):
     if row:
         return dict(row)
     return None
+
+def log_audit(
+    user_email: str,
+    action: str,
+    resource: str,
+    status_code: int = 200,
+    details: Any = None,
+    ip_address: str = None
+):
+    """Registra evento forense na tabela audit_logs (imutável)"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        details_str = details
+        if details is not None and not isinstance(details, str):
+            try:
+                import json
+                details_str = json.dumps(details, ensure_ascii=False)
+            except Exception:
+                details_str = str(details)
+
+        cursor.execute("""
+        INSERT INTO audit_logs (user_email, action, resource, status_code, details, ip_address)
+        VALUES (?, ?, ?, ?, ?, ?);
+        """, (
+            (user_email or "anonymous").lower().strip(),
+            action.upper().strip(),
+            resource,
+            status_code,
+            details_str,
+            ip_address or "127.0.0.1"
+        ))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[Audit Log Error] Falha ao registrar log de auditoria: {e}")
+
+def get_audit_logs(
+    limit: int = 50,
+    offset: int = 0,
+    action: str = None,
+    user_email: str = None,
+    status_code: int = None
+):
+    """Consulta registros forenses com filtros compostos"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    query = "SELECT * FROM audit_logs WHERE 1=1"
+    params = []
+    
+    if action:
+        query += " AND action = ?"
+        params.append(action.upper().strip())
+    if user_email:
+        query += " AND user_email LIKE ?"
+        params.append(f"%{user_email.lower().strip()}%")
+    if status_code is not None:
+        query += " AND status_code = ?"
+        params.append(status_code)
+        
+    query += " ORDER BY id DESC LIMIT ? OFFSET ?;"
+    params.extend([limit, offset])
+    
+    cursor.execute(query, tuple(params))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def count_audit_logs(
+    action: str = None,
+    user_email: str = None,
+    status_code: int = None
+):
+    """Conta total de registros forenses com filtros"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    query = "SELECT COUNT(*) FROM audit_logs WHERE 1=1"
+    params = []
+    
+    if action:
+        query += " AND action = ?"
+        params.append(action.upper().strip())
+    if user_email:
+        query += " AND user_email LIKE ?"
+        params.append(f"%{user_email.lower().strip()}%")
+    if status_code is not None:
+        query += " AND status_code = ?"
+        params.append(status_code)
+        
+    cursor.execute(query, tuple(params))
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count
+
+def get_backups_dir():
+    """Retorna o diretório oficial de snapshots do SQLite"""
+    backups_dir = os.path.join(os.path.dirname(__file__), "backups")
+    os.makedirs(backups_dir, exist_ok=True)
+    return backups_dir
+
+def create_database_snapshot(dest_dir: str = None):
+    """Gera um snapshot consistente e íntegro do banco SQLite usando a API de Backup online"""
+    from datetime import datetime
+    dest_folder = dest_dir or get_backups_dir()
+    os.makedirs(dest_folder, exist_ok=True)
+    
+    timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    snapshot_filename = f"backup_auth_{timestamp_str}.db"
+    snapshot_path = os.path.join(dest_folder, snapshot_filename)
+    
+    # Executa cópia atômica via SQLite Backup API
+    src_conn = sqlite3.connect(DB_PATH)
+    dest_conn = sqlite3.connect(snapshot_path)
+    with dest_conn:
+        src_conn.backup(dest_conn, pages=100)
+    dest_conn.close()
+    src_conn.close()
+    
+    size_bytes = os.path.getsize(snapshot_path)
+    
+    # Registra em auditoria
+    log_audit("system", "BACKUP_SNAPSHOT_CREATED", "/api/admin/backup", 200, {
+        "filename": snapshot_filename,
+        "size_bytes": size_bytes
+    })
+    
+    return {
+        "filename": snapshot_filename,
+        "path": snapshot_path,
+        "size_bytes": size_bytes,
+        "created_at": datetime.now().isoformat()
+    }
+
+def get_database_stats():
+    """Retorna telemetria operacional e volumetria do SQLite"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    tables = ["users", "transactions", "notices", "pdis", "client_followups", "audit_logs"]
+    counts = {}
+    for t in tables:
+        try:
+            cursor.execute(f"SELECT COUNT(*) FROM {t};")
+            counts[t] = cursor.fetchone()[0]
+        except Exception:
+            counts[t] = 0
+            
+    conn.close()
+    
+    db_size = os.path.getsize(DB_PATH) if os.path.exists(DB_PATH) else 0
+    backups_dir = get_backups_dir()
+    existing_backups = []
+    if os.path.exists(backups_dir):
+        for f in sorted(os.listdir(backups_dir), reverse=True):
+            if f.endswith(".db"):
+                f_path = os.path.join(backups_dir, f)
+                existing_backups.append({
+                    "filename": f,
+                    "size_bytes": os.path.getsize(f_path),
+                    "created_at": os.path.getmtime(f_path)
+                })
+                
+    return {
+        "database_file": os.path.basename(DB_PATH),
+        "size_bytes": db_size,
+        "size_kb": round(db_size / 1024, 2),
+        "table_counts": counts,
+        "total_backups": len(existing_backups),
+        "backups": existing_backups[:10]
+    }
 
 if __name__ == "__main__":
     init_db()

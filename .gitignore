@@ -22,6 +22,8 @@ yarn-debug.log*
 # Bancos de Dados Locais e Arquivos Temporários
 *.sqlite
 *.db
+backups/
+backend/backups/
 tmp/
 dist/
 build/

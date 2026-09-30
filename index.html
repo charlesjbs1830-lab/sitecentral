@@ -333,6 +333,119 @@
             </div>
           </div>
 
+          <!-- PAINEL DE INDICADORES ESTRATÉGICOS (PE BRASIL JÚNIOR 2024-2026 • CLUSTER 4.0) -->
+          <div id="card-pe-brasil-junior" class="glass-card rounded-xl p-5 border-t-4 border-indigo-600 space-y-4">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-lg shadow-xs">
+                  🎯
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h3 class="text-sm font-bold text-slate-800">Planejamento Estratégico Brasil Júnior (PE 2024-2026)</h3>
+                    <span class="text-[10px] bg-indigo-100 text-indigo-800 font-mono font-bold px-2 py-0.5 rounded-full border border-indigo-200">Cluster 4.0</span>
+                  </div>
+                  <p class="text-xs text-slate-500 mt-0.5">Metas federadas da Brasil Júnior, Projetos de Alto Impacto (PAI), Retenção e Linhas de Corte do Selo EJ.</p>
+                </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="button" onclick="abrirModalPOPs()" class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg border border-slate-300 transition flex items-center gap-1.5 shadow-2xs">
+                  <i class="fa-solid fa-book-bookmark text-blue-600"></i> POPs & Compliance
+                </button>
+                <button type="button" onclick="abrirModalImpactoMEJ()" class="px-3 py-1.5 text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-lg border border-emerald-300 transition flex items-center gap-1.5 shadow-2xs">
+                  <i class="fa-solid fa-leaf text-emerald-600"></i> Dossiê de Impacto (3.5x)
+                </button>
+                <button type="button" onclick="carregarMetasPE()" class="p-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg border border-slate-200" title="Recarregar Indicadores PE">
+                  <i class="fa-solid fa-arrows-rotate"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Grid de Metas do PE -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <!-- 1. Faturamento -->
+              <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Faturamento PE</span>
+                  <span id="pe-fat-status" class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">Calculando...</span>
+                </div>
+                <div class="flex items-baseline justify-between">
+                  <span id="pe-fat-realizado" class="text-lg font-black text-slate-800">R$ 0,00</span>
+                  <span class="text-[10px] text-slate-400 font-mono">Meta: <strong id="pe-fat-meta">R$ 50.000,00</strong></span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                  <div id="pe-fat-bar" class="bg-indigo-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-500">
+                  <span id="pe-fat-pct">0.0% da meta anual</span>
+                  <span class="font-mono text-slate-400">Ciclo 2026</span>
+                </div>
+              </div>
+
+              <!-- 2. Projetos de Alto Impacto (PAI) -->
+              <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Projetos PAI (MEJ)</span>
+                  <span id="pe-pai-status" class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">Calculando...</span>
+                </div>
+                <div class="flex items-baseline justify-between">
+                  <span id="pe-pai-realizado" class="text-lg font-black text-slate-800">0</span>
+                  <span class="text-[10px] text-slate-400 font-mono">Meta: <strong id="pe-pai-meta">10 projetos</strong></span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                  <div id="pe-pai-bar" class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-500">
+                  <span id="pe-pai-pct">0.0% da meta</span>
+                  <span class="font-mono text-slate-400">Transformação</span>
+                </div>
+              </div>
+
+              <!-- 3. Retenção de Membros -->
+              <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Retenção de Membros</span>
+                  <span id="pe-ret-status" class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">Calculando...</span>
+                </div>
+                <div class="flex items-baseline justify-between">
+                  <span id="pe-ret-taxa" class="text-lg font-black text-slate-800">0.0%</span>
+                  <span class="text-[10px] text-slate-400 font-mono">Meta: <strong id="pe-ret-meta">80,0%</strong></span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                  <div id="pe-ret-bar" class="bg-emerald-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-500">
+                  <span id="pe-ret-pct">Engajamento VPGG</span>
+                  <span class="font-mono text-slate-400">23 Membros</span>
+                </div>
+              </div>
+
+              <!-- 4. NPS / Satisfação do Cliente -->
+              <div class="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">NPS / Satisfação</span>
+                  <span id="pe-nps-status" class="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">Calculando...</span>
+                </div>
+                <div class="flex items-baseline justify-between">
+                  <span id="pe-nps-valor" class="text-lg font-black text-slate-800">0.0</span>
+                  <span class="text-[10px] text-slate-400 font-mono">Meta: <strong id="pe-nps-meta">75,0</strong></span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                  <div id="pe-nps-bar" class="bg-amber-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+                <div class="flex justify-between text-[10px] text-slate-500">
+                  <span id="pe-nps-pct">Zona de Excelência</span>
+                  <span class="font-mono text-slate-400">Pós-Serviço</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Alertas Visuais de Linha de Corte Federativa -->
+            <div id="pe-alertas-container" class="space-y-1.5">
+              <!-- Renderizado dinamicamente via carregarMetasPE() -->
+            </div>
+          </div>
+
           <!-- MURAL DE AVISOS & RECADOS INSTITUCIONAIS (EDbrain) -->
           <div class="glass-card rounded-xl p-5 border-t-4 border-blue-600 space-y-4">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
@@ -472,6 +585,10 @@
             <button onclick="switchComercialSubtab('followups')" id="subtab-com-followups" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
               <i class="fa-solid fa-handshake text-sky-600"></i> Follow-ups & CRM Relacional (SQLite)
               <span id="badge-crm-followups" class="bg-sky-100 text-sky-800 text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold">0</span>
+            </button>
+            <button onclick="switchComercialSubtab('kanban')" id="subtab-com-kanban" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
+              <i class="fa-solid fa-table-columns text-indigo-600"></i> Funil Kanban Interativo (MEJ)
+              <span id="badge-crm-kanban" class="bg-indigo-100 text-indigo-800 text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold">0</span>
             </button>
           </div>
 
@@ -952,6 +1069,27 @@
                     <textarea id="fu_notes" rows="2" placeholder="Resumo da conversa, objeções levantadas pelo cliente, interesse em registro de marca, etc." class="w-full border border-slate-300 rounded-lg p-2.5 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"></textarea>
                   </div>
 
+                  <!-- Métricas de Impacto Socioeconômico MEJ (3.5x Multiplicador) -->
+                  <div class="lg:col-span-6 grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-emerald-50/70 rounded-xl border border-emerald-200">
+                    <div>
+                      <label for="fu_impact_score" class="block text-[10px] font-bold text-emerald-900 uppercase mb-1">Score de Impacto (0 a 100)</label>
+                      <input type="number" id="fu_impact_score" min="0" max="100" placeholder="Ex: 85" class="w-full border border-emerald-300 bg-white rounded-lg p-2 text-xs text-slate-800 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    </div>
+                    <div>
+                      <label for="fu_impact_type" class="block text-[10px] font-bold text-emerald-900 uppercase mb-1">Tipo de Impacto MEJ</label>
+                      <select id="fu_impact_type" class="w-full border border-emerald-300 bg-white rounded-lg p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-semibold">
+                        <option value="Proteção de Ativo Intangível / Marca">Proteção de Ativo Intangível / Marca</option>
+                        <option value="Desenvolvimento Local / Geração de Renda">Desenvolvimento Local / Geração de Renda</option>
+                        <option value="Formalização & Segurança Jurídica">Formalização & Segurança Jurídica</option>
+                        <option value="Inovação e Tecnologia">Inovação e Tecnologia</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label for="fu_impact_desc" class="block text-[10px] font-bold text-emerald-900 uppercase mb-1">Descrição do Impacto Socioeconômico</label>
+                      <input type="text" id="fu_impact_desc" placeholder="Ex: Proteção patrimonial para 25 empregos locais..." class="w-full border border-emerald-300 bg-white rounded-lg p-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    </div>
+                  </div>
+
                 </div>
 
                 <div class="flex justify-end pt-2">
@@ -1077,6 +1215,104 @@
               </div>
             </div>
 
+          </div>
+
+          <!-- SUB-ABA D: FUNIL KANBAN INTERATIVO (BRASIL JÚNIOR / MEJ) -->
+          <div id="comercial-sub-kanban" class="hidden space-y-6">
+            <!-- Header do Kanban com Ações -->
+            <div class="glass-card rounded-xl p-5 border-t-4 border-indigo-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-base font-bold text-slate-800">📋 Quadro Kanban Interativo de Oportunidades</h3>
+                  <span class="text-[10px] bg-indigo-100 text-indigo-800 font-mono font-bold px-2 py-0.5 rounded-full border border-indigo-200">Funil Comercial MEJ</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">Visualize a evolução de leads por estágio, monitore tempo de estagnação (&ge; 14d / &ge; 30d) e gere roteiros consultivos com tese jurídica.</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="button" onclick="carregarFollowupsCRM()" class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg border border-slate-300 transition flex items-center gap-1.5 shadow-2xs">
+                  <i class="fa-solid fa-arrows-rotate text-indigo-600"></i> Atualizar Kanban
+                </button>
+                <button type="button" onclick="abrirModalIngestaoPublica()" class="px-3 py-1.5 text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-lg border border-emerald-300 transition flex items-center gap-1.5 shadow-2xs">
+                  <i class="fa-solid fa-file-import text-emerald-600"></i> Ingestão de Leads
+                </button>
+                <button type="button" onclick="abrirModalImpactoMEJ()" class="px-3 py-1.5 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-800 font-bold rounded-lg border border-indigo-300 transition flex items-center gap-1.5 shadow-2xs">
+                  <i class="fa-solid fa-chart-line text-indigo-600"></i> Dossiê de Impacto MEJ (3.5x)
+                </button>
+              </div>
+            </div>
+
+            <!-- Colunas do Kanban -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+              
+              <!-- Coluna 1: Prospecção -->
+              <div class="bg-slate-100/90 rounded-xl p-3 border border-blue-200 shadow-xs flex flex-col">
+                <div class="flex items-center justify-between pb-2 mb-2 border-b border-blue-200">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-blue-900">Prospecção</h4>
+                  </div>
+                  <div class="flex items-center gap-1 text-[11px] font-mono">
+                    <span id="kanban-count-prospeccao" class="bg-blue-200 text-blue-800 font-bold px-2 py-0.5 rounded-full">0</span>
+                    <span id="kanban-val-prospeccao" class="text-slate-500 text-[10px]">R$ 0</span>
+                  </div>
+                </div>
+                <div id="kanban-col-prospeccao" class="kanban-col space-y-2.5 p-1">
+                  <!-- Cards de prospecção -->
+                </div>
+              </div>
+
+              <!-- Coluna 2: Negociação -->
+              <div class="bg-slate-100/90 rounded-xl p-3 border border-amber-200 shadow-xs flex flex-col">
+                <div class="flex items-center justify-between pb-2 mb-2 border-b border-amber-200">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-amber-900">Negociação</h4>
+                  </div>
+                  <div class="flex items-center gap-1 text-[11px] font-mono">
+                    <span id="kanban-count-negociacao" class="bg-amber-200 text-amber-800 font-bold px-2 py-0.5 rounded-full">0</span>
+                    <span id="kanban-val-negociacao" class="text-slate-500 text-[10px]">R$ 0</span>
+                  </div>
+                </div>
+                <div id="kanban-col-negociacao" class="kanban-col space-y-2.5 p-1">
+                  <!-- Cards de negociação -->
+                </div>
+              </div>
+
+              <!-- Coluna 3: Fechado -->
+              <div class="bg-slate-100/90 rounded-xl p-3 border border-emerald-200 shadow-xs flex flex-col">
+                <div class="flex items-center justify-between pb-2 mb-2 border-b border-emerald-200">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-900">Fechado</h4>
+                  </div>
+                  <div class="flex items-center gap-1 text-[11px] font-mono">
+                    <span id="kanban-count-fechado" class="bg-emerald-200 text-emerald-800 font-bold px-2 py-0.5 rounded-full">0</span>
+                    <span id="kanban-val-fechado" class="text-slate-500 text-[10px]">R$ 0</span>
+                  </div>
+                </div>
+                <div id="kanban-col-fechado" class="kanban-col space-y-2.5 p-1">
+                  <!-- Cards fechados -->
+                </div>
+              </div>
+
+              <!-- Coluna 4: Perdido -->
+              <div class="bg-slate-100/90 rounded-xl p-3 border border-rose-200 shadow-xs flex flex-col">
+                <div class="flex items-center justify-between pb-2 mb-2 border-b border-rose-200">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-rose-500"></span>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-rose-900">Perdido</h4>
+                  </div>
+                  <div class="flex items-center gap-1 text-[11px] font-mono">
+                    <span id="kanban-count-perdido" class="bg-rose-200 text-rose-800 font-bold px-2 py-0.5 rounded-full">0</span>
+                    <span id="kanban-val-perdido" class="text-slate-500 text-[10px]">R$ 0</span>
+                  </div>
+                </div>
+                <div id="kanban-col-perdido" class="kanban-col space-y-2.5 p-1">
+                  <!-- Cards perdidos -->
+                </div>
+              </div>
+
+            </div>
           </div>
 
         </section>
@@ -1596,10 +1832,10 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
                   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
                     
                     <!-- Membro Colaborador -->
-                    <div class="lg:col-span-3">
+                    <div class="lg:col-span-2">
                       <label for="pdi_user_email" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Colaborador Avaliado *</label>
                       <select id="pdi_user_email" required onchange="aoSelecionarMembroPDI()" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-semibold">
-                        <option value="">-- Selecione o membro avaliado (23 colaboradores) --</option>
+                        <option value="">-- Selecione o membro (23) --</option>
                       </select>
                     </div>
 
@@ -1607,6 +1843,18 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
                     <div class="lg:col-span-1">
                       <label for="pdi_area" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Área</label>
                       <input type="text" id="pdi_area" value="VPGG" readonly class="w-full border border-slate-200 bg-slate-50 rounded-lg px-3 py-2 text-xs text-slate-600 font-semibold">
+                    </div>
+
+                    <!-- Macro-Competência Brasil Júnior -->
+                    <div class="lg:col-span-1">
+                      <label for="pdi_competency_mej" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Competência MEJ *</label>
+                      <select id="pdi_competency_mej" required class="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-xs text-purple-900 bg-purple-50/60 focus:outline-none focus:ring-2 focus:ring-purple-500 font-semibold">
+                        <option value="Gestão">Gestão</option>
+                        <option value="Liderança">Liderança</option>
+                        <option value="Autoconhecimento">Autoconhecimento</option>
+                        <option value="Visão Sistêmica">Visão Sistêmica</option>
+                        <option value="Orientação para Resultados">Orientação para Resultados</option>
+                      </select>
                     </div>
 
                     <!-- Prazo Final -->
@@ -1888,31 +2136,141 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
 
         <!-- 11. AUDITORIA & RBAC -->
         <section id="view-auditoria" class="hidden space-y-6">
-          <div class="glass-card rounded-xl p-5 border-t-4 border-slate-800">
-            <h3 class="text-base font-bold text-slate-800">🔒 Auditoria de Ações, Telemetria & Controle RBAC</h3>
-            <p class="text-xs text-slate-500 mt-0.5">Rastreamento de acessos e permissões por membro e setor da EDV Jr.</p>
+          <div class="glass-card rounded-xl p-5 border-t-4 border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                🔒 Auditoria Forense, Snapshots & Governança SQLite
+                <span class="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-bold">Imutável</span>
+              </h3>
+              <p class="text-xs text-slate-500 mt-0.5">Trilha de eventos forenses, bloqueios de segurança (403) e rotina atômica de backup do banco de dados (Custo Zero).</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button type="button" onclick="carregarAuditLogs()" class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg border border-slate-300 transition flex items-center gap-1.5 shadow-2xs">
+                <i class="fa-solid fa-arrows-rotate text-blue-600"></i> Atualizar Auditoria
+              </button>
+              <button type="button" onclick="exportarAuditLogsCSV()" class="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg shadow-2xs flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-file-csv text-emerald-400"></i> Exportar Trilha (CSV)
+              </button>
+            </div>
           </div>
 
+          <!-- Card de Governança de Backups do SQLite -->
+          <div class="glass-card rounded-xl p-5 border-t-4 border-emerald-600 space-y-4">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-lg shadow-xs">
+                  💾
+                </div>
+                <div>
+                  <h4 class="text-sm font-bold text-slate-800">Central de Snapshots e Resiliência do SQLite (Custo Zero)</h4>
+                  <p class="text-xs text-slate-500 mt-0.5">Backups consistentes e atômicos via SQLite Online Backup API gravados em snapshots locais.</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="criarSnapshotBanco()" id="btn-snapshot-now" class="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition">
+                  <i class="fa-solid fa-camera"></i> Criar Snapshot Imediato
+                </button>
+                <button type="button" onclick="baixarBancoOficial()" class="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-xs flex items-center gap-1.5 transition">
+                  <i class="fa-solid fa-download"></i> Baixar auth.db Oficial
+                </button>
+              </div>
+            </div>
+
+            <!-- Telemetria do Banco -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-500 block">Arquivo do Banco</span>
+                <span id="backup-db-filename" class="text-xs font-mono font-bold text-slate-800">auth.db</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-500 block">Tamanho no Disco</span>
+                <span id="backup-db-size" class="text-xs font-mono font-bold text-slate-800">0.0 KB</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-500 block">Total de Snapshots</span>
+                <span id="backup-total-snapshots" class="text-xs font-mono font-bold text-emerald-700">0</span>
+              </div>
+              <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                <span class="text-[10px] font-bold uppercase text-slate-500 block">Status Operacional</span>
+                <span class="text-xs font-bold text-emerald-600 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Atômico / Íntegro</span>
+              </div>
+            </div>
+
+            <!-- Lista de Backups Recentes -->
+            <div id="backup-snapshots-list" class="space-y-1.5 pt-2">
+              <!-- Renderizado dinamicamente -->
+            </div>
+          </div>
+
+          <!-- Tabela DataGrid de Auditoria Forense -->
+          <div class="glass-card rounded-xl p-5 space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <h4 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                📜 Registros de Auditoria Corporativa (audit_logs)
+                <span id="badge-total-audit-logs" class="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-mono font-bold">0</span>
+              </h4>
+              <div class="flex flex-wrap items-center gap-2">
+                <input type="text" id="filtro-audit-user" oninput="filtrarAuditLogs()" placeholder="Filtrar por e-mail..." class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white">
+                <select id="filtro-audit-action" onchange="filtrarAuditLogs()" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-semibold">
+                  <option value="">Todas as Ações</option>
+                  <option value="LOGIN_SUCCESS">LOGIN_SUCCESS</option>
+                  <option value="SECURITY_VIOLATION_403">SECURITY_VIOLATION_403</option>
+                  <option value="PDI_CREATED">PDI_CREATED</option>
+                  <option value="PDI_UPDATED">PDI_UPDATED</option>
+                  <option value="CRM_LEAD_CREATED">CRM_LEAD_CREATED</option>
+                  <option value="CRM_LEAD_UPDATED">CRM_LEAD_UPDATED</option>
+                  <option value="BACKUP_SNAPSHOT_CREATED">BACKUP_SNAPSHOT_CREATED</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="overflow-x-auto max-h-[450px] border border-slate-200 rounded-lg">
+              <table class="w-full text-xs text-left datagrid-table">
+                <thead class="bg-slate-50 text-slate-600 uppercase font-semibold border-b border-slate-200 sticky top-0">
+                  <tr>
+                    <th class="px-3 py-2.5">ID</th>
+                    <th class="px-3 py-2.5">Data / Hora</th>
+                    <th class="px-3 py-2.5">Usuário (E-mail)</th>
+                    <th class="px-3 py-2.5">Ação Realizada</th>
+                    <th class="px-3 py-2.5">Recurso</th>
+                    <th class="px-3 py-2.5 text-center">Status HTTP</th>
+                    <th class="px-3 py-2.5">IP</th>
+                    <th class="px-3 py-2.5">Detalhes da Ação</th>
+                  </tr>
+                </thead>
+                <tbody id="datagrid-audit-logs" class="divide-y divide-slate-100 font-mono text-[11px]">
+                  <tr>
+                    <td colspan="8" class="p-6 text-center text-slate-400">
+                      Carregando registros forenses da auditoria...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Matriz de Papéis (RBAC) -->
           <div class="glass-card rounded-xl p-5">
+            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3">Matriz Institucional de Controle de Acesso Baseado em Papéis (RBAC)</h4>
             <div class="text-xs space-y-3">
               <div class="p-3 bg-slate-50 rounded-lg border border-slate-200 flex justify-between items-center">
                 <div>
                   <strong class="text-slate-800 block">Perfil ADMIN (Presidência)</strong>
-                  <span class="text-slate-500 text-[11px]">Acesso total de leitura e edição a todos os módulos, tesouraria e governança.</span>
+                  <span class="text-slate-500 text-[11px]">Acesso total de leitura e edição a todos os módulos, tesouraria, governança, snapshots de banco e auditoria forense.</span>
                 </div>
                 <span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold">Nível Máximo</span>
               </div>
               <div class="p-3 bg-slate-50 rounded-lg border border-slate-200 flex justify-between items-center">
                 <div>
                   <strong class="text-slate-800 block">Perfil MANAGER (Diretores & Gerentes)</strong>
-                  <span class="text-slate-500 text-[11px]">Acesso completo ao próprio setor (Comercial, Projetos, Tesouraria, VPGG) e leitura dos demais.</span>
+                  <span class="text-slate-500 text-[11px]">Acesso completo ao próprio setor (Comercial, Projetos, Tesouraria, VPGG) e leitura dos demais. Diretores acessam auditoria e backups.</span>
                 </div>
                 <span class="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded font-bold">Gerencial</span>
               </div>
               <div class="p-3 bg-slate-50 rounded-lg border border-slate-200 flex justify-between items-center">
                 <div>
                   <strong class="text-slate-800 block">Perfil ANALYST (Consultores & Assessores)</strong>
-                  <span class="text-slate-500 text-[11px]">Acesso operacional a prospecção de leads, registros de acompanhamento e consultas INPI.</span>
+                  <span class="text-slate-500 text-[11px]">Acesso operacional restrito à própria área, teto de alçada financeiro de R$ 1.000,00 e bloqueio em rotinas administrativas.</span>
                 </div>
                 <span class="px-2 py-0.5 bg-slate-200 text-slate-700 rounded font-bold">Operacional</span>
               </div>
@@ -2181,6 +2539,205 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
           </div>
         </form>
 
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: GERADOR DINÂMICO DE PITCHES (WHATSAPP, INSTAGRAM, EMAIL & TESE JURÍDICA) -->
+  <div id="modal-gerador-pitch" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-[#0b1d3a] text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center font-bold text-white shadow-md text-base">
+            ⚡
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white flex items-center gap-2">
+              Gerador de Pitches Consultivos & Tese Jurídica
+              <span class="text-[10px] bg-amber-400/20 text-amber-300 font-mono px-2 py-0.5 rounded-full border border-amber-400/30">Lei 9.279/96</span>
+            </h3>
+            <span id="pitch-modal-lead-title" class="text-[11px] text-blue-200 font-medium">Carregando lead...</span>
+          </div>
+        </div>
+        <button onclick="fecharModalPitch()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4 text-xs">
+        
+        <!-- Tese Jurídica Fundamentada -->
+        <div class="p-4 bg-amber-50/70 border border-amber-200 rounded-xl space-y-1.5">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-amber-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              <i class="fa-solid fa-scale-balanced text-amber-600"></i> Tese Jurídica de Abordagem (INPI & LPI)
+            </span>
+            <button type="button" onclick="copiarPitch('tese')" class="text-[10px] text-amber-800 hover:text-amber-950 font-bold underline flex items-center gap-1">
+              <i class="fa-solid fa-copy"></i> Copiar Tese
+            </button>
+          </div>
+          <p id="pitch-tese-juridica" class="text-slate-700 leading-relaxed font-sans text-xs bg-white p-3 rounded-lg border border-amber-200 whitespace-pre-wrap"></p>
+        </div>
+
+        <!-- Seletor de Canais -->
+        <div class="flex border-b border-slate-200 gap-3 text-xs font-bold">
+          <button onclick="switchPitchTab('whatsapp')" id="pitch-tab-whatsapp" class="pb-2.5 border-b-2 border-emerald-600 text-emerald-700 flex items-center gap-1.5">
+            <i class="fa-brands fa-whatsapp text-emerald-600 text-sm"></i> WhatsApp Consultivo
+          </button>
+          <button onclick="switchPitchTab('instagram')" id="pitch-tab-instagram" class="pb-2.5 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-1.5">
+            <i class="fa-brands fa-instagram text-rose-500 text-sm"></i> Instagram Direct
+          </button>
+          <button onclick="switchPitchTab('email')" id="pitch-tab-email" class="pb-2.5 border-b-2 border-transparent text-slate-500 hover:text-slate-800 flex items-center gap-1.5">
+            <i class="fa-solid fa-envelope text-blue-600 text-sm"></i> E-mail Formal
+          </button>
+        </div>
+
+        <!-- Conteúdo do Pitch: WhatsApp -->
+        <div id="pitch-content-whatsapp" class="space-y-2">
+          <div class="flex justify-between items-center text-[11px] text-slate-500">
+            <span>Roteiro empático com proposta de pesquisa prévia gratuita:</span>
+            <button onclick="copiarPitch('whatsapp')" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded shadow-xs flex items-center gap-1 transition">
+              <i class="fa-solid fa-copy"></i> Copiar WhatsApp
+            </button>
+          </div>
+          <textarea id="pitch-text-whatsapp" rows="6" readonly class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 font-mono text-[11px] leading-relaxed focus:outline-none"></textarea>
+        </div>
+
+        <!-- Conteúdo do Pitch: Instagram -->
+        <div id="pitch-content-instagram" class="hidden space-y-2">
+          <div class="flex justify-between items-center text-[11px] text-slate-500">
+            <span>Abordagem direta sobre risco de marca para Direct Message:</span>
+            <button onclick="copiarPitch('instagram')" class="px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded shadow-xs flex items-center gap-1 transition">
+              <i class="fa-solid fa-copy"></i> Copiar Instagram
+            </button>
+          </div>
+          <textarea id="pitch-text-instagram" rows="6" readonly class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 font-mono text-[11px] leading-relaxed focus:outline-none"></textarea>
+        </div>
+
+        <!-- Conteúdo do Pitch: E-mail -->
+        <div id="pitch-content-email" class="hidden space-y-2">
+          <div class="flex justify-between items-center text-[11px] text-slate-500">
+            <span>Carta formal executiva com menção expressa à Lei 9.279/96:</span>
+            <button onclick="copiarPitch('email')" class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded shadow-xs flex items-center gap-1 transition">
+              <i class="fa-solid fa-copy"></i> Copiar E-mail
+            </button>
+          </div>
+          <textarea id="pitch-text-email" rows="8" readonly class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 font-mono text-[11px] leading-relaxed focus:outline-none"></textarea>
+        </div>
+
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <button type="button" onclick="fecharModalPitch()" class="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs px-4 py-2 rounded-lg transition">
+          Fechar Janela
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CENTRAL DE PLAYBOOKS & COMPLIANCE MEJ (POPs) -->
+  <div id="modal-compliance-pops" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-[#0b1d3a] text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white shadow-md text-base">
+            📖
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Central de Processos Operacionais Padrão (POPs)</h3>
+            <span class="text-[10px] text-blue-200 font-mono">Conformidade Brasil Júnior • Selo EJ 2026</span>
+          </div>
+        </div>
+        <button onclick="fecharModalPOPs()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4 text-xs" id="pops-container-body">
+        <div class="p-6 text-center text-slate-400">
+          <i class="fa-solid fa-spinner fa-spin text-xl text-blue-600 mb-2 block"></i>
+          Carregando playbooks operacionais do servidor...
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <button type="button" onclick="fecharModalPOPs()" class="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs px-4 py-2 rounded-lg transition">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: DOSSIÊ DE IMPACTO SOCIOECONÔMICO MEJ (3.5x MULTIPLICADOR) -->
+  <div id="modal-impacto-mej" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-[#0b1d3a] text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center font-bold text-white shadow-md text-base">
+            🌍
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Dossiê de Impacto Socioeconômico Gerado (MEJ)</h3>
+            <span class="text-[10px] text-emerald-300 font-mono">Metodologia Brasil Júnior • Multiplicador Oficial 3.5x</span>
+          </div>
+        </div>
+        <button onclick="fecharModalImpactoMEJ()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-5 text-xs">
+        
+        <!-- Cards de Resumo Executivo -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="p-3.5 bg-slate-50 rounded-xl border border-slate-200">
+            <span class="text-[10px] uppercase font-bold text-slate-500 block">Contratos Fechados</span>
+            <span id="impacto-total-contratos" class="text-xl font-black text-slate-800 block mt-1">0</span>
+            <span class="text-[10px] text-slate-400 font-mono">Projetos Executados</span>
+          </div>
+          <div class="p-3.5 bg-blue-50 rounded-xl border border-blue-200">
+            <span class="text-[10px] uppercase font-bold text-blue-800 block">Receita Direta EJ</span>
+            <span id="impacto-receita-direta" class="text-xl font-black text-blue-700 block mt-1">R$ 0,00</span>
+            <span class="text-[10px] text-blue-600 font-mono">Faturamento Líquido</span>
+          </div>
+          <div class="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200">
+            <span class="text-[10px] uppercase font-bold text-emerald-800 block">Impacto Local (3.5x)</span>
+            <span id="impacto-economico-gerado" class="text-xl font-black text-emerald-700 block mt-1">R$ 0,00</span>
+            <span class="text-[10px] text-emerald-600 font-mono">Geração de Renda & Ativos</span>
+          </div>
+          <div class="p-3.5 bg-purple-50 rounded-xl border border-purple-200">
+            <span class="text-[10px] uppercase font-bold text-purple-800 block">Horas de Consultoria</span>
+            <span id="impacto-horas-consultoria" class="text-xl font-black text-purple-700 block mt-1">0h</span>
+            <span class="text-[10px] text-purple-600 font-mono">Vivência Universitária</span>
+          </div>
+        </div>
+
+        <!-- Tabela de Contratos & Impacto por Empresa -->
+        <div class="glass-card rounded-xl overflow-hidden border border-slate-200">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+            <span class="font-bold text-slate-800 text-xs">Contratos Consolidados & Pontuação de Impacto</span>
+            <span class="text-[10px] text-slate-500 font-mono">Dados auditados no SQLite</span>
+          </div>
+          <div class="overflow-x-auto max-h-[300px]">
+            <table class="w-full text-xs text-left datagrid-table">
+              <thead class="bg-slate-100 text-slate-600 uppercase font-semibold border-b border-slate-200 sticky top-0">
+                <tr>
+                  <th class="px-3 py-2">Cliente / Empresa</th>
+                  <th class="px-3 py-2">Porte</th>
+                  <th class="px-3 py-2 text-right">Valor Contrato</th>
+                  <th class="px-3 py-2 text-right">Impacto (3.5x)</th>
+                  <th class="px-3 py-2 text-center">Score</th>
+                  <th class="px-3 py-2">Tipo de Impacto</th>
+                </tr>
+              </thead>
+              <tbody id="tabela-impacto-mej-body" class="divide-y divide-slate-100">
+                <!-- Injetado dinamicamente -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+        <span class="text-[11px] text-slate-500 font-mono">Relatório pronto para homologação no Portal Brasil Júnior</span>
+        <button type="button" onclick="fecharModalImpactoMEJ()" class="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs px-4 py-2 rounded-lg transition">
+          Fechar
+        </button>
       </div>
     </div>
   </div>
