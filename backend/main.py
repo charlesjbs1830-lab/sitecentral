@@ -97,7 +97,7 @@ try:
         verify_psel_access
     )
 except ImportError:
-    from backend.database import (
+    from database import (
         init_db,
         get_user_by_email,
         get_user_by_id,
