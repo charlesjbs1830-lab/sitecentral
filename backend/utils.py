@@ -109,7 +109,8 @@ def build_fts5_wildcard_query(search_query: Optional[str]) -> str:
         return ""
 
     # Anexa o operador wildcard (*) do FTS5 a cada token
-    sanitized_terms = [f"{re.sub(r'[*\"\':()]', '', t)}*" for t in tokens if len(t) > 0]
+    clean_regex = re.compile(r'[*"':()]')
+    sanitized_terms = [f"{clean_regex.sub('', t)}*" for t in tokens if len(t) > 0]
     return " ".join(sanitized_terms)
 
 def build_address_from_brasilapi(data: dict) -> Optional[str]:
