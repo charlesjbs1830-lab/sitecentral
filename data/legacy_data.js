@@ -1,6 +1,6 @@
 // Dados Oficiais Sincronizados do Google Drive EDV Jr. (Gestão 2026)
 window.EDV_LEGACY_DATA = {
-  "timestamp": "30/09/2026 14:26:00",
+  "timestamp": "30/09/2026 16:45:09",
   "drive_connected": true,
   "drive_root": "G:\\Drives compartilhados\\Gestão 2026 - EDV Jr",
   "rms": [

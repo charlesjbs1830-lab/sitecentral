@@ -2092,6 +2092,12 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
               <button onclick="switchVPGGSubtab('trilhas')" id="subtab-vpgg-trilhas" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
                 <i class="fa-solid fa-wand-magic-sparkles text-amber-500"></i> Motor de Trilhas (/vpgg/pdis/generate)
               </button>
+              <button onclick="switchVPGGSubtab('sucessao')" id="subtab-vpgg-sucessao" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
+                <i class="fa-solid fa-trophy text-amber-500"></i> Sucessão & Prontidão IPS
+              </button>
+              <button onclick="switchVPGGSubtab('triangulacao')" id="subtab-vpgg-triangulacao" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
+                <i class="fa-solid fa-scale-balanced text-indigo-600"></i> Triangulação 360º (BJ)
+              </button>
               <button onclick="switchVPGGSubtab('analytics')" id="subtab-vpgg-analytics" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
                 <i class="fa-solid fa-chart-column text-blue-600"></i> Analytics & Estatísticas (/vpgg/pdis/analytics)
               </button>
@@ -2353,6 +2359,249 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
                   </table>
                 </div>
               </div>
+            </div>
+
+            <!-- SUB-ABA 5: ÍNDICE DE PRONTIDÃO PREDITIVA PARA SUCESSÃO (IPS) -->
+            <div id="vpgg-sub-sucessao" class="hidden space-y-6">
+              
+              <!-- Banner Superior com Seletor de Cargo e Ações -->
+              <div class="glass-card rounded-xl p-5 border-t-4 border-amber-500 shadow-sm space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <h3 class="text-base font-bold text-slate-800">🏆 Índice de Prontidão Preditiva para Sucessão (IPS)</h3>
+                      <span class="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full border border-amber-200">Motor Brasil Júnior & Selo EJ</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                      Cálculo analítico-probabilístico comparando membros a vetores canônicos de gestores históricos com 100% Selo EJ. Aplicação estrita da Linha de Corte de Governança.
+                    </p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs">
+                      <button onclick="mudarCargoAlvoSucessao('diretoria')" id="btn-sucessao-cargo-diretoria" class="px-3 py-1 bg-white font-bold rounded shadow-xs text-slate-800">
+                        Diretoria Executiva (Corte &ge; 70)
+                      </button>
+                      <button onclick="mudarCargoAlvoSucessao('presidencia')" id="btn-sucessao-cargo-presidencia" class="px-3 py-1 text-slate-600 hover:text-slate-900 font-medium">
+                        Presidência (Corte &ge; 80)
+                      </button>
+                    </div>
+                    <button onclick="carregarSucessaoIPS()" class="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-2xs">
+                      <i class="fa-solid fa-arrows-rotate text-amber-600"></i> Atualizar IPS
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Banner Informativo do Benchmark Canônico Ativo -->
+                <div id="sucessao-benchmark-card" class="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-circle-check text-amber-600 text-sm"></i>
+                    <span><strong>Benchmark Vigente:</strong> <span id="sucessao-benchmark-nome">Diretor Executivo Modelo</span> • Selo EJ: <strong>100% Homologado</strong></span>
+                  </div>
+                  <span id="sucessao-corte-info" class="text-[11px] font-mono font-bold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full">Linha de Corte: IPS &ge; 70.0</span>
+                </div>
+              </div>
+
+              <!-- KPIs de Sucessão -->
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div class="glass-card rounded-xl p-4 border-l-4 border-slate-600">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Membros Avaliados</span>
+                  <span id="kpi-sucessao-total" class="text-2xl font-black text-slate-800 mt-0.5 block">0</span>
+                  <span class="text-[10px] text-slate-400 block mt-0.5">Ecossistema EDV Jr.</span>
+                </div>
+                <div class="glass-card rounded-xl p-4 border-l-4 border-emerald-500">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Aptos / Elegíveis</span>
+                  <span id="kpi-sucessao-aptos" class="text-2xl font-black text-emerald-600 mt-0.5 block">0</span>
+                  <span class="text-[10px] text-emerald-600 block mt-0.5">Acima da Linha de Corte</span>
+                </div>
+                <div class="glass-card rounded-xl p-4 border-l-4 border-rose-500">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Com Restrição</span>
+                  <span id="kpi-sucessao-bloqueados" class="text-2xl font-black text-rose-600 mt-0.5 block">0</span>
+                  <span class="text-[10px] text-rose-500 block mt-0.5">Bloqueio Estatutário Ativo</span>
+                </div>
+                <div class="glass-card rounded-xl p-4 border-l-4 border-blue-500">
+                  <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">IPS Médio da EJ</span>
+                  <span id="kpi-sucessao-media" class="text-2xl font-black text-blue-600 mt-0.5 block">0.0</span>
+                  <span class="text-[10px] text-blue-500 block mt-0.5">Escala Global 0 - 100</span>
+                </div>
+              </div>
+
+              <!-- Tabela / DataGrid de Candidatos ao IPS -->
+              <div class="glass-card rounded-xl p-5 space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                      📋 Quadro Preditivo de Prontidão Sucessória
+                      <span id="sucessao-count-badge" class="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full font-mono font-bold">0 registros</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Ranking ponderado por conformidade com competências BJ e compliance Selo EJ.</p>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <input type="text" id="filtro-sucessao-busca" oninput="filtrarTabelaSucessao()" placeholder="Buscar membro ou área..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-56 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                    <select id="filtro-sucessao-status" onchange="filtrarTabelaSucessao()" class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold">
+                      <option value="">Todos os Status</option>
+                      <option value="elegivel">🟢 Apenas Aptos / Elegíveis</option>
+                      <option value="restrito">🔴 Apenas Com Restrição</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="overflow-x-auto max-h-[500px] border border-slate-200 rounded-lg">
+                  <table class="w-full text-xs text-left datagrid-table">
+                    <thead class="bg-slate-50 text-slate-600 uppercase font-semibold border-b border-slate-200 sticky top-0">
+                      <tr>
+                        <th class="px-4 py-3">Membro / Candidato</th>
+                        <th class="px-4 py-3">Área & Cargo</th>
+                        <th class="px-4 py-3 text-center">Índice IPS (0-100)</th>
+                        <th class="px-4 py-3 text-center">Similaridade Benchmark</th>
+                        <th class="px-4 py-3">Status de Governança</th>
+                        <th class="px-4 py-3">Motivo / Auditoria de Restrição</th>
+                        <th class="px-4 py-3 text-center">Ações de Desenvolvimento</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tabela-sucessao-ips-body" class="divide-y divide-slate-100">
+                      <tr>
+                        <td colspan="7" class="p-8 text-center text-slate-400">
+                          <i class="fa-solid fa-spinner fa-spin text-xl text-amber-500 mb-2 block"></i>
+                          Calculando Índices de Prontidão Preditiva (IPS)...
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- SUB-ABA 6: TRIANGULAÇÃO OPERACIONAL-COMPORTAMENTAL (360º + HARD DATA) -->
+            <div id="vpgg-sub-triangulacao" class="hidden space-y-6">
+              
+              <!-- Header com Seletor de Membro e Ações -->
+              <div class="glass-card rounded-xl p-5 border-t-4 border-indigo-600 shadow-sm space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <h3 class="text-base font-bold text-slate-800">⚖️ Triangulação Operacional-Comportamental (Hard vs. Soft Data)</h3>
+                      <span class="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full border border-indigo-200">5 Competências Oficiais BJ</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-0.5">
+                      Eliminação de subjetivismos: cruzamento de métricas do CRM/Projetos com avaliações 360º ponderadas pela assertividade dos avaliadores.
+                    </p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button type="button" onclick="abrirModalAvaliacao360()" class="px-3.5 py-2 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm transition flex items-center gap-1.5">
+                      <i class="fa-solid fa-plus"></i> Nova Avaliação 360º
+                    </button>
+                    <button onclick="carregarTriangulacaoVPGG()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs text-slate-700 font-bold transition flex items-center gap-1.5">
+                      <i class="fa-solid fa-arrows-rotate text-indigo-600"></i> Atualizar
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Seletor de Colaborador Analisado -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
+                  <div class="md:col-span-2">
+                    <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Selecionar Membro para Análise Aprofundada *</label>
+                    <select id="triangulacao-seletor-membro" onchange="aoMudarMembroTriangulacao()" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold">
+                      <option value="">-- Carregando membros... --</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Status de Mitigação</label>
+                    <div id="triangulacao-status-mitigacao-badge" class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 flex items-center justify-between">
+                      <span>Plano 70-20-10:</span>
+                      <span id="triangulacao-status-mitigacao-val" class="text-slate-500 font-mono">Não Gerado</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Hard Data KPIs (Operacionais) -->
+              <div class="space-y-3">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <i class="fa-solid fa-database text-blue-600"></i> Hard Data: Métricas Operacionais Extraídas de CRM, Projetos e Ágoras
+                </span>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div class="glass-card rounded-xl p-4 border-l-4 border-emerald-500">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Faturamento Gerado</span>
+                    <span id="hard-faturamento-val" class="text-xl font-bold font-mono text-emerald-700 mt-1 block">R$ 0,00</span>
+                    <span class="text-[10px] text-slate-400 block mt-0.5">Contratos Fechados CRM</span>
+                  </div>
+                  <div class="glass-card rounded-xl p-4 border-l-4 border-blue-500">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Taxa de Conversão</span>
+                    <span id="hard-conversao-val" class="text-xl font-bold font-mono text-blue-700 mt-1 block">0.0%</span>
+                    <span class="text-[10px] text-slate-400 block mt-0.5">Leads vs. Contratos</span>
+                  </div>
+                  <div class="glass-card rounded-xl p-4 border-l-4 border-indigo-500">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Pontualidade em RMs</span>
+                    <span id="hard-pontualidade-val" class="text-xl font-bold font-mono text-indigo-700 mt-1 block">0.0%</span>
+                    <span class="text-[10px] text-slate-400 block mt-0.5">Processos INPI nos Prazos</span>
+                  </div>
+                  <div class="glass-card rounded-xl p-4 border-l-4 border-purple-500">
+                    <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Assiduidade em Ágoras</span>
+                    <span id="hard-assiduidade-val" class="text-xl font-bold font-mono text-purple-700 mt-1 block">0.0%</span>
+                    <span class="text-[10px] text-slate-400 block mt-0.5">Presença Reuniões Gerais</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 5 Competências Brasil Júnior Trianguladas (Radar / Grade) -->
+              <div class="space-y-3">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <i class="fa-solid fa-chart-pie text-indigo-600"></i> Competências Brasil Júnior Trianguladas (Ponderação Hard + Soft Calibrada)
+                </span>
+                <div id="grid-competencias-trianguladas" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <!-- Injetado dinamicamente: Liderança, Gestão, Visão Sistêmica, Orientação para Resultados, Autoconhecimento -->
+                </div>
+              </div>
+
+              <!-- Calibração de Avaliadores & Histórico de Avaliações 360º -->
+              <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Painel de Calibração de Avaliadores -->
+                <div class="glass-card rounded-xl p-5 space-y-3">
+                  <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <h4 class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <i class="fa-solid fa-sliders text-amber-500"></i> Calibração de Avaliadores (w_eval)
+                    </h4>
+                    <span class="text-[10px] font-mono text-slate-400">Histórico de Assertividade</span>
+                  </div>
+                  <p class="text-xs text-slate-500 leading-relaxed">
+                    Pesos multiplicadores calibrados para cada perfil com base no histórico de assertividade técnica e governança.
+                  </p>
+                  <div id="lista-calibracao-avaliadores" class="space-y-2 pt-1">
+                    <!-- Injetado dinamicamente -->
+                  </div>
+                </div>
+
+                <!-- Histórico de Avaliações 360º Recebidas -->
+                <div class="lg:col-span-2 glass-card rounded-xl p-5 space-y-3">
+                  <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <h4 class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <i class="fa-solid fa-comments text-indigo-600"></i> Avaliações 360º Registradas no EDbrain
+                    </h4>
+                    <span id="badge-total-evals-360" class="text-[10px] font-mono font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full">0 avaliações</span>
+                  </div>
+                  <div class="overflow-x-auto max-h-[300px]">
+                    <table class="w-full text-xs text-left datagrid-table">
+                      <thead class="bg-slate-50 text-slate-600 uppercase font-semibold border-b border-slate-200">
+                        <tr>
+                          <th class="px-3 py-2.5">Avaliador</th>
+                          <th class="px-3 py-2.5">Relação</th>
+                          <th class="px-3 py-2.5 text-center">Peso</th>
+                          <th class="px-3 py-2.5 text-center">Média BJ</th>
+                          <th class="px-3 py-2.5">Parecer / Feedback</th>
+                          <th class="px-3 py-2.5 font-mono text-[10px]">Data</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tabela-historico-360-body" class="divide-y divide-slate-100">
+                        <tr>
+                          <td colspan="6" class="p-6 text-center text-slate-400">Selecione um membro para carregar as avaliações 360º.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
             </div>
 
           </div>
@@ -3469,6 +3718,173 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVA AVALIAÇÃO 360º (BRASIL JÚNIOR) -->
+  <div id="modal-avaliacao-360" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-[#0b1d3a] text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-white shadow-md text-base">
+            ⚖️
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Registrar Avaliação 360º (Brasil Júnior)</h3>
+            <span class="text-[10px] text-indigo-300 font-mono">Calibração de Liderança, Gestão & Resultados</span>
+          </div>
+        </div>
+        <button onclick="fecharModalAvaliacao360()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+      </div>
+
+      <form id="form-avaliacao-360" onsubmit="salvarAvaliacao360(event)" class="p-6 overflow-y-auto space-y-4 text-xs">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Colaborador Avaliado *</label>
+          <select id="eval360_user_email" required class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold">
+            <option value="">-- Selecione o membro avaliado --</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Relação Hierárquica / Papel *</label>
+            <select id="eval360_relationship" required class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
+              <option value="peer">Colega / Par (Peso 1.00x)</option>
+              <option value="leader">Líder Direto / Diretor (Peso 1.25x)</option>
+              <option value="subordinate">Liderado / Subordinado (Peso 1.10x)</option>
+              <option value="self">Autoavaliação (Peso 0.65x)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Ciclo de Avaliação</label>
+            <input type="text" id="eval360_cycle" value="2026.1" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono">
+          </div>
+        </div>
+
+        <div class="space-y-3 pt-2 border-t border-slate-100">
+          <span class="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+            Notas por Macro-Competência Brasil Júnior (Escala 0 a 100):
+          </span>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-600 mb-1">🦁 Liderança (0-100) *</label>
+              <input type="number" step="0.1" min="0" max="100" id="eval360_lideranca" required placeholder="Ex: 85.0" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white font-mono font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-600 mb-1">📊 Gestão (0-100) *</label>
+              <input type="number" step="0.1" min="0" max="100" id="eval360_gestao" required placeholder="Ex: 80.0" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white font-mono font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-600 mb-1">🌐 Visão Sistêmica (0-100) *</label>
+              <input type="number" step="0.1" min="0" max="100" id="eval360_visao" required placeholder="Ex: 78.0" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white font-mono font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-600 mb-1">🎯 Orientação para Resultados (0-100) *</label>
+              <input type="number" step="0.1" min="0" max="100" id="eval360_resultados" required placeholder="Ex: 88.0" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white font-mono font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-[10px] font-bold text-slate-600 mb-1">🧘 Autoconhecimento (0-100) *</label>
+              <input type="number" step="0.1" min="0" max="100" id="eval360_autoconhecimento" required placeholder="Ex: 82.0" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white font-mono font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Parecer Qualitativo & Evidências Comportamentais</label>
+          <textarea id="eval360_feedback" rows="3" placeholder="Cite exemplos concretos de entregas, postura em reuniões, escuta ativa e pontos de desenvolvimento..." class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+          <button type="button" onclick="fecharModalAvaliacao360()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition">Cancelar</button>
+          <button type="submit" id="btn-submit-eval360" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm transition flex items-center gap-1.5">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Avaliação 360º
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: MITIGAÇÃO AUTOMATIZADA DE GAPS (70-20-10) -->
+  <div id="modal-mitigacao-gaps" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-amber-500 flex items-center justify-center font-bold text-white shadow-md text-base">
+            🚀
+          </div>
+          <div>
+            <h3 id="modal-mitigacao-titulo" class="font-bold text-sm text-white">Plano de Mitigação de Gaps (Metodologia 70-20-10)</h3>
+            <span id="modal-mitigacao-subtitulo" class="text-[10px] text-purple-200 font-mono">Correção Operacional Automática em Runtime</span>
+          </div>
+        </div>
+        <button onclick="fecharModalMitigacaoGaps()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4 text-xs">
+        <div id="modal-mitigacao-status-header" class="p-3 bg-purple-50 border border-purple-200 rounded-xl flex items-center justify-between">
+          <div>
+            <span class="text-[10px] uppercase font-bold text-purple-700 block">Colaborador em Mitigação:</span>
+            <strong id="modal-mitigacao-nome-membro" class="text-xs text-purple-950 font-bold">Carregando...</strong>
+          </div>
+          <span id="modal-mitigacao-badge-gaps" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+            Gaps Identificados
+          </span>
+        </div>
+
+        <!-- 70% Experiencial (On-the-job) -->
+        <div class="p-4 bg-emerald-50/60 rounded-xl border border-emerald-200 space-y-2">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-xs text-emerald-900 flex items-center gap-1.5">
+              <span class="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">70</span>
+              Experiencial (On-the-Job: Ação Operacional Real)
+            </h4>
+            <span class="text-[10px] font-bold text-emerald-700">70% da Formação</span>
+          </div>
+          <div id="modal-mitigacao-70-lista" class="space-y-1.5 text-slate-700 pl-6">
+            <!-- Injetado -->
+          </div>
+        </div>
+
+        <!-- 20% Social (Mentoria e Feedback) -->
+        <div class="p-4 bg-blue-50/60 rounded-xl border border-blue-200 space-y-2">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-xs text-blue-900 flex items-center gap-1.5">
+              <span class="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-black flex items-center justify-center">20</span>
+              Social (Mentoria Pareada & Acompanhamento de Líderes)
+            </h4>
+            <span class="text-[10px] font-bold text-blue-700">20% da Formação</span>
+          </div>
+          <div id="modal-mitigacao-20-lista" class="space-y-1.5 text-slate-700 pl-6">
+            <!-- Injetado -->
+          </div>
+        </div>
+
+        <!-- 10% Formal (Estudo e POPs) -->
+        <div class="p-4 bg-purple-50/60 rounded-xl border border-purple-200 space-y-2">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-xs text-purple-900 flex items-center gap-1.5">
+              <span class="w-5 h-5 rounded-full bg-purple-600 text-white text-[10px] font-black flex items-center justify-center">10</span>
+              Formal (Manuais, POPs & Diretrizes Brasil Júnior)
+            </h4>
+            <span class="text-[10px] font-bold text-purple-700">10% da Formação</span>
+          </div>
+          <div id="modal-mitigacao-10-lista" class="space-y-1.5 text-slate-700 pl-6">
+            <!-- Injetado -->
+          </div>
+        </div>
+
+        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 flex items-center gap-2">
+          <i class="fa-solid fa-circle-info text-blue-600 text-sm"></i>
+          <span>Este plano 70-20-10 foi automaticamente sincronizado com o registro de PDI do colaborador na tabela <code>pdis</code>.</span>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end">
+        <button type="button" onclick="fecharModalMitigacaoGaps()" class="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow-sm text-xs transition">
+          Entendido / Fechar
+        </button>
+      </div>
     </div>
   </div>
 

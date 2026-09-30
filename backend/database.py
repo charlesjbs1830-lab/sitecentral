@@ -9,7 +9,9 @@ import os
 import re
 import unicodedata
 import bcrypt
-from typing import Any, Optional, List, Dict
+import math
+import json
+from typing import Any, Optional, List, Dict, Union, Tuple
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "auth.db")
 
@@ -73,6 +75,90 @@ class BrandAssetORM(Base):
     tags = Column(String(200), nullable=True)
     is_official = Column(Integer, default=1)
     uploaded_by = Column(String(100), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+class PerformanceEvaluation360ORM(Base):
+    __tablename__ = "performance_evaluations_360"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, default="edv_jr")
+    cycle_id = Column(String(50), nullable=False, default="2026.1")
+    evaluatee_email = Column(String(150), nullable=False)
+    evaluator_email = Column(String(150), nullable=False)
+    relationship_type = Column(String(50), nullable=False, default="peer")  # peer, leader, subordinate, self
+    score_lideranca = Column(Float, nullable=False, default=3.0)
+    score_gestao = Column(Float, nullable=False, default=3.0)
+    score_visao_sistemica = Column(Float, nullable=False, default=3.0)
+    score_orientacao_resultados = Column(Float, nullable=False, default=3.0)
+    score_autoconhecimento = Column(Float, nullable=False, default=3.0)
+    feedback_qualitativo = Column(Text, nullable=True)
+    status = Column(String(50), nullable=False, default="submitted")
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+class EvaluatorCalibrationORM(Base):
+    __tablename__ = "evaluator_calibrations"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, default="edv_jr")
+    evaluator_email = Column(String(150), unique=True, nullable=False)
+    assertiveness_weight = Column(Float, nullable=False, default=1.0)
+    bias_tendency = Column(String(50), nullable=False, default="neutral")  # neutral, lenient, strict, halo_effect
+    variance_metric = Column(Float, default=0.0)
+    correlation_with_hard_data = Column(Float, default=0.85)
+    total_evaluations_count = Column(Integer, default=0)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+class HistoricalManagerBenchmarkORM(Base):
+    __tablename__ = "historical_manager_benchmarks"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, default="edv_jr")
+    manager_name = Column(String(150), nullable=False)
+    role_target = Column(String(50), nullable=False)  # diretoria, presidencia
+    mandate_year = Column(String(50), nullable=False, default="2024-2025")
+    lideranca_score = Column(Float, nullable=False, default=88.0)
+    gestao_score = Column(Float, nullable=False, default=85.0)
+    visao_sistemica_score = Column(Float, nullable=False, default=85.0)
+    orientacao_resultados_score = Column(Float, nullable=False, default=87.0)
+    autoconhecimento_score = Column(Float, nullable=False, default=82.0)
+    conversion_rate = Column(Float, default=30.0)
+    project_punctuality_rate = Column(Float, default=95.0)
+    revenue_per_cycle = Column(Float, default=15000.0)
+    assiduidade_rate = Column(Float, default=98.0)
+    federation_audit_score = Column(Float, default=100.0)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+class SuccessionReadinessORM(Base):
+    __tablename__ = "succession_readiness_records"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, default="edv_jr")
+    user_email = Column(String(150), nullable=False)
+    role_target = Column(String(50), nullable=False, default="diretoria")  # diretoria, presidencia
+    ips_score = Column(Float, nullable=False, default=0.0)
+    hard_data_score = Column(Float, nullable=False, default=0.0)
+    soft_data_score = Column(Float, nullable=False, default=0.0)
+    similarity_to_benchmark = Column(Float, nullable=False, default=0.0)
+    is_eligible = Column(Integer, nullable=False, default=0)
+    cutoff_threshold = Column(Float, nullable=False, default=70.0)
+    restriction_reason = Column(Text, nullable=True)
+    details_json = Column(Text, nullable=True)
+    calculated_at = Column(DateTime, server_default=func.now())
+
+class GapMitigationActionORM(Base):
+    __tablename__ = "gap_mitigation_actions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, default="edv_jr")
+    user_email = Column(String(150), nullable=False)
+    competency_deficient = Column(String(100), nullable=False)
+    current_score = Column(Float, default=0.0)
+    target_score = Column(Float, default=80.0)
+    deficit_severity = Column(String(50), default="medio")  # baixo, medio, alto, critico
+    action_type = Column(String(50), default="70_on_the_job")  # 70_on_the_job, 20_social_mentoria, 10_formal_estudo
+    practical_allocation = Column(Text, nullable=False)
+    mentor_assigned = Column(String(150), nullable=True)
+    course_or_playbook = Column(Text, nullable=True)
+    status = Column(String(50), default="sugerido")  # sugerido, em_execucao, concluido
+    deadline = Column(String(50), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -357,8 +443,15 @@ def init_db():
 
     cursor.execute("PRAGMA table_info(pdis);")
     existing_pdi_cols = [col[1] for col in cursor.fetchall()]
-    if "competency_mej" not in existing_pdi_cols:
-        cursor.execute("ALTER TABLE pdis ADD COLUMN competency_mej TEXT DEFAULT 'Gestão';")
+    new_pdi_cols = {
+        "competency_mej": "TEXT DEFAULT 'Gestão'",
+        "action_plan_70_20_10": "TEXT",
+        "triangulated_score": "REAL DEFAULT 0.0",
+        "ips_score": "REAL DEFAULT 0.0"
+    }
+    for pdi_col, pdi_def in new_pdi_cols.items():
+        if pdi_col not in existing_pdi_cols:
+            cursor.execute(f"ALTER TABLE pdis ADD COLUMN {pdi_col} {pdi_def};")
 
     # 5. Tabela de Follow-up de Clientes e CRM Comercial (Com Atributos Corporativos, Razão Social, Fantasia e Impacto MEJ)
     cursor.execute("""
@@ -503,6 +596,111 @@ def init_db():
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_brand_tenant_cat ON brand_assets(tenant_id, category);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_brand_official ON brand_assets(is_official);")
+
+    # 10. Tabela de Avaliações 360º (Soft Data / Modelo Oficial Brasil Júnior)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS performance_evaluations_360 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        cycle_id TEXT NOT NULL DEFAULT '2026.1',
+        evaluatee_email TEXT NOT NULL,
+        evaluator_email TEXT NOT NULL,
+        relationship_type TEXT NOT NULL CHECK(relationship_type IN ('peer', 'leader', 'subordinate', 'self')),
+        score_lideranca REAL NOT NULL DEFAULT 3.0,
+        score_gestao REAL NOT NULL DEFAULT 3.0,
+        score_visao_sistemica REAL NOT NULL DEFAULT 3.0,
+        score_orientacao_resultados REAL NOT NULL DEFAULT 3.0,
+        score_autoconhecimento REAL NOT NULL DEFAULT 3.0,
+        feedback_qualitativo TEXT,
+        status TEXT NOT NULL DEFAULT 'submitted' CHECK(status IN ('submitted', 'draft')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_eval360_evaluatee ON performance_evaluations_360(evaluatee_email, cycle_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_eval360_evaluator ON performance_evaluations_360(evaluator_email);")
+
+    # 11. Tabela de Calibração de Avaliadores (Assertiveness Weighting & Viés)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS evaluator_calibrations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        evaluator_email TEXT UNIQUE NOT NULL,
+        assertiveness_weight REAL NOT NULL DEFAULT 1.0,
+        bias_tendency TEXT NOT NULL DEFAULT 'neutral',
+        variance_metric REAL DEFAULT 0.0,
+        correlation_with_hard_data REAL DEFAULT 0.85,
+        total_evaluations_count INTEGER DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_eval_calib_email ON evaluator_calibrations(evaluator_email);")
+
+    # 12. Tabela de Perfis de Benchmark de Gestores Históricos (Federação / Selo EJ)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS historical_manager_benchmarks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        manager_name TEXT NOT NULL,
+        role_target TEXT NOT NULL CHECK(role_target IN ('diretoria', 'presidencia')),
+        mandate_year TEXT NOT NULL DEFAULT '2024-2025',
+        lideranca_score REAL NOT NULL DEFAULT 88.0,
+        gestao_score REAL NOT NULL DEFAULT 85.0,
+        visao_sistemica_score REAL NOT NULL DEFAULT 85.0,
+        orientacao_resultados_score REAL NOT NULL DEFAULT 87.0,
+        autoconhecimento_score REAL NOT NULL DEFAULT 82.0,
+        conversion_rate REAL DEFAULT 30.0,
+        project_punctuality_rate REAL DEFAULT 95.0,
+        revenue_per_cycle REAL DEFAULT 15000.0,
+        assiduidade_rate REAL DEFAULT 98.0,
+        federation_audit_score REAL DEFAULT 100.0,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_benchmarks_role ON historical_manager_benchmarks(role_target);")
+
+    # 13. Tabela de Índice de Prontidão Preditiva para Sucessão (IPS)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS succession_readiness_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        user_email TEXT NOT NULL,
+        role_target TEXT NOT NULL DEFAULT 'diretoria' CHECK(role_target IN ('diretoria', 'presidencia')),
+        ips_score REAL NOT NULL DEFAULT 0.0,
+        hard_data_score REAL NOT NULL DEFAULT 0.0,
+        soft_data_score REAL NOT NULL DEFAULT 0.0,
+        similarity_to_benchmark REAL NOT NULL DEFAULT 0.0,
+        is_eligible INTEGER NOT NULL DEFAULT 0,
+        cutoff_threshold REAL NOT NULL DEFAULT 70.0,
+        restriction_reason TEXT,
+        details_json TEXT,
+        calculated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_succession_email ON succession_readiness_records(user_email, role_target);")
+
+    # 14. Tabela de Ações de Mitigação Automatizada de Gaps (Runtime 70-20-10)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS gap_mitigation_actions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        user_email TEXT NOT NULL,
+        competency_deficient TEXT NOT NULL,
+        current_score REAL DEFAULT 0.0,
+        target_score REAL DEFAULT 80.0,
+        deficit_severity TEXT DEFAULT 'medio' CHECK(deficit_severity IN ('baixo', 'medio', 'alto', 'critico')),
+        action_type TEXT DEFAULT '70_on_the_job' CHECK(action_type IN ('70_on_the_job', '20_social_mentoria', '10_formal_estudo')),
+        practical_allocation TEXT NOT NULL,
+        mentor_assigned TEXT,
+        course_or_playbook TEXT,
+        status TEXT DEFAULT 'sugerido' CHECK(status IN ('sugerido', 'em_execucao', 'concluido')),
+        deadline TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_gap_actions_user ON gap_mitigation_actions(user_email);")
 
 
     # Índices de alta performance para Radar e CRM
@@ -662,7 +860,74 @@ def init_db():
             cursor.execute("UPDATE client_followups SET campaign_id = 4 WHERE id IN (SELECT id FROM client_followups LIMIT 6 OFFSET 12);")
     except Exception as e_link:
         print(f"[SQLite] Aviso ao vincular leads iniciais a campanhas: {e_link}")
-            
+
+    # Seeding inicial de Benchmarks de Gestores Históricos (Federação / Selo EJ)
+    cursor.execute("SELECT COUNT(*) FROM historical_manager_benchmarks;")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("""
+        INSERT INTO historical_manager_benchmarks (
+            tenant_id, manager_name, role_target, mandate_year,
+            lideranca_score, gestao_score, visao_sistemica_score, orientacao_resultados_score, autoconhecimento_score,
+            conversion_rate, project_punctuality_rate, revenue_per_cycle, assiduidade_rate, federation_audit_score, notes
+        ) VALUES 
+        ('edv_jr', 'Gestão 2024-2025 - Perfil Referência Diretoria Executiva', 'diretoria', '2024-2025',
+         85.0, 85.0, 80.0, 85.0, 80.0, 25.0, 95.0, 12000.0, 96.0, 100.0, 'Média consolidada dos Diretores que alcançaram Alto Impacto e Selo EJ Pleno na Federação.'),
+        ('edv_jr', 'Gestão 2024-2025 - Perfil Referência Presidência Institucional', 'presidencia', '2024-2025',
+         92.0, 88.0, 90.0, 88.0, 85.0, 28.0, 98.0, 15000.0, 98.0, 100.0, 'Média consolidada de Presidentes com 100% de conformidade federativa na Brasil Júnior.');
+        """)
+
+    # Seeding inicial de Calibração de Avaliadores (Assertiveness Weights)
+    cursor.execute("SELECT COUNT(*) FROM evaluator_calibrations;")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("""
+        INSERT INTO evaluator_calibrations (tenant_id, evaluator_email, assertiveness_weight, bias_tendency, variance_metric, correlation_with_hard_data, total_evaluations_count)
+        VALUES 
+        ('edv_jr', 'charles.junior@edvjr.com.br', 1.25, 'neutral', 0.85, 0.94, 22),
+        ('edv_jr', 'alice.ney@edvjr.com.br', 1.20, 'neutral', 0.80, 0.91, 20),
+        ('edv_jr', 'isadora.epichin@edvjr.com.br', 1.15, 'strict', 0.90, 0.89, 15),
+        ('edv_jr', 'thais.junger@edvjr.com.br', 1.10, 'neutral', 0.75, 0.86, 14),
+        ('edv_jr', 'evelyn.roldi@edvjr.com.br', 1.05, 'neutral', 0.78, 0.83, 12);
+        """)
+
+    # Seeding inicial de Avaliações 360º (Soft Data Oficial Brasil Júnior)
+    cursor.execute("SELECT COUNT(*) FROM performance_evaluations_360;")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("""
+        INSERT INTO performance_evaluations_360 (
+            tenant_id, cycle_id, evaluatee_email, evaluator_email, relationship_type,
+            score_lideranca, score_gestao, score_visao_sistemica, score_orientacao_resultados, score_autoconhecimento,
+            feedback_qualitativo
+        ) VALUES 
+        -- Samuel (Comercial)
+        ('edv_jr', '2026.1', 'samuel.garcia@edvjr.com.br', 'isadora.epichin@edvjr.com.br', 'leader', 3.8, 3.7, 3.9, 3.5, 4.0, 'Excelente postura de prospecção e engajamento cultural; necessita calibrar fechamento e contorno de objeções em reuniões finais.'),
+        ('edv_jr', '2026.1', 'samuel.garcia@edvjr.com.br', 'estevao.coutinho@edvjr.com.br', 'peer', 4.0, 3.5, 3.8, 3.6, 4.1, 'Muito prestativo e com energia contagiante na área de vendas.'),
+        ('edv_jr', '2026.1', 'samuel.garcia@edvjr.com.br', 'samuel.garcia@edvjr.com.br', 'self', 4.0, 3.8, 4.0, 3.5, 4.2, 'Autoavaliação: Quero me aprofundar em negociação estratégica e conversão direta.'),
+        
+        -- Estevão (Comercial)
+        ('edv_jr', '2026.1', 'estevao.coutinho@edvjr.com.br', 'isadora.epichin@edvjr.com.br', 'leader', 4.2, 3.4, 3.7, 4.3, 3.8, 'Fechou contrato importante com agilidade comercial, mas requer disciplina no preenchimento do CRM.'),
+        ('edv_jr', '2026.1', 'estevao.coutinho@edvjr.com.br', 'samuel.garcia@edvjr.com.br', 'peer', 4.1, 3.6, 3.8, 4.2, 3.9, 'Excelente negociador e confiável nas conversas com clientes.'),
+        
+        -- Alice Mizuki (Projetos)
+        ('edv_jr', '2026.1', 'alice.mizuki@edvjr.com.br', 'thais.junger@edvjr.com.br', 'leader', 4.1, 4.6, 4.5, 4.2, 4.4, 'Domínio exímio de marcas e legislação do INPI. Pronta para assumir liderança de equipe técnica.'),
+        ('edv_jr', '2026.1', 'alice.mizuki@edvjr.com.br', 'amanda.bede@edvjr.com.br', 'peer', 4.0, 4.5, 4.3, 4.0, 4.5, 'Referência técnica de dúvidas em despachos.'),
+        
+        -- Pedro Barros (Comercial)
+        ('edv_jr', '2026.1', 'pedro.barros@edvjr.com.br', 'isadora.epichin@edvjr.com.br', 'leader', 3.2, 3.6, 3.4, 3.3, 3.8, 'Boa dedicação ao inbound; precisa expandir iniciativa e assumir projetos de ponta a ponta.'),
+        ('edv_jr', '2026.1', 'pedro.barros@edvjr.com.br', 'estevao.coutinho@edvjr.com.br', 'peer', 3.5, 3.7, 3.5, 3.4, 3.7, 'Colega colaborativo e pontual nas entregas rotineiras.'),
+
+        -- Renato Moura (Projetos)
+        ('edv_jr', '2026.1', 'renato.moura@edvjr.com.br', 'thais.junger@edvjr.com.br', 'leader', 3.6, 4.0, 3.8, 3.7, 4.0, 'Excelente pontualidade nas buscas de anterioridade e atenção a detalhes regulatórios.'),
+        ('edv_jr', '2026.1', 'renato.moura@edvjr.com.br', 'alice.mizuki@edvjr.com.br', 'peer', 3.7, 3.9, 3.8, 3.8, 4.1, 'Muito responsável no suporte às dúvidas de classificação de Nice no INPI.'),
+
+        -- Alicia Athayde (Marketing)
+        ('edv_jr', '2026.1', 'alicia.athayde@edvjr.com.br', 'evelyn.roldi@edvjr.com.br', 'leader', 3.9, 4.1, 3.8, 3.7, 4.2, 'Ótima criatividade no copywriting e identidade visual das campanhas no Instagram.'),
+        ('edv_jr', '2026.1', 'alicia.athayde@edvjr.com.br', 'joaop.lecco@edvjr.com.br', 'peer', 4.0, 4.0, 3.9, 3.6, 4.1, 'Sinergia exemplar no design e alinhamento com o MIV 2026.'),
+
+        -- Aline Tartaglia (Jurídico)
+        ('edv_jr', '2026.1', 'aline.tartaglia@edvjr.com.br', 'charles.junior@edvjr.com.br', 'leader', 4.2, 4.3, 4.1, 4.0, 4.3, 'Rigor técnico impecável nos contratos de prestação de serviços e compliance.'),
+        ('edv_jr', '2026.1', 'aline.tartaglia@edvjr.com.br', 'karolina.krause@edvjr.com.br', 'peer', 4.1, 4.2, 4.0, 3.9, 4.2, 'Grande capacidade analítica em minutas e pareceres.');
+        """)
+
     conn.commit()
     cursor.execute("SELECT COUNT(*) FROM users;")
     total_users = cursor.fetchone()[0]
@@ -1531,6 +1796,717 @@ def get_marketing_dashboard_analytics(tenant_id: str = "edv_jr") -> dict:
         "brand_assets_total": total_brand_assets,
         "desempenho_canais": canais
     }
+
+
+# ==============================================================================
+# MOTOR PREDITIVO DE SUCESSÃO, TRIANGULAÇÃO E MITIGAÇÃO DE GAPS (VPGG / EDbrain)
+# ==============================================================================
+
+def get_member_hard_metrics(user_email: str, conn=None) -> dict:
+    """
+    Extrai métricas operacionais quantitativas (Hard Data) sem subjetividade:
+    - CRM Comercial (client_followups): leads, conversão, faturamento atribuído.
+    - Projetos (legacy_data / RMs): pontualidade, volume de marcas.
+    - VPGG (legacy_data / agoras): assiduidade em reuniões e 1-on-1s.
+    """
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, email, nome, area, role, setor, cargo FROM users WHERE LOWER(email) = LOWER(?);", (user_email.strip(),))
+    user = cursor.fetchone()
+    if not user:
+        if should_close: conn.close()
+        return {}
+
+    user_dict = dict(user)
+    nome = user_dict["nome"]
+    user_area = user_dict["area"] or user_dict.get("setor") or "Geral"
+
+    # 1. Métricas do CRM Comercial
+    cursor.execute("""
+    SELECT 
+        COUNT(*) as total_leads,
+        SUM(CASE WHEN status = 'fechado' THEN 1 ELSE 0 END) as closed_deals,
+        SUM(CASE WHEN status = 'fechado' THEN estimated_value ELSE 0.0 END) as total_revenue
+    FROM client_followups
+    WHERE LOWER(created_by) = LOWER(?);
+    """, (user_email.strip(),))
+    crm_row = cursor.fetchone()
+    total_leads = crm_row["total_leads"] or 0
+    closed_deals = crm_row["closed_deals"] or 0
+    total_revenue = float(crm_row["total_revenue"] or 0.0)
+
+    # 2. Carregar dados do ecossistema do Google Drive (legacy_data.json)
+    legacy_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "legacy_data.json")
+    legacy = {}
+    if os.path.exists(legacy_path):
+        try:
+            with open(legacy_path, 'r', encoding='utf-8') as f:
+                legacy = json.load(f)
+        except Exception:
+            pass
+
+    # Assiduidade e Governança da VPGG
+    vpgg_list = legacy.get("vpgg", [])
+    assiduidade_pct = 92.0
+    pdi_prev_status = "Em andamento"
+    one_on_one_status = "Em dia"
+    first_name = nome.split()[0].lower()
+    for item in vpgg_list:
+        v_nome = item.get("nome", "").lower()
+        if v_nome in nome.lower() or first_name in v_nome:
+            try:
+                assiduidade_pct = float(item.get("assiduidade", "92%").replace("%", "").strip())
+            except Exception:
+                assiduidade_pct = 92.0
+            pdi_prev_status = item.get("pdi_status", "Em andamento")
+            one_on_one_status = item.get("one_on_one", "Em dia")
+            break
+
+    # Pontualidade e RMs em Projetos
+    rms_list = legacy.get("rms", [])
+    user_rms = [r for r in rms_list if nome.lower() in (r.get("participantes", "") + r.get("responsavel", "")).lower()]
+    total_rms = len(user_rms)
+    ontime_rms = [r for r in user_rms if "indeferido" not in r.get("fase", "").lower() and "atraso" not in r.get("fase", "").lower()]
+    punctuality_rate = (len(ontime_rms) / total_rms * 100.0) if total_rms > 0 else (95.0 if "projeto" in user_area.lower() else 92.0)
+
+    # Normalização de Hard Scores (0.0 a 100.0)
+    conversion_rate = (closed_deals / total_leads * 100.0) if total_leads > 0 else 0.0
+    conversion_score = min(100.0, (conversion_rate / 20.0) * 100.0) if total_leads > 0 else (80.0 if "comercial" not in user_area.lower() else 50.0)
+    revenue_score = min(100.0, (total_revenue / 8000.0) * 100.0) if total_revenue > 0 else (75.0 if "comercial" not in user_area.lower() else 45.0)
+    project_punctuality_score = min(100.0, max(0.0, punctuality_rate))
+    assiduidade_score = min(100.0, max(0.0, assiduidade_pct))
+
+    # Ponderação do Hard Score Geral de acordo com a área de atuação do membro
+    if "comercial" in user_area.lower():
+        overall_hard = 0.40 * conversion_score + 0.35 * revenue_score + 0.25 * assiduidade_score
+    elif "projeto" in user_area.lower():
+        overall_hard = 0.50 * project_punctuality_score + 0.30 * assiduidade_score + 0.20 * revenue_score
+    else:
+        overall_hard = 0.40 * assiduidade_score + 0.30 * project_punctuality_score + 0.30 * conversion_score
+
+    if should_close: conn.close()
+
+    return {
+        "user_email": user_email,
+        "nome": nome,
+        "area": user_area,
+        "role": user_dict["role"],
+        "cargo": user_dict["cargo"],
+        "total_leads": total_leads,
+        "closed_deals": closed_deals,
+        "total_revenue": total_revenue,
+        "conversion_rate": round(conversion_rate, 1),
+        "total_rms": total_rms,
+        "punctuality_rate": round(punctuality_rate, 1),
+        "assiduidade_pct": round(assiduidade_pct, 1),
+        "pdi_prev_status": pdi_prev_status,
+        "one_on_one_status": one_on_one_status,
+        "scores": {
+            "conversion_score": round(conversion_score, 1),
+            "revenue_score": round(revenue_score, 1),
+            "project_punctuality_score": round(project_punctuality_score, 1),
+            "assiduidade_score": round(assiduidade_score, 1),
+            "overall_hard_score": round(overall_hard, 1)
+        }
+    }
+
+
+def get_evaluator_calibrations(conn=None) -> dict:
+    """
+    Retorna os pesos de assertividade e calibração de viés dos avaliadores.
+    """
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+
+    cursor = conn.cursor()
+    cursor.execute("SELECT evaluator_email, assertiveness_weight, bias_tendency, correlation_with_hard_data FROM evaluator_calibrations;")
+    calibrations = {
+        r["evaluator_email"].lower(): {
+            "assertiveness_weight": float(r["assertiveness_weight"]),
+            "bias_tendency": r["bias_tendency"],
+            "correlation_with_hard_data": float(r["correlation_with_hard_data"])
+        } for r in cursor.fetchall()
+    }
+    if should_close: conn.close()
+    return calibrations
+
+
+def calculate_triangulation(user_email: Optional[str] = None) -> Union[dict, List[dict]]:
+    """
+    Cruza métricas quantitativas operacionais (Hard Data) com avaliações 360º (Soft Data).
+    Pondera as notas com base no histórico de assertividade dos avaliadores e alinha
+    rigorosamente às 5 competências da Brasil Júnior:
+    1. Liderança
+    2. Gestão
+    3. Visão Sistêmica
+    4. Orientação para Resultados
+    5. Autoconhecimento
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    evaluator_calibs = get_evaluator_calibrations(conn=conn)
+
+    # Identificar quais usuários processar
+    if user_email:
+        cursor.execute("SELECT email FROM users WHERE LOWER(email) = LOWER(?);", (user_email.strip(),))
+        target_users = [r["email"] for r in cursor.fetchall()]
+    else:
+        cursor.execute("SELECT email FROM users ORDER BY id ASC;")
+        target_users = [r["email"] for r in cursor.fetchall()]
+
+    rel_multipliers = {
+        "leader": 1.25,
+        "peer": 1.00,
+        "subordinate": 1.10,
+        "self": 0.65
+    }
+
+    comps = ["lideranca", "gestao", "visao_sistemica", "orientacao_resultados", "autoconhecimento"]
+    results = []
+
+    for email in target_users:
+        hard_data = get_member_hard_metrics(email, conn=conn)
+        if not hard_data:
+            continue
+
+        hard_scores = hard_data["scores"]
+
+        # Buscar avaliações 360º
+        cursor.execute("""
+        SELECT evaluator_email, relationship_type,
+               score_lideranca, score_gestao, score_visao_sistemica, score_orientacao_resultados, score_autoconhecimento,
+               feedback_qualitativo
+        FROM performance_evaluations_360
+        WHERE LOWER(evaluatee_email) = LOWER(?) AND status = 'submitted';
+        """, (email,))
+        evals = [dict(r) for r in cursor.fetchall()]
+
+        soft_weighted = {}
+        if evals:
+            for c in comps:
+                total_weight = 0.0
+                weighted_sum = 0.0
+                col_name = f"score_{c}"
+                for ev in evals:
+                    eval_email = ev["evaluator_email"].lower()
+                    calib = evaluator_calibs.get(eval_email, {"assertiveness_weight": 1.0})
+                    w_assert = calib["assertiveness_weight"]
+                    rel_mult = rel_multipliers.get(ev["relationship_type"], 1.0)
+                    eff_weight = w_assert * rel_mult
+
+                    score_100 = ev[col_name] * 20.0
+                    weighted_sum += eff_weight * score_100
+                    total_weight += eff_weight
+
+                soft_weighted[c] = round(weighted_sum / total_weight, 1) if total_weight > 0 else 70.0
+        else:
+            # Baseline baseado na média de assiduidade e histórico se ainda não avaliado
+            base_score = min(85.0, max(65.0, hard_scores["assiduidade_score"] * 0.85))
+            soft_weighted = {c: round(base_score, 1) for c in comps}
+
+        # Mapeamento do Hard Data correspondente para cada competência BJ
+        hard_orientacao = 0.60 * ((hard_scores["conversion_score"] + hard_scores["revenue_score"]) / 2.0) + 0.40 * hard_scores["assiduidade_score"]
+        hard_gestao = 0.70 * hard_scores["project_punctuality_score"] + 0.30 * hard_scores["assiduidade_score"]
+        hard_lideranca = 0.60 * hard_scores["assiduidade_score"] + 0.40 * hard_scores["project_punctuality_score"]
+        hard_visao = 0.50 * hard_scores["conversion_score"] + 0.50 * hard_scores["project_punctuality_score"]
+        hard_autoconhecimento = 0.70 * hard_scores["assiduidade_score"] + 0.30 * hard_scores["project_punctuality_score"]
+
+        # Triangulação Fim-a-Fim (Hard Data vs. Soft Data Calibrado)
+        triangulated = {
+            "lideranca": round(0.60 * soft_weighted["lideranca"] + 0.40 * hard_lideranca, 1),
+            "gestao": round(0.45 * soft_weighted["gestao"] + 0.55 * hard_gestao, 1),
+            "visao_sistemica": round(0.50 * soft_weighted["visao_sistemica"] + 0.50 * hard_visao, 1),
+            "orientacao_resultados": round(0.50 * soft_weighted["orientacao_resultados"] + 0.50 * hard_orientacao, 1),
+            "autoconhecimento": round(0.65 * soft_weighted["autoconhecimento"] + 0.35 * hard_autoconhecimento, 1)
+        }
+
+        overall_triangulated = round(sum(triangulated.values()) / 5.0, 1)
+
+        # Atualizar score triangulado no PDI mais recente do membro
+        try:
+            cursor.execute("""
+            UPDATE pdis SET triangulated_score = ?
+            WHERE LOWER(user_email) = LOWER(?) AND status != 'concluido';
+            """, (overall_triangulated, email))
+        except Exception:
+            pass
+
+        sorted_comps = sorted(triangulated.items(), key=lambda x: x[1], reverse=True)
+        strengths = [s[0] for s in sorted_comps if s[1] >= 75.0]
+        chronic_gaps = [s[0] for s in sorted_comps if s[1] < 68.0]
+
+        res_item = {
+            "user_email": email,
+            "nome": hard_data["nome"],
+            "area": hard_data["area"],
+            "role": hard_data["role"],
+            "cargo": hard_data["cargo"],
+            "evaluations_count": len(evals),
+            "hard_data": hard_data,
+            "soft_scores_calibrated": soft_weighted,
+            "triangulated_competencies": triangulated,
+            "overall_triangulated_score": overall_triangulated,
+            "strengths": strengths,
+            "chronic_gaps": chronic_gaps
+        }
+        results.append(res_item)
+
+    conn.commit()
+    conn.close()
+
+    if user_email:
+        return results[0] if results else {}
+    return results
+
+
+def calculate_succession_ips(user_email: Optional[str] = None, role_target: str = "diretoria") -> Union[dict, List[dict]]:
+    """
+    Calcula o Índice de Prontidão Preditiva para Sucessão (IPS) (0 a 100):
+    - Correlaciona o desempenho atual do assessor com o perfil histórico de gestores
+      que passaram pela EJ com alto desempenho validado pelas auditorias da federação (Selo EJ 100%).
+    - Se o IPS estiver abaixo da linha de corte de governança (70 para diretoria, 80 para presidência),
+      restringe automaticamente a elegibilidade para cargos executivos.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Buscar perfil histórico oficial da federação
+    cursor.execute("""
+    SELECT * FROM historical_manager_benchmarks 
+    WHERE role_target = ? 
+    ORDER BY id DESC LIMIT 1;
+    """, (role_target,))
+    bench = cursor.fetchone()
+    if not bench:
+        cursor.execute("SELECT * FROM historical_manager_benchmarks ORDER BY id DESC LIMIT 1;")
+        bench = cursor.fetchone()
+
+    bench_dict = dict(bench) if bench else {
+        "manager_name": "Benchmark Federativo",
+        "mandate_year": "2024-2025",
+        "lideranca_score": 85.0, "gestao_score": 85.0, "visao_sistemica_score": 80.0,
+        "orientacao_resultados_score": 85.0, "autoconhecimento_score": 80.0,
+        "conversion_rate": 25.0, "project_punctuality_rate": 95.0, "assiduidade_rate": 96.0,
+        "federation_audit_score": 100.0
+    }
+
+    # Vetor canônico de benchmark (5 competências + excelência operacional hard + assiduidade)
+    bench_vec = [
+        float(bench_dict["lideranca_score"]),
+        float(bench_dict["gestao_score"]),
+        float(bench_dict["visao_sistemica_score"]),
+        float(bench_dict["orientacao_resultados_score"]),
+        float(bench_dict["autoconhecimento_score"]),
+        88.0,  # Benchmark Hard Performance
+        float(bench_dict["assiduidade_rate"])
+    ]
+
+    triangulations = calculate_triangulation(user_email)
+    if isinstance(triangulations, dict):
+        triang_list = [triangulations] if triangulations else []
+    else:
+        triang_list = triangulations
+
+    cutoff = 80.0 if role_target == "presidencia" else 70.0
+    min_comp_threshold = 65.0 if role_target == "presidencia" else 55.0
+
+    results = []
+    comp_labels = ["Liderança", "Gestão", "Visão Sistêmica", "Orientação para Resultados", "Autoconhecimento", "Desempenho Operacional", "Assiduidade"]
+
+    for triang in triang_list:
+        tc = triang["triangulated_competencies"]
+        hs = triang["hard_data"]["scores"]
+
+        # Vetor do membro avaliado
+        member_vec = [
+            tc["lideranca"],
+            tc["gestao"],
+            tc["visao_sistemica"],
+            tc["orientacao_resultados"],
+            tc["autoconhecimento"],
+            hs["overall_hard_score"],
+            hs["assiduidade_score"]
+        ]
+
+        # Similaridade Cosseno multidimensional
+        dot = sum(m * b for m, b in zip(member_vec, bench_vec))
+        mag_m = math.sqrt(sum(m * m for m in member_vec))
+        mag_b = math.sqrt(sum(b * b for b in bench_vec))
+        cossim = (dot / (mag_m * mag_b)) if (mag_m > 0 and mag_b > 0) else 0.0
+
+        # Penalidades por gaps severos em relação ao benchmark histórico
+        gap_penalty = 0.0
+        critical_deficits = []
+        for idx, (m_val, b_val) in enumerate(zip(member_vec, bench_vec)):
+            gap = b_val - m_val
+            if gap > 10.0:
+                pen_item = (gap - 10.0) * 0.45
+                gap_penalty += pen_item
+                critical_deficits.append({
+                    "competency": comp_labels[idx],
+                    "member_score": round(m_val, 1),
+                    "benchmark_score": round(b_val, 1),
+                    "gap": round(gap, 1)
+                })
+
+        hard_score = hs["overall_hard_score"]
+        soft_score = sum(triang["soft_scores_calibrated"].values()) / 5.0
+
+        # Fórmula Probabilística do IPS (0 a 100)
+        raw_ips = 0.35 * hard_score + 0.35 * soft_score + 0.30 * (cossim * 100.0) - gap_penalty
+        ips = round(min(100.0, max(0.0, raw_ips)), 1)
+
+        # Restrição de Elegibilidade Executiva por Governança
+        min_comp_passed = all(tc[c] >= min_comp_threshold for c in ["lideranca", "gestao", "visao_sistemica", "orientacao_resultados", "autoconhecimento"])
+        is_eligible = (ips >= cutoff) and min_comp_passed
+
+        restriction_reason = None
+        if not is_eligible:
+            reasons = []
+            if ips < cutoff:
+                reasons.append(f"IPS de {ips} pontos está abaixo da linha de corte de governança ({cutoff} pts) para o cargo pretendido ({role_target.capitalize()}).")
+            if not min_comp_passed:
+                failed = [f"{c.capitalize()} ({tc[c]:.1f} < {min_comp_threshold})" for c in tc if tc[c] < min_comp_threshold]
+                reasons.append(f"Competências críticas abaixo do limiar mínimo obrigatório: {', '.join(failed)}.")
+            if critical_deficits:
+                def_str = ', '.join([f"{d['competency']} (gap: -{d['gap']} pts)" for d in critical_deficits[:2]])
+                reasons.append(f"Déficits em relação aos gestores históricos com Selo EJ: {def_str}.")
+            restriction_reason = " ".join(reasons)
+
+        details_str = json.dumps({
+            "triangulated": tc,
+            "hard_scores": hs,
+            "critical_deficits": critical_deficits,
+            "cossim": round(cossim, 3),
+            "gap_penalty": round(gap_penalty, 1)
+        })
+
+        # Persistir ou atualizar em succession_readiness_records
+        cursor.execute("""
+        SELECT id FROM succession_readiness_records 
+        WHERE LOWER(user_email) = LOWER(?) AND role_target = ?;
+        """, (triang["user_email"], role_target))
+        existing = cursor.fetchone()
+
+        if existing:
+            cursor.execute("""
+            UPDATE succession_readiness_records 
+            SET ips_score = ?, hard_data_score = ?, soft_data_score = ?, similarity_to_benchmark = ?,
+                is_eligible = ?, cutoff_threshold = ?, restriction_reason = ?, details_json = ?, calculated_at = CURRENT_TIMESTAMP
+            WHERE id = ?;
+            """, (ips, hard_score, soft_score, cossim, 1 if is_eligible else 0, cutoff, restriction_reason, details_str, existing["id"]))
+        else:
+            cursor.execute("""
+            INSERT INTO succession_readiness_records (
+                tenant_id, user_email, role_target, ips_score, hard_data_score, soft_data_score,
+                similarity_to_benchmark, is_eligible, cutoff_threshold, restriction_reason, details_json
+            ) VALUES ('edv_jr', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """, (triang["user_email"], role_target, ips, hard_score, soft_score, cossim, 1 if is_eligible else 0, cutoff, restriction_reason, details_str))
+
+        # Atualizar ips_score no PDI
+        try:
+            cursor.execute("""
+            UPDATE pdis SET ips_score = ?
+            WHERE LOWER(user_email) = LOWER(?) AND status != 'concluido';
+            """, (ips, triang["user_email"]))
+        except Exception:
+            pass
+
+        results.append({
+            "user_email": triang["user_email"],
+            "nome": triang["nome"],
+            "area": triang["area"],
+            "role": triang["role"],
+            "cargo": triang["cargo"],
+            "role_target": role_target,
+            "ips_score": ips,
+            "hard_data_score": round(hard_score, 1),
+            "soft_data_score": round(soft_score, 1),
+            "similarity_to_benchmark": round(cossim, 3),
+            "is_eligible": is_eligible,
+            "cutoff_threshold": cutoff,
+            "status_sucessao": "Apto para Sucessão Executiva" if is_eligible else "Restrição de Governança Ativa",
+            "restriction_reason": restriction_reason,
+            "critical_deficits": critical_deficits,
+            "benchmark_referencia": {
+                "manager_name": bench_dict.get("manager_name", "Gestor Benchmark"),
+                "mandate_year": bench_dict.get("mandate_year", "2024-2025"),
+                "federation_audit_score": bench_dict.get("federation_audit_score", 100.0)
+            }
+        })
+
+    conn.commit()
+    conn.close()
+
+    if user_email:
+        return results[0] if results else {}
+    return results
+
+
+def generate_gap_mitigation_plan(user_email: str) -> dict:
+    """
+    Mitigação Automatizada de Gaps (Ação Corretiva em Tempo de Execução):
+    - Identifica déficits crônicos a partir da triangulação.
+    - Reconfigura a alocação prática do membro (70-20-10):
+      * 70% On-the-job: Inserir assessores com lacunas como co-responsáveis em projetos complexos ou negociações CRM.
+      * 20% Social: Mentoria pareada com diretor sênior de alto desempenho.
+      * 10% Formal: Playbooks técnicos e capacitações da Brasil Júnior.
+    - Persiste em gap_mitigation_actions e atualiza o PDI ativo em pdis.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    triang = calculate_triangulation(user_email)
+    if not triang:
+        conn.close()
+        return {"error": "Colaborador não encontrado"}
+
+    tc = triang["triangulated_competencies"]
+    user_area = triang["area"]
+    user_nome = triang["nome"]
+
+    # Catálogo de ações práticas de nivelamento orientadas pelo modelo da Brasil Júnior
+    mitigation_catalog = {
+        "orientacao_resultados": {
+            "title": "Orientação para Resultados (Negociação & Conversão)",
+            "practical": f"Inserção imediata de {user_nome} como co-responsável em 3 negociações de grande porte no CRM pareado com a Diretora Comercial (Isadora Epichin), participando ativamente do diagnóstico, proposta e fechamento.",
+            "mentor": "isadora.epichin@edvjr.com.br",
+            "study": "Playbook Oficial de Vendas e Negociação Avançada EDV Jr. (Técnicas SPIN Selling para RMs)."
+        },
+        "gestao": {
+            "title": "Gestão (Controle de Processos & Cronograma)",
+            "practical": f"Alocação de {user_nome} como co-gestor de sprint no Controle de RMs com Thais Junger, assumindo a fiscalização semanal de prazos e conformidade regulatória no INPI.",
+            "mentor": "thais.junger@edvjr.com.br",
+            "study": "Manual POP-VPGG-04 de Gestão de Projetos e Prazos Regulatórios."
+        },
+        "lideranca": {
+            "title": "Liderança (Mobilização & Comunicação)",
+            "practical": f"Designação de {user_nome} para a liderança e condução da dinâmica de grupo na próxima etapa do Processo Seletivo (PSEL) e facilitação de uma Reunião Geral de alinhamento.",
+            "mentor": "charles.junior@edvjr.com.br",
+            "study": "Diretrizes de Liderança MEJ e Formação de Sucessores da Brasil Júnior."
+        },
+        "visao_sistemica": {
+            "title": "Visão Sistêmica (Intersetorial & Ecossistema)",
+            "practical": f"Co-participação na força-tarefa de auditoria das certidões e estatuto social do Selo EJ 2026 junto à Presidência e VPGG (Alice Ney), analisando o impacto interdepartamental.",
+            "mentor": "alice.ney@edvjr.com.br",
+            "study": "Regulamento e Critérios de Auditoria do Selo EJ (Edital Oficial 2026)."
+        },
+        "autoconhecimento": {
+            "title": "Autoconhecimento (Feedback & Desenvolvimento)",
+            "practical": f"Ciclo quinzenal de One-on-One intensivo com a VPGG (Alice Ney) com estruturação de diário de bordo e autoavaliação reflexiva de competências.",
+            "mentor": "alice.ney@edvjr.com.br",
+            "study": "Guia Prático de Inteligência Emocional e Escuta Ativa nas Relações MEJ."
+        }
+    }
+
+    # Identificar competências com maior necessidade de mitigação
+    gaps_to_mitigate = []
+    for comp_key, comp_score in tc.items():
+        if comp_score < 72.0:
+            severity = "critico" if comp_score < 60.0 else ("alto" if comp_score < 66.0 else "medio")
+            gaps_to_mitigate.append({
+                "key": comp_key,
+                "score": comp_score,
+                "severity": severity,
+                **mitigation_catalog[comp_key]
+            })
+
+    # Se não houver gaps < 72, mitigar a menor competência para nivelamento preventivo
+    if not gaps_to_mitigate:
+        lowest_comp = min(tc.items(), key=lambda x: x[1])
+        gaps_to_mitigate.append({
+            "key": lowest_comp[0],
+            "score": lowest_comp[1],
+            "severity": "medio",
+            **mitigation_catalog[lowest_comp[0]]
+        })
+
+    created_actions = []
+    action_plan_text = f"PLANO DE MITIGAÇÃO AUTOMATIZADA 70-20-10 (EDbrain - {user_nome}):\n"
+
+    for g in gaps_to_mitigate:
+        # Registrar em gap_mitigation_actions se não existir ativo
+        cursor.execute("""
+        SELECT id FROM gap_mitigation_actions 
+        WHERE LOWER(user_email) = LOWER(?) AND competency_deficient = ? AND status = 'em_execucao';
+        """, (user_email, g["title"]))
+        row = cursor.fetchone()
+
+        if not row:
+            cursor.execute("""
+            INSERT INTO gap_mitigation_actions (
+                tenant_id, user_email, competency_deficient, current_score, target_score,
+                deficit_severity, action_type, practical_allocation, mentor_assigned,
+                course_or_playbook, status, deadline
+            ) VALUES (
+                'edv_jr', ?, ?, ?, 80.0,
+                ?, '70_on_the_job', ?, ?,
+                ?, 'em_execucao', '2026-06-30'
+            );
+            """, (user_email, g["title"], g["score"], g["severity"], g["practical"], g["mentor"], g["study"]))
+            action_id = cursor.lastrowid
+            action_record = {
+                "id": action_id,
+                "user_email": user_email,
+                "competency_deficient": g["title"],
+                "action_type": "70_on_the_job",
+                "practical_allocation": g["practical"],
+                "mentor_assigned": g["mentor"],
+                "course_or_playbook": g["study"],
+                "current_score": g["score"],
+                "deficit_severity": g["severity"],
+                "status": "em_execucao"
+            }
+            created_actions.append(action_record)
+        else:
+            action_record = {
+                "id": row["id"],
+                "user_email": user_email,
+                "competency_deficient": g["title"],
+                "action_type": "70_on_the_job",
+                "practical_allocation": g["practical"],
+                "mentor_assigned": g["mentor"],
+                "course_or_playbook": g["study"],
+                "current_score": g["score"],
+                "deficit_severity": g["severity"],
+                "status": "em_execucao"
+            }
+            created_actions.append(action_record)
+
+        action_plan_text += f"\n• Competência: {g['title']} (Score atual: {g['score']:.1f} | Severidade: {g['severity'].upper()})\n"
+        action_plan_text += f"  - 70% Experiencial (On-the-Job): {g['practical']}\n"
+        action_plan_text += f"  - 20% Social (Mentoria): Pareamento com {g['mentor']}\n"
+        action_plan_text += f"  - 10% Formal (Estudo): {g['study']}\n"
+
+    # Atualizar ou criar o PDI na tabela pdis
+    cursor.execute("SELECT id FROM pdis WHERE LOWER(user_email) = LOWER(?) ORDER BY id DESC LIMIT 1;", (user_email,))
+    pdi_row = cursor.fetchone()
+
+    if pdi_row:
+        cursor.execute("""
+        UPDATE pdis 
+        SET action_plan_70_20_10 = ?, status = 'em_andamento'
+        WHERE id = ?;
+        """, (action_plan_text, pdi_row["id"]))
+    else:
+        cursor.execute("""
+        INSERT INTO pdis (
+            user_email, area, competency_mej, objectives, development_ideas, deadline, status, action_plan_70_20_10
+        ) VALUES (
+            ?, ?, 'Orientação para Resultados',
+            'Superar lacunas de desempenho e acelerar prontidão sucessória via alocação prática guiada.',
+            'Co-responsabilidade em projetos complexos e negociações de fechamento do CRM.',
+            '2026-06-30', 'em_andamento', ?
+        );
+        """, (user_email, user_area, action_plan_text))
+
+    conn.commit()
+    conn.close()
+
+    return {
+        "user_email": user_email,
+        "nome": user_nome,
+        "area": user_area,
+        "action_plan_70_20_10": action_plan_text,
+        "mitigation_actions": created_actions
+    }
+
+
+def save_evaluation_360(eval_data: dict, current_user_email: str) -> dict:
+    """
+    Registra uma nova avaliação 360º oficial alinhada às competências Brasil Júnior.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    INSERT INTO performance_evaluations_360 (
+        tenant_id, cycle_id, evaluatee_email, evaluator_email, relationship_type,
+        score_lideranca, score_gestao, score_visao_sistemica, score_orientacao_resultados, score_autoconhecimento,
+        feedback_qualitativo, status
+    ) VALUES (
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    );
+    """, (
+        eval_data.get("tenant_id", "edv_jr"),
+        eval_data.get("cycle_id", "2026.1"),
+        eval_data["evaluatee_email"].strip().lower(),
+        current_user_email.strip().lower(),
+        eval_data.get("relationship_type", "peer"),
+        float(eval_data.get("score_lideranca", 3.0)),
+        float(eval_data.get("score_gestao", 3.0)),
+        float(eval_data.get("score_visao_sistemica", 3.0)),
+        float(eval_data.get("score_orientacao_resultados", 3.0)),
+        float(eval_data.get("score_autoconhecimento", 3.0)),
+        eval_data.get("feedback_qualitativo", ""),
+        eval_data.get("status", "submitted")
+    ))
+    eval_id = cursor.lastrowid
+
+    # Incrementar contador de avaliações do avaliador
+    cursor.execute("""
+    UPDATE evaluator_calibrations 
+    SET total_evaluations_count = total_evaluations_count + 1
+    WHERE LOWER(evaluator_email) = LOWER(?);
+    """, (current_user_email.strip(),))
+
+    conn.commit()
+
+    # Recalcular triangulação do avaliado
+    cursor.execute("SELECT * FROM performance_evaluations_360 WHERE id = ?;", (eval_id,))
+    created_eval = dict(cursor.fetchone())
+    conn.close()
+
+    # Trigger triangulation update
+    try:
+        calculate_triangulation(created_eval["evaluatee_email"])
+    except Exception:
+        pass
+
+    return created_eval
+
+
+def list_evaluations_360(evaluatee_email: Optional[str] = None) -> List[dict]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    if evaluatee_email:
+        cursor.execute("SELECT * FROM performance_evaluations_360 WHERE LOWER(evaluatee_email) = LOWER(?) ORDER BY id DESC;", (evaluatee_email.strip(),))
+    else:
+        cursor.execute("SELECT * FROM performance_evaluations_360 ORDER BY id DESC;")
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def list_gap_mitigation_actions(user_email: Optional[str] = None) -> List[dict]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    if user_email:
+        cursor.execute("SELECT * FROM gap_mitigation_actions WHERE LOWER(user_email) = LOWER(?) ORDER BY id DESC;", (user_email.strip(),))
+    else:
+        cursor.execute("SELECT * FROM gap_mitigation_actions ORDER BY id DESC;")
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def list_historical_benchmarks(role_target: Optional[str] = None) -> List[dict]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    if role_target:
+        cursor.execute("SELECT * FROM historical_manager_benchmarks WHERE role_target = ? ORDER BY id DESC;", (role_target,))
+    else:
+        cursor.execute("SELECT * FROM historical_manager_benchmarks ORDER BY id DESC;")
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
 
 
 if __name__ == "__main__":

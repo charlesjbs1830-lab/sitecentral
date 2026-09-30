@@ -43,7 +43,7 @@ except ImportError:
     )
 
 try:
-    from database import (
+    from backend.database import (
         init_db,
         get_user_by_email,
         get_user_by_id,
@@ -80,9 +80,23 @@ try:
         CampaignORM,
         PselCandidateORM,
         BrandAssetORM,
+        PerformanceEvaluation360ORM,
+        EvaluatorCalibrationORM,
+        HistoricalManagerBenchmarkORM,
+        SuccessionReadinessORM,
+        GapMitigationActionORM,
+        calculate_triangulation,
+        save_evaluation_360,
+        list_evaluations_360,
+        calculate_succession_ips,
+        generate_gap_mitigation_plan,
+        list_gap_mitigation_actions,
+        list_historical_benchmarks,
+        get_member_hard_metrics,
+        get_evaluator_calibrations,
         get_db_session
     )
-    from auth import (
+    from backend.auth import (
         verify_password,
         create_access_token,
         get_current_user,
@@ -134,9 +148,23 @@ except ImportError:
         CampaignORM,
         PselCandidateORM,
         BrandAssetORM,
+        PerformanceEvaluation360ORM,
+        EvaluatorCalibrationORM,
+        HistoricalManagerBenchmarkORM,
+        SuccessionReadinessORM,
+        GapMitigationActionORM,
+        calculate_triangulation,
+        save_evaluation_360,
+        list_evaluations_360,
+        calculate_succession_ips,
+        generate_gap_mitigation_plan,
+        list_gap_mitigation_actions,
+        list_historical_benchmarks,
+        get_member_hard_metrics,
+        get_evaluator_calibrations,
         get_db_session
     )
-    from backend.auth import (
+    from auth import (
         verify_password,
         create_access_token,
         get_current_user,
@@ -270,11 +298,60 @@ class PDIResponse(BaseModel):
     development_ideas: str
     deadline: str
     status: str
+    triangulated_score: Optional[float] = 0.0
+    ips_score: Optional[float] = 0.0
+    action_plan_70_20_10: Optional[str] = None
     created_at: Optional[str] = None
 
 class PDIGenerateRequest(BaseModel):
     member_email: str = Field(..., description="E-mail corporativo do membro para geração da trilha")
     foco_adicional: Optional[str] = Field(None, description="Foco customizado opcional (ex: liderança, oratória, vendas)")
+
+class Evaluation360Create(BaseModel):
+    evaluatee_email: str = Field(..., description="E-mail institucional do colaborador avaliado")
+    cycle_id: Optional[str] = Field("2026.1", description="Ciclo avaliativo vigente (ex: '2026.1', '2026.2')")
+    relationship_type: Optional[str] = Field("peer", description="Relação hierárquica com o avaliado ('leader', 'peer', 'subordinate', 'self')")
+    score_lideranca: float = Field(..., ge=1.0, le=5.0, description="Nota de Liderança Oficial Brasil Júnior (1.0 a 5.0)")
+    score_gestao: float = Field(..., ge=1.0, le=5.0, description="Nota de Gestão Oficial Brasil Júnior (1.0 a 5.0)")
+    score_visao_sistemica: float = Field(..., ge=1.0, le=5.0, description="Nota de Visão Sistêmica Oficial Brasil Júnior (1.0 a 5.0)")
+    score_orientacao_resultados: float = Field(..., ge=1.0, le=5.0, description="Nota de Orientação para Resultados Oficial Brasil Júnior (1.0 a 5.0)")
+    score_autoconhecimento: float = Field(..., ge=1.0, le=5.0, description="Nota de Autoconhecimento Oficial Brasil Júnior (1.0 a 5.0)")
+    feedback_qualitativo: Optional[str] = Field(None, description="Parecer qualitativo, pontos a continuar e pontos a desenvolver")
+
+class Evaluation360Response(BaseModel):
+    id: int
+    tenant_id: str
+    cycle_id: str
+    evaluatee_email: str
+    evaluator_email: str
+    relationship_type: str
+    score_lideranca: float
+    score_gestao: float
+    score_visao_sistemica: float
+    score_orientacao_resultados: float
+    score_autoconhecimento: float
+    feedback_qualitativo: Optional[str] = None
+    status: str
+    created_at: Optional[Any] = None
+
+class GapMitigationPlanRequest(BaseModel):
+    user_email: str = Field(..., description="E-mail do assessor para reconfiguração imediata do plano de desenvolvimento")
+
+class GapMitigationActionResponse(BaseModel):
+    id: int
+    tenant_id: str
+    user_email: str
+    competency_deficient: str
+    current_score: float
+    target_score: float
+    deficit_severity: str
+    action_type: str
+    practical_allocation: str
+    mentor_assigned: Optional[str] = None
+    course_or_playbook: Optional[str] = None
+    status: str
+    deadline: Optional[str] = None
+    created_at: Optional[Any] = None
 
 VALID_CRM_STATUSES = {"prospeccao", "negociacao", "fechado", "perdido"}
 
@@ -1459,6 +1536,236 @@ async def get_pdi_analytics_endpoint(
     """
     target_email = member_email.lower().strip() if member_email else current_user["email"]
     return _build_pdi_analytics_and_trail(target_email, None)
+
+# ==============================================================================
+# 5.1 TRIANGULAÇÃO OPERACIONAL-COMPORTAMENTAL (HARD DATA VS. SOFT DATA 360º)
+# ==============================================================================
+
+@app.get(
+    "/vpgg/triangulation",
+    summary="Triangulação Operacional-Comportamental de Membros (Hard vs. Soft Data)"
+)
+@app.get(
+    "/api/vpgg/triangulation",
+    include_in_schema=False
+)
+async def get_triangulation_endpoint(
+    user_email: Optional[str] = Query(None, description="Filtrar por e-mail institucional do membro"),
+    current_user: dict = Depends(verify_vpgg_access)
+):
+    """
+    Cruza métricas quantitativas extraídas do CRM e Projetos (conversão, faturamento, pontualidade de RMs)
+    com avaliações qualitativas 360º ponderadas por histórico de assertividade dos avaliadores,
+    alinhando ao Modelo Oficial da Brasil Júnior (Liderança, Gestão, Visão Sistêmica, Orientação para Resultados e Autoconhecimento).
+    """
+    res = calculate_triangulation(user_email)
+    log_audit(
+        current_user.get("email"),
+        "TRIANGULATION_ACCESSED",
+        "/vpgg/triangulation",
+        200,
+        {"user_email": user_email}
+    )
+    return res
+
+@app.get(
+    "/vpgg/triangulation/{user_email}",
+    summary="Triangulação de Membro Específico (Hard vs. Soft Data)"
+)
+@app.get(
+    "/api/vpgg/triangulation/{user_email}",
+    include_in_schema=False
+)
+async def get_member_triangulation_endpoint(
+    user_email: str,
+    current_user: dict = Depends(verify_vpgg_access)
+):
+    res = calculate_triangulation(user_email)
+    if not res:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Colaborador com e-mail '{user_email}' não encontrado."
+        )
+    return res
+
+@app.post(
+    "/vpgg/evaluations-360",
+    response_model=Evaluation360Response,
+    status_code=status.HTTP_201_CREATED,
+    summary="Registrar Avaliação 360º (Modelo Oficial Brasil Júnior)"
+)
+@app.post(
+    "/api/vpgg/evaluations-360",
+    response_model=Evaluation360Response,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False
+)
+async def create_evaluation_360_endpoint(
+    payload: Evaluation360Create,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Submete uma nova avaliação qualitativa 360º oficial, pontuando o colaborador nas 5 competências essenciais.
+    """
+    target_user = get_user_by_email(payload.evaluatee_email)
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Membro avaliado '{payload.evaluatee_email}' não encontrado na whitelist oficial."
+        )
+
+    eval_data = payload.model_dump() if hasattr(payload, 'model_dump') else payload.dict()
+    created = save_evaluation_360(eval_data, current_user["email"])
+
+    log_audit(
+        current_user.get("email"),
+        "EVALUATION_360_SUBMITTED",
+        "/vpgg/evaluations-360",
+        201,
+        {"evaluatee_email": payload.evaluatee_email, "evaluator": current_user["email"]}
+    )
+    return created
+
+@app.get(
+    "/vpgg/evaluations-360",
+    summary="Listar Avaliações 360º Submetidas"
+)
+@app.get(
+    "/api/vpgg/evaluations-360",
+    include_in_schema=False
+)
+async def list_evaluations_360_endpoint(
+    evaluatee_email: Optional[str] = Query(None, description="Filtrar por e-mail do avaliado"),
+    current_user: dict = Depends(verify_vpgg_access)
+):
+    return list_evaluations_360(evaluatee_email)
+
+# ==============================================================================
+# 5.2 ÍNDICE DE PRONTIDÃO PREDITIVA PARA SUCESSÃO (IPS) & GOVERNANÇA FEDERATIVA
+# ==============================================================================
+
+@app.get(
+    "/vpgg/succession-ips",
+    summary="Calcular Índice de Prontidão Preditiva para Sucessão (IPS) Corporativo"
+)
+@app.get(
+    "/api/vpgg/succession-ips",
+    include_in_schema=False
+)
+async def get_succession_ips_endpoint(
+    role_target: str = Query("diretoria", pattern="^(diretoria|presidencia)$", description="Cargo executivo alvo ('diretoria' ou 'presidencia')"),
+    current_user: dict = Depends(verify_vpgg_access)
+):
+    """
+    Calcula o escore probabilístico de prontidão para sucessão (0 a 100),
+    comparando a performance com o perfil histórico de gestores com aprovação plena no Selo EJ.
+    Restringe elegibilidade automática se o IPS estiver abaixo da linha de corte.
+    """
+    res = calculate_succession_ips(None, role_target)
+    log_audit(
+        current_user.get("email"),
+        "SUCCESSION_IPS_BATCH_ACCESSED",
+        "/vpgg/succession-ips",
+        200,
+        {"role_target": role_target}
+    )
+    return res
+
+@app.get(
+    "/vpgg/succession-ips/{user_email}",
+    summary="Dossiê Preditivo de Sucessão de Membro Específico"
+)
+@app.get(
+    "/api/vpgg/succession-ips/{user_email}",
+    include_in_schema=False
+)
+async def get_member_succession_ips_endpoint(
+    user_email: str,
+    role_target: str = Query("diretoria", pattern="^(diretoria|presidencia)$", description="Cargo executivo alvo ('diretoria' ou 'presidencia')"),
+    current_user: dict = Depends(verify_vpgg_access)
+):
+    res = calculate_succession_ips(user_email, role_target)
+    if not res:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Colaborador com e-mail '{user_email}' não encontrado."
+        )
+
+    log_audit(
+        current_user.get("email"),
+        "SUCCESSION_IPS_MEMBER_ACCESSED",
+        f"/vpgg/succession-ips/{user_email}",
+        200,
+        {"user_email": user_email, "ips_score": res["ips_score"], "eligible": res["is_eligible"]}
+    )
+    return res
+
+# ==============================================================================
+# 5.3 MITIGAÇÃO AUTOMATIZADA DE GAPS (AÇÃO CORRETIVA EM TEMPO DE EXECUÇÃO 70-20-10)
+# ==============================================================================
+
+@app.post(
+    "/vpgg/gap-mitigation/generate/{user_email}",
+    summary="Disparar Mecanismo Preditivo de Mitigação de Gaps em Tempo de Execução"
+)
+@app.post(
+    "/api/vpgg/gap-mitigation/generate/{user_email}",
+    include_in_schema=False
+)
+async def generate_gap_mitigation_endpoint(
+    user_email: str,
+    current_user: dict = Depends(verify_vpgg_access)
+):
+    """
+    Identifica déficits crônicos em competências e reconfigura automaticamente a alocação prática do membro:
+    insere assessores com lacunas como co-responsáveis em projetos complexos ou negociações CRM,
+    pareando com mentores seniores e atualizando o PDI ativo.
+    """
+    target_user = get_user_by_email(user_email)
+    if not target_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Colaborador com e-mail '{user_email}' não encontrado."
+        )
+
+    plan = generate_gap_mitigation_plan(user_email)
+
+    log_audit(
+        current_user.get("email"),
+        "GAP_MITIGATION_GENERATED",
+        f"/vpgg/gap-mitigation/generate/{user_email}",
+        200,
+        {"user_email": user_email, "actions_count": len(plan.get("mitigation_actions", []))}
+    )
+    return plan
+
+@app.get(
+    "/vpgg/gap-mitigation/{user_email}",
+    summary="Listar Ações de Mitigação Prática Ativas do Membro"
+)
+@app.get(
+    "/api/vpgg/gap-mitigation/{user_email}",
+    include_in_schema=False
+)
+async def list_gap_mitigation_endpoint(
+    user_email: str,
+    current_user: dict = Depends(verify_vpgg_access)
+):
+    return list_gap_mitigation_actions(user_email)
+
+@app.get(
+    "/vpgg/benchmarks",
+    summary="Listar Perfis de Benchmark de Gestores Históricos (Federação / Selo EJ)"
+)
+@app.get(
+    "/api/vpgg/benchmarks",
+    include_in_schema=False
+)
+async def list_benchmarks_endpoint(
+    role_target: Optional[str] = Query(None, description="Filtrar por cargo ('diretoria' ou 'presidencia')"),
+    current_user: dict = Depends(verify_vpgg_access)
+):
+    return list_historical_benchmarks(role_target)
 
 # ==============================================================================
 # 6. MÓDULO DE INTELIGÊNCIA COMERCIAL, ENRIQUECIMENTO BRASILAPI & RADAR (EDbrain)

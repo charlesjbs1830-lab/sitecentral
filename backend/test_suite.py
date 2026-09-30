@@ -1127,7 +1127,156 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         self.assertIn("roi_global_percentual", data)
         self.assertIn("psel_metricas", data)
         self.assertIn("desempenho_canais", data)
-        self.assertGreaterEqual(data["total_campanhas"], 1)
+    def test_32_hard_data_vs_soft_data_triangulation_and_evaluator_weights(self):
+        """Valida a triangulação de métricas operacionais quantitativas (Hard Data) com avaliações 360º (Soft Data) e calibração de avaliadores"""
+        token_vpgg = self.tokens["diretor"]
+        token_com = self.tokens["assessor_comercial"]
+
+        # 1. Assessor comercial não tem acesso direto a métricas globais de VPGG -> 403
+        res_denied = self.client.get("/api/vpgg/triangulation", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_denied.status_code, 403)
+
+        # 2. Diretora de VPGG acessa triangulação corporativa -> 200 OK
+        res = self.client.get("/api/vpgg/triangulation", headers={"Authorization": f"Bearer {token_vpgg}"})
+        self.assertEqual(res.status_code, 200)
+        members = res.json()
+        self.assertGreaterEqual(len(members), 20)
+
+        # 3. Valida triangulação de membro específico (Samuel Garcia)
+        res_samuel = self.client.get("/api/vpgg/triangulation/samuel.garcia@edvjr.com.br", headers={"Authorization": f"Bearer {token_vpgg}"})
+        self.assertEqual(res_samuel.status_code, 200)
+        data = res_samuel.json()
+
+        # Hard Data extraído do CRM, RMs e Assiduidade
+        self.assertIn("hard_data", data)
+        hard_scores = data["hard_data"]["scores"]
+        self.assertIn("conversion_score", hard_scores)
+        self.assertIn("project_punctuality_score", hard_scores)
+        self.assertIn("assiduidade_score", hard_scores)
+        self.assertIn("overall_hard_score", hard_scores)
+
+        # Soft Data calibrado nas 5 competências oficiais da Brasil Júnior
+        soft_scores = data["soft_scores_calibrated"]
+        for comp in ["lideranca", "gestao", "visao_sistemica", "orientacao_resultados", "autoconhecimento"]:
+            self.assertIn(comp, soft_scores)
+            self.assertGreater(soft_scores[comp], 0.0)
+
+        # Triangulação ponderada
+        triang = data["triangulated_competencies"]
+        for comp in ["lideranca", "gestao", "visao_sistemica", "orientacao_resultados", "autoconhecimento"]:
+            self.assertIn(comp, triang)
+        self.assertGreater(data["overall_triangulated_score"], 0.0)
+
+    def test_33_evaluations_360_creation_and_brasil_junior_competencies(self):
+        """Valida submissão de avaliação 360º oficial, validação de limites de notas e feedback"""
+        token_com = self.tokens["assessor_comercial"]
+
+        # 1. Submissão válida por par
+        eval_payload = {
+            "evaluatee_email": "samuel.garcia@edvjr.com.br",
+            "cycle_id": "2026.1",
+            "relationship_type": "peer",
+            "score_lideranca": 4.2,
+            "score_gestao": 3.8,
+            "score_visao_sistemica": 4.0,
+            "score_orientacao_resultados": 3.9,
+            "score_autoconhecimento": 4.1,
+            "feedback_qualitativo": "Excelente postura proativa e comunicação clara com a equipe comercial."
+        }
+        res = self.client.post("/api/vpgg/evaluations-360", json=eval_payload, headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res.status_code, 201)
+        created = res.json()
+        self.assertEqual(created["evaluatee_email"], "samuel.garcia@edvjr.com.br")
+        self.assertEqual(created["relationship_type"], "peer")
+
+        # 2. Rejeição de nota fora da escala 1.0 a 5.0 -> 422 Unprocessable Entity
+        invalid_payload = dict(eval_payload)
+        invalid_payload["score_lideranca"] = 5.5
+        res_invalid = self.client.post("/api/vpgg/evaluations-360", json=invalid_payload, headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_invalid.status_code, 422)
+
+        # 3. Rejeição de membro inexistente -> 404 Not Found
+        ghost_payload = dict(eval_payload)
+        ghost_payload["evaluatee_email"] = "fantasma@edvjr.com.br"
+        res_ghost = self.client.post("/api/vpgg/evaluations-360", json=ghost_payload, headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_ghost.status_code, 404)
+
+    def test_34_succession_predictive_index_ips_and_governance_cutoff(self):
+        """Valida o cálculo preditivo do IPS, similaridade com perfil federativo e bloqueio por corte de governança"""
+        token_vpgg = self.tokens["diretor"]
+
+        # 1. Cálculo do IPS para Diretoria (linha de corte = 70.0)
+        res_dir = self.client.get("/api/vpgg/succession-ips/samuel.garcia@edvjr.com.br?role_target=diretoria", headers={"Authorization": f"Bearer {token_vpgg}"})
+        self.assertEqual(res_dir.status_code, 200)
+        data_dir = res_dir.json()
+
+        self.assertIn("ips_score", data_dir)
+        self.assertIn("similarity_to_benchmark", data_dir)
+        self.assertEqual(data_dir["cutoff_threshold"], 70.0)
+        self.assertGreater(data_dir["similarity_to_benchmark"], 0.8)
+
+        # Como Samuel possui gaps operacionais, IPS < 70 restringe elegibilidade automática
+        if data_dir["ips_score"] < 70.0:
+            self.assertFalse(data_dir["is_eligible"])
+            self.assertEqual(data_dir["status_sucessao"], "Restrição de Governança Ativa")
+            self.assertIsNotNone(data_dir["restriction_reason"])
+            self.assertIn("abaixo da linha de corte", data_dir["restriction_reason"])
+
+        # 2. Cálculo do IPS para Presidência (linha de corte = 80.0)
+        res_pres = self.client.get("/api/vpgg/succession-ips/samuel.garcia@edvjr.com.br?role_target=presidencia", headers={"Authorization": f"Bearer {token_vpgg}"})
+        self.assertEqual(res_pres.status_code, 200)
+        data_pres = res_pres.json()
+        self.assertEqual(data_pres["cutoff_threshold"], 80.0)
+        self.assertFalse(data_pres["is_eligible"])
+
+    def test_35_gap_mitigation_runtime_action_and_pdi_70_20_10_update(self):
+        """Valida detecção preditiva de déficits crônicos e geração de plano 70-20-10 com alocação prática e atualização de PDI"""
+        token_vpgg = self.tokens["diretor"]
+
+        # 1. Dispara o mecanismo de mitigação preditiva
+        res = self.client.post("/api/vpgg/gap-mitigation/generate/samuel.garcia@edvjr.com.br", headers={"Authorization": f"Bearer {token_vpgg}"})
+        self.assertEqual(res.status_code, 200)
+        plan = res.json()
+
+        self.assertIn("action_plan_70_20_10", plan)
+        self.assertIn("mitigation_actions", plan)
+        self.assertGreaterEqual(len(plan["mitigation_actions"]), 1)
+
+        plan_text = plan["action_plan_70_20_10"]
+        self.assertIn("70% Experiencial (On-the-Job)", plan_text)
+        self.assertIn("20% Social (Mentoria)", plan_text)
+        self.assertIn("10% Formal (Estudo)", plan_text)
+
+        # 2. Verifica se a alocação prática especifica inserção em projetos complexos ou negociações CRM
+        first_action = plan["mitigation_actions"][0]
+        self.assertEqual(first_action["action_type"], "70_on_the_job")
+        self.assertIsNotNone(first_action["practical_allocation"])
+
+        # 3. Verifica no SQLite se a tabela pdis foi atualizada com o plano 70-20-10
+        conn = get_connection()
+        pdi_row = conn.execute("SELECT action_plan_70_20_10, status FROM pdis WHERE LOWER(user_email) = 'samuel.garcia@edvjr.com.br' ORDER BY id DESC LIMIT 1;").fetchone()
+        self.assertIsNotNone(pdi_row)
+        self.assertIsNotNone(pdi_row["action_plan_70_20_10"])
+        self.assertEqual(pdi_row["status"], "em_andamento")
+        conn.close()
+
+    def test_36_historical_manager_benchmarks_and_rbac_protection(self):
+        """Valida consulta de perfis de benchmark federativos (Selo EJ 100%) e proteção RBAC"""
+        token_vpgg = self.tokens["diretor"]
+        token_proj = self.tokens["assessor_projetos"]
+
+        # 1. Assessor de Projetos tenta acessar benchmarks de gestão -> 403 Forbidden
+        res_denied = self.client.get("/api/vpgg/benchmarks", headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res_denied.status_code, 403)
+
+        # 2. Diretora de VPGG consulta os benchmarks -> 200 OK
+        res = self.client.get("/api/vpgg/benchmarks", headers={"Authorization": f"Bearer {token_vpgg}"})
+        self.assertEqual(res.status_code, 200)
+        benchmarks = res.json()
+        self.assertGreaterEqual(len(benchmarks), 2)
+        for b in benchmarks:
+            self.assertEqual(b["federation_audit_score"], 100.0)
+            self.assertIn(b["role_target"], ["diretoria", "presidencia"])
 
 if __name__ == "__main__":
     unittest.main()

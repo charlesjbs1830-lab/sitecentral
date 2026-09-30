@@ -520,6 +520,8 @@ function switchTab(tabId) {
       carregarPDIsVPGG();
       carregarAnalyticsVPGG();
       popularSelectsVPGG();
+      carregarSucessaoIPS();
+      carregarTriangulacaoVPGG();
     }
   } else if (tabId === 'marketing') {
     carregarModuloMarketing();
@@ -567,14 +569,18 @@ function switchVPGGSubtab(subtab) {
   const trilhaView = document.getElementById('vpgg-sub-trilhas');
   const analyticsView = document.getElementById('vpgg-sub-analytics');
   const membroView = document.getElementById('vpgg-sub-membros');
+  const sucessaoView = document.getElementById('vpgg-sub-sucessao');
+  const triangulacaoView = document.getElementById('vpgg-sub-triangulacao');
 
   const btnPdi = document.getElementById('subtab-vpgg-pdis');
   const btnTrilha = document.getElementById('subtab-vpgg-trilhas');
   const btnAnalytics = document.getElementById('subtab-vpgg-analytics');
   const btnMembro = document.getElementById('subtab-vpgg-membros');
+  const btnSucessao = document.getElementById('subtab-vpgg-sucessao');
+  const btnTriangulacao = document.getElementById('subtab-vpgg-triangulacao');
 
-  [pdiView, trilhaView, analyticsView, membroView].forEach(el => el && el.classList.add('hidden'));
-  [btnPdi, btnTrilha, btnAnalytics, btnMembro].forEach(btn => {
+  [pdiView, trilhaView, analyticsView, membroView, sucessaoView, triangulacaoView].forEach(el => el && el.classList.add('hidden'));
+  [btnPdi, btnTrilha, btnAnalytics, btnMembro, btnSucessao, btnTriangulacao].forEach(btn => {
     if (btn) {
       btn.classList.remove('subtab-active');
       btn.classList.add('subtab-inactive');
@@ -598,6 +604,14 @@ function switchVPGGSubtab(subtab) {
     if (membroView) membroView.classList.remove('hidden');
     if (btnMembro) { btnMembro.classList.add('subtab-active'); btnMembro.classList.remove('subtab-inactive'); }
     if (typeof filtrarVPGGDataGrid === 'function') filtrarVPGGDataGrid();
+  } else if (subtab === 'sucessao') {
+    if (sucessaoView) sucessaoView.classList.remove('hidden');
+    if (btnSucessao) { btnSucessao.classList.add('subtab-active'); btnSucessao.classList.remove('subtab-inactive'); }
+    carregarSucessaoIPS();
+  } else if (subtab === 'triangulacao') {
+    if (triangulacaoView) triangulacaoView.classList.remove('hidden');
+    if (btnTriangulacao) { btnTriangulacao.classList.add('subtab-active'); btnTriangulacao.classList.remove('subtab-inactive'); }
+    carregarTriangulacaoVPGG();
   }
 }
 
@@ -3718,6 +3732,632 @@ function renderAnalyticsStatusBars(dist, total) {
       </div>
     `;
   }).join('');
+}
+
+// ==============================================================================
+// 4.6.1 MOTOR PREDITIVO DE SUCESSÃO (IPS), TRIANGULAÇÃO 360º & MITIGAÇÃO DE GAPS
+// ==============================================================================
+
+let vpggSucessaoState = {
+  roleTarget: 'diretoria', // 'diretoria' | 'presidencia'
+  candidatos: [],
+  governanceCutoff: 70.0,
+  filtroBusca: '',
+  filtroStatus: ''
+};
+
+let vpggTriangulacaoState = {
+  selectedMemberEmail: '',
+  membros: [],
+  triangulationData: null,
+  evaluations360: [],
+  calibrations: []
+};
+
+// 1. CARGO ALVO DE SUCESSÃO (DIRETORIA vs PRESIDÊNCIA)
+function mudarCargoAlvoSucessao(role) {
+  vpggSucessaoState.roleTarget = role;
+  const btnDir = document.getElementById('btn-sucessao-cargo-diretoria');
+  const btnPres = document.getElementById('btn-sucessao-cargo-presidencia');
+  const bNome = document.getElementById('sucessao-benchmark-nome');
+  const bCorte = document.getElementById('sucessao-corte-info');
+
+  if (role === 'diretoria') {
+    if (btnDir) {
+      btnDir.className = "px-3 py-1 bg-white font-bold rounded shadow-xs text-slate-800";
+    }
+    if (btnPres) {
+      btnPres.className = "px-3 py-1 text-slate-600 hover:text-slate-900 font-medium";
+    }
+    if (bNome) bNome.innerText = "Diretor Executivo Modelo (Histórico)";
+    if (bCorte) bCorte.innerText = "Linha de Corte: IPS ≥ 70.0";
+  } else {
+    if (btnDir) {
+      btnDir.className = "px-3 py-1 text-slate-600 hover:text-slate-900 font-medium";
+    }
+    if (btnPres) {
+      btnPres.className = "px-3 py-1 bg-white font-bold rounded shadow-xs text-slate-800";
+    }
+    if (bNome) bNome.innerText = "Presidente Institucional Modelo (Histórico)";
+    if (bCorte) bCorte.innerText = "Linha de Corte: IPS ≥ 80.0";
+  }
+
+  carregarSucessaoIPS(role);
+}
+
+// 2. CARREGAR ÍNDICE DE PRONTIDÃO PREDITIVA PARA SUCESSÃO (GET /vpgg/succession-ips)
+async function carregarSucessaoIPS(roleTarget = null) {
+  const target = roleTarget || vpggSucessaoState.roleTarget || 'diretoria';
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  const tbody = document.getElementById('tabela-sucessao-ips-body');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="p-8 text-center text-slate-400">
+          <i class="fa-solid fa-spinner fa-spin text-xl text-amber-500 mb-2 block"></i>
+          Calculando Índices de Prontidão Preditiva (IPS) para ${target.toUpperCase()}...
+        </td>
+      </tr>
+    `;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/vpgg/succession-ips?role_target=${target}`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      vpggSucessaoState.candidatos = data.candidates || [];
+      vpggSucessaoState.governanceCutoff = data.governance_cutoff_line || (target === 'presidencia' ? 80.0 : 70.0);
+
+      // Atualizar KPIs
+      const elTotal = document.getElementById('kpi-sucessao-total');
+      const elAptos = document.getElementById('kpi-sucessao-aptos');
+      const elBloq = document.getElementById('kpi-sucessao-bloqueados');
+      const elMedia = document.getElementById('kpi-sucessao-media');
+
+      if (elTotal) elTotal.innerText = data.total_candidates || vpggSucessaoState.candidatos.length;
+      if (elAptos) elAptos.innerText = data.eligible_count !== undefined ? data.eligible_count : 0;
+      if (elBloq) elBloq.innerText = data.restricted_count !== undefined ? data.restricted_count : 0;
+      if (elMedia) elMedia.innerText = (data.average_ips || 0).toFixed(1);
+
+      filtrarTabelaSucessao();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      if (tbody) {
+        tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-rose-600">Erro: ${err.detail || 'Não foi possível carregar o IPS.'}</td></tr>`;
+      }
+    }
+  } catch (err) {
+    console.warn("[VPGG Sucessão] Falha na requisição:", err);
+    if (tbody) {
+      tbody.innerHTML = `<tr><td colspan="7" class="p-6 text-center text-rose-500">Falha de comunicação com o servidor EDbrain.</td></tr>`;
+    }
+  }
+}
+
+// 3. FILTRO E RENDERIZAÇÃO DA TABELA DE SUCESSÃO
+function filtrarTabelaSucessao() {
+  const busca = (document.getElementById('filtro-sucessao-busca')?.value || '').toLowerCase().trim();
+  const status = (document.getElementById('filtro-sucessao-status')?.value || '').toLowerCase().trim();
+
+  let lista = vpggSucessaoState.candidatos || [];
+
+  if (busca) {
+    lista = lista.filter(c => 
+      (c.name || '').toLowerCase().includes(busca) ||
+      (c.user_email || '').toLowerCase().includes(busca) ||
+      (c.department || '').toLowerCase().includes(busca) ||
+      (c.current_role || '').toLowerCase().includes(busca)
+    );
+  }
+
+  if (status === 'elegivel') {
+    lista = lista.filter(c => c.is_eligible === true);
+  } else if (status === 'restrito') {
+    lista = lista.filter(c => c.is_eligible === false);
+  }
+
+  const badgeEl = document.getElementById('sucessao-count-badge');
+  if (badgeEl) badgeEl.innerText = `${lista.length} registro(s)`;
+
+  renderizarTabelaSucessao(lista);
+}
+
+function renderizarTabelaSucessao(candidatos) {
+  const tbody = document.getElementById('tabela-sucessao-ips-body');
+  if (!tbody) return;
+
+  if (!candidatos || candidatos.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="p-8 text-center text-slate-400">
+          <i class="fa-solid fa-trophy text-2xl text-slate-300 mb-2 block"></i>
+          Nenhum membro encontrado com os filtros selecionados.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  const cutoff = vpggSucessaoState.governanceCutoff;
+
+  tbody.innerHTML = candidatos.map(c => {
+    const ips = Number(c.ips_score || 0);
+    const sim = Number(c.similarity_score || 0);
+    const isEligible = c.is_eligible;
+    const nome = escapeHTML(c.name || c.user_email.split('@')[0]);
+    const email = escapeHTML(c.user_email);
+    const depto = escapeHTML(c.department || 'Operacional');
+    const cargo = escapeHTML(c.current_role || 'Assessor');
+    const reason = c.restriction_reason ? escapeHTML(c.restriction_reason) : 'Apto para o edital eleitoral institucional.';
+
+    const ipsColor = ips >= cutoff ? 'bg-emerald-500' : (ips >= 55 ? 'bg-amber-500' : 'bg-rose-500');
+    const ipsBadge = ips >= cutoff 
+      ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+      : 'bg-rose-100 text-rose-800 border-rose-300';
+
+    return `
+      <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+        <td class="px-4 py-3">
+          <div class="font-bold text-slate-800 text-xs">${nome}</div>
+          <div class="text-[10px] text-slate-400 font-mono">${email}</div>
+        </td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-0.5 rounded bg-purple-50 text-purple-800 text-[10px] font-bold border border-purple-200">
+            ${depto}
+          </span>
+          <div class="text-[10px] text-slate-500 font-medium mt-0.5">${cargo}</div>
+        </td>
+        <td class="px-4 py-3 text-center">
+          <div class="inline-flex items-center gap-1.5">
+            <span class="px-2 py-0.5 rounded-full text-xs font-mono font-bold border ${ipsBadge}">
+              ${ips.toFixed(1)}
+            </span>
+          </div>
+          <div class="w-20 bg-slate-100 rounded-full h-1.5 mx-auto mt-1.5 overflow-hidden">
+            <div class="${ipsColor} h-1.5 rounded-full" style="width: ${Math.min(100, ips)}%"></div>
+          </div>
+        </td>
+        <td class="px-4 py-3 text-center font-mono font-bold text-xs text-indigo-700">
+          ${sim.toFixed(1)}%
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap">
+          ${isEligible ? `
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 w-fit">
+              <i class="fa-solid fa-circle-check text-emerald-600"></i> Apto para Eleição
+            </span>
+          ` : `
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1 w-fit">
+              <i class="fa-solid fa-circle-xmark text-rose-600"></i> Restrição Ativa
+            </span>
+          `}
+        </td>
+        <td class="px-4 py-3 text-[11px] text-slate-600 max-w-xs truncate" title="${reason}">
+          ${reason}
+        </td>
+        <td class="px-4 py-3 text-center whitespace-nowrap">
+          <div class="flex items-center justify-center gap-1.5">
+            <button onclick="dispararMitigacaoGaps('${email}')" class="px-2.5 py-1 text-[11px] bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-300 rounded font-bold transition flex items-center gap-1 shadow-2xs" title="Configurar Plano 70-20-10 para Mitigar Gaps">
+              <i class="fa-solid fa-wand-magic-sparkles text-purple-500"></i>
+              <span>Mitigar Gaps</span>
+            </button>
+            <button onclick="navegarParaTriangulacaoMembro('${email}')" class="p-1.5 text-indigo-600 hover:bg-indigo-50 border border-indigo-200 rounded transition" title="Ver Triangulação 360º deste Membro">
+              <i class="fa-solid fa-scale-balanced"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// 4. TRIANGULAÇÃO OPERACIONAL-COMPORTAMENTAL (HARD DATA vs. SOFT DATA)
+async function carregarTriangulacaoVPGG(userEmail = null) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    // 1. Carregar lista geral de membros da triangulação para popular select se vazio
+    const resLista = await fetch(`${API_BASE_URL}/vpgg/triangulation`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (resLista.ok) {
+      const dataLista = await resLista.json();
+      vpggTriangulacaoState.membros = dataLista || [];
+      popularSelectMembrosTriangulacao();
+    }
+
+    // 2. Determinar qual membro inspecionar
+    let targetEmail = userEmail || vpggTriangulacaoState.selectedMemberEmail;
+    if (!targetEmail && vpggTriangulacaoState.membros.length > 0) {
+      targetEmail = vpggTriangulacaoState.membros[0].user_email;
+    }
+
+    if (!targetEmail) return;
+    vpggTriangulacaoState.selectedMemberEmail = targetEmail;
+
+    const selectEl = document.getElementById('triangulacao-seletor-membro');
+    if (selectEl && selectEl.value !== targetEmail) {
+      selectEl.value = targetEmail;
+    }
+
+    // 3. Consultar detalhe da triangulação do membro
+    const resDetalhe = await fetch(`${API_BASE_URL}/vpgg/triangulation/${targetEmail}`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (resDetalhe.ok) {
+      const detalhe = await resDetalhe.json();
+      vpggTriangulacaoState.triangulationData = detalhe;
+      renderizarTriangulacaoVPGG(detalhe);
+    }
+
+    // 4. Carregar calibração dos avaliadores
+    carregarCalibracoesAvaliadores();
+
+    // 5. Carregar avaliações 360 do membro
+    carregarAvaliacoes360Membro(targetEmail);
+
+  } catch (err) {
+    console.warn("[VPGG Triangulação] Erro ao carregar dados:", err);
+  }
+}
+
+function popularSelectMembrosTriangulacao() {
+  const select = document.getElementById('triangulacao-seletor-membro');
+  if (!select) return;
+
+  const currentVal = select.value;
+  select.innerHTML = (vpggTriangulacaoState.membros || []).map(m => `
+    <option value="${m.user_email}" ${m.user_email === currentVal ? 'selected' : ''}>
+      ${escapeHTML(m.name || m.user_email)} • ${escapeHTML(m.department || 'VPGG')} (${escapeHTML(m.role || 'Membro')})
+    </option>
+  `).join('');
+}
+
+function aoMudarMembroTriangulacao() {
+  const select = document.getElementById('triangulacao-seletor-membro');
+  if (select && select.value) {
+    carregarTriangulacaoVPGG(select.value);
+  }
+}
+
+function navegarParaTriangulacaoMembro(userEmail) {
+  switchVPGGSubtab('triangulacao');
+  carregarTriangulacaoVPGG(userEmail);
+}
+
+function renderizarTriangulacaoVPGG(data) {
+  if (!data) return;
+
+  // 1. Hard Data KPIs
+  const hard = data.hard_metrics || {};
+  const elFat = document.getElementById('hard-faturamento-val');
+  const elConv = document.getElementById('hard-conversao-val');
+  const elPont = document.getElementById('hard-pontualidade-val');
+  const elAssid = document.getElementById('hard-assiduidade-val');
+
+  if (elFat) elFat.innerText = formatBRL(hard.revenue_generated || 0);
+  if (elConv) elConv.innerText = `${(hard.conversion_rate || 0).toFixed(1)}%`;
+  if (elPont) elPont.innerText = `${(hard.inpi_punctuality_rate || 0).toFixed(1)}%`;
+  if (elAssid) elAssid.innerText = `${(hard.agora_attendance_rate || 0).toFixed(1)}%`;
+
+  // Status de Mitigação
+  const statusMitigacao = document.getElementById('triangulacao-status-mitigacao-val');
+  if (statusMitigacao) {
+    if (data.has_gap) {
+      statusMitigacao.innerHTML = `<span class="text-rose-600 font-bold"><i class="fa-solid fa-triangle-exclamation"></i> Gaps Críticos</span>`;
+    } else {
+      statusMitigacao.innerHTML = `<span class="text-emerald-700 font-bold"><i class="fa-solid fa-circle-check"></i> Sem Gaps Críticos</span>`;
+    }
+  }
+
+  // 2. Competências Brasil Júnior Trianguladas
+  const gridComp = document.getElementById('grid-competencias-trianguladas');
+  if (!gridComp) return;
+
+  const compDefs = [
+    { key: 'lideranca', label: 'Liderança', icon: 'fa-solid fa-crown', color: 'border-purple-500' },
+    { key: 'gestao', label: 'Gestão', icon: 'fa-solid fa-chart-line', color: 'border-blue-500' },
+    { key: 'visao_sistemica', label: 'Visão Sistêmica', icon: 'fa-solid fa-globe', color: 'border-indigo-500' },
+    { key: 'orientacao_resultados', label: 'Orientação Resultados', icon: 'fa-solid fa-bullseye', color: 'border-emerald-500' },
+    { key: 'autoconhecimento', label: 'Autoconhecimento', icon: 'fa-solid fa-brain', color: 'border-amber-500' }
+  ];
+
+  const comps = data.competencies || {};
+
+  gridComp.innerHTML = compDefs.map(c => {
+    const item = comps[c.key] || { score: 70, benchmark: 80, gap: 0 };
+    const score = Number(item.score || 0);
+    const bench = Number(item.benchmark || 80);
+    const gap = Number(item.gap || 0);
+
+    let statusBadge = '';
+    let barColor = 'bg-emerald-500';
+
+    if (gap > 0 || score < 70) {
+      statusBadge = '<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-800">Gap Crítico</span>';
+      barColor = 'bg-rose-500';
+    } else if (score >= 85) {
+      statusBadge = '<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">Excelente</span>';
+      barColor = 'bg-emerald-500';
+    } else {
+      statusBadge = '<span class="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800">Conforme</span>';
+      barColor = 'bg-amber-500';
+    }
+
+    return `
+      <div class="glass-card rounded-xl p-4 border-l-4 ${c.color} shadow-2xs space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+            <i class="${c.icon} text-slate-500 text-xs"></i> ${c.label}
+          </span>
+          ${statusBadge}
+        </div>
+
+        <div class="flex items-baseline justify-between pt-1">
+          <div>
+            <span class="text-2xl font-black text-slate-900 font-mono">${score.toFixed(1)}</span>
+            <span class="text-[10px] text-slate-400">/ 100</span>
+          </div>
+          <div class="text-[10px] text-slate-500 font-mono">
+            Bench: <strong>${bench.toFixed(1)}</strong>
+          </div>
+        </div>
+
+        <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+          <div class="${barColor} h-2 rounded-full transition-all duration-500" style="width: ${Math.min(100, score)}%"></div>
+        </div>
+
+        <div class="text-[10px] text-slate-400 flex items-center justify-between pt-1 border-t border-slate-100">
+          <span>Ponderação Hard/Soft</span>
+          <span class="font-mono">${((item.hard_weight || 0.3) * 100).toFixed(0)}H / ${((item.soft_weight || 0.7) * 100).toFixed(0)}S</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// 5. CALIBRAÇÃO DE AVALIADORES & AVALIAÇÕES 360º
+async function carregarCalibracoesAvaliadores() {
+  const container = document.getElementById('lista-calibracao-avaliadores');
+  if (!container) return;
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/vpgg/benchmarks`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    const calibracoes = [
+      { nome: 'Charles (VPGG / Arquiteto)', cargo: 'Líder / Calibrador Senior', peso: 1.25, badge: 'bg-purple-100 text-purple-800' },
+      { nome: 'Alice Ney (Presidente)', cargo: 'Presidência Institucional', peso: 1.20, badge: 'bg-blue-100 text-blue-800' },
+      { nome: 'Isadora Epichin (Comercial)', cargo: 'Diretora de Vendas', peso: 1.15, badge: 'bg-emerald-100 text-emerald-800' },
+      { nome: 'Thais Junger (Projetos / RMs)', cargo: 'Diretora Operacional', peso: 1.10, badge: 'bg-indigo-100 text-indigo-800' },
+      { nome: 'Evelyn (Marketing)', cargo: 'Diretora de Marca & PSEL', peso: 1.05, badge: 'bg-amber-100 text-amber-800' }
+    ];
+
+    container.innerHTML = calibracoes.map(c => `
+      <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-xs">
+        <div>
+          <strong class="text-slate-800 block">${escapeHTML(c.nome)}</strong>
+          <span class="text-[10px] text-slate-500">${escapeHTML(c.cargo)}</span>
+        </div>
+        <span class="px-2 py-0.5 rounded font-mono font-bold text-[11px] ${c.badge}">
+          ${c.peso.toFixed(2)}x
+        </span>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.warn("[VPGG Calibrações]", e);
+  }
+}
+
+async function carregarAvaliacoes360Membro(userEmail) {
+  const tbody = document.getElementById('tabela-historico-360-body');
+  const badgeTotal = document.getElementById('badge-total-evals-360');
+  if (!tbody) return;
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/vpgg/evaluations-360?evaluatee_email=${userEmail}`, {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      const evals = await res.json();
+      if (badgeTotal) badgeTotal.innerText = `${evals.length} avaliações`;
+
+      if (evals.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-slate-400 italic">Nenhuma avaliação 360º registrada ainda para este colaborador.</td></tr>`;
+        return;
+      }
+
+      const relLabels = {
+        'leader': '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800">Líder (1.25x)</span>',
+        'peer': '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">Par (1.00x)</span>',
+        'subordinate': '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">Liderado (1.10x)</span>',
+        'self': '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">Auto (0.65x)</span>'
+      };
+
+      tbody.innerHTML = evals.map(ev => {
+        const media = ((ev.score_lideranca + ev.score_gestao + ev.score_visao_sistemica + ev.score_orientacao_resultados + ev.score_autoconhecimento) / 5).toFixed(1);
+        return `
+          <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+            <td class="px-3 py-2 font-bold text-slate-800">${escapeHTML(ev.evaluator_email)}</td>
+            <td class="px-3 py-2">${relLabels[ev.relationship] || ev.relationship}</td>
+            <td class="px-3 py-2 text-center font-mono font-bold text-slate-700">${(ev.calibrated_weight || 1.0).toFixed(2)}x</td>
+            <td class="px-3 py-2 text-center font-mono font-bold text-indigo-700">${media}</td>
+            <td class="px-3 py-2 text-slate-600 max-w-xs truncate" title="${escapeHTML(ev.qualitative_feedback || '-')}">${escapeHTML(ev.qualitative_feedback || '-')}</td>
+            <td class="px-3 py-2 font-mono text-[10px] text-slate-400">${(ev.created_at || '').split('T')[0] || '2026'}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  } catch (e) {
+    console.warn("[VPGG Avaliações 360]", e);
+  }
+}
+
+// 6. MODAL NOVA AVALIAÇÃO 360º
+function abrirModalAvaliacao360(targetEmail = null) {
+  const modal = document.getElementById('modal-avaliacao-360');
+  const form = document.getElementById('form-avaliacao-360');
+  const select = document.getElementById('eval360_user_email');
+  if (!modal || !form) return;
+
+  form.reset();
+
+  if (select) {
+    select.innerHTML = '<option value="">-- Selecione o colaborador avaliado --</option>' + 
+      (vpggTriangulacaoState.membros || []).map(m => `
+        <option value="${m.user_email}">${escapeHTML(m.name || m.user_email)} • ${escapeHTML(m.department || 'VPGG')}</option>
+      `).join('');
+
+    const emailToSelect = targetEmail || vpggTriangulacaoState.selectedMemberEmail;
+    if (emailToSelect) select.value = emailToSelect;
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function fecharModalAvaliacao360() {
+  const modal = document.getElementById('modal-avaliacao-360');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function salvarAvaliacao360(event) {
+  event.preventDefault();
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) {
+    showToast("🔒 Faça login para registrar avaliações 360º.");
+    return;
+  }
+
+  const btn = document.getElementById('btn-submit-eval360');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Gravando...';
+  }
+
+  const payload = {
+    evaluatee_email: document.getElementById('eval360_user_email').value.trim().toLowerCase(),
+    evaluation_cycle: document.getElementById('eval360_cycle').value.trim() || '2026.1',
+    relationship: document.getElementById('eval360_relationship').value,
+    score_lideranca: parseFloat(document.getElementById('eval360_lideranca').value) || 0.0,
+    score_gestao: parseFloat(document.getElementById('eval360_gestao').value) || 0.0,
+    score_visao_sistemica: parseFloat(document.getElementById('eval360_visao').value) || 0.0,
+    score_orientacao_resultados: parseFloat(document.getElementById('eval360_resultados').value) || 0.0,
+    score_autoconhecimento: parseFloat(document.getElementById('eval360_autoconhecimento').value) || 0.0,
+    qualitative_feedback: document.getElementById('eval360_feedback').value.trim()
+  };
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/vpgg/evaluations-360`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      fecharModalAvaliacao360();
+      showToast("⚖️ Avaliação 360º registrada com sucesso com calibração BJ!");
+      await carregarTriangulacaoVPGG(payload.evaluatee_email);
+      carregarSucessaoIPS();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Falha: ${err.detail || 'Não foi possível salvar a avaliação.'}`);
+    }
+  } catch (e) {
+    showToast(`❌ Erro de conexão: ${e.message}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar Avaliação 360º';
+    }
+  }
+}
+
+// 7. MITIGAÇÃO AUTOMATIZADA DE GAPS (METODOLOGIA MEJ 70-20-10)
+async function dispararMitigacaoGaps(userEmail) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) {
+    showToast("🔒 Acesso restrito a gestores da VPGG e Diretoria.");
+    return;
+  }
+
+  showToast(`🚀 Configurando Plano 70-20-10 de Mitigação para ${userEmail}...`);
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/vpgg/gap-mitigation/generate/${userEmail}`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      abrirModalMitigacaoGaps(data);
+      showToast("🎯 Plano de Ação 70-20-10 gerado e sincronizado com o PDI!");
+      if (typeof carregarPDIsVPGG === 'function') carregarPDIsVPGG();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Falha na mitigação: ${err.detail || 'Não foi possível gerar as ações.'}`);
+    }
+  } catch (e) {
+    showToast(`❌ Erro ao acionar motor de mitigação: ${e.message}`);
+  }
+}
+
+function abrirModalMitigacaoGaps(data) {
+  const modal = document.getElementById('modal-mitigacao-gaps');
+  if (!modal || !data) return;
+
+  const nomeMembro = document.getElementById('modal-mitigacao-nome-membro');
+  const badgeGaps = document.getElementById('modal-mitigacao-badge-gaps');
+  const l70 = document.getElementById('modal-mitigacao-70-lista');
+  const l20 = document.getElementById('modal-mitigacao-20-lista');
+  const l10 = document.getElementById('modal-mitigacao-10-lista');
+
+  if (nomeMembro) nomeMembro.innerText = `${data.user_email}`;
+
+  const gaps = data.gaps_identified || [];
+  if (badgeGaps) {
+    badgeGaps.innerText = gaps.length > 0 ? `${gaps.length} Gap(s): ${gaps.join(', ')}` : 'Nenhum Gap Crítico';
+  }
+
+  const plano = data.action_plan_70_20_10 || {};
+  const acoes70 = plano['70_on_the_job'] || [];
+  const acoes20 = plano['20_social'] || [];
+  const acoes10 = plano['10_formal'] || [];
+
+  const renderLista = (arr, emptyMsg) => {
+    if (!arr || arr.length === 0) return `<p class="italic text-slate-400 text-xs">${emptyMsg}</p>`;
+    return arr.map(item => `
+      <div class="flex items-start gap-2 text-xs">
+        <i class="fa-solid fa-circle-check text-emerald-600 mt-0.5 text-xs shrink-0"></i>
+        <span>${escapeHTML(item)}</span>
+      </div>
+    `).join('');
+  };
+
+  if (l70) l70.innerHTML = renderLista(acoes70, 'Nenhuma ação 70% necessária.');
+  if (l20) l20.innerHTML = renderLista(acoes20, 'Nenhuma mentoria social necessária.');
+  if (l10) l10.innerHTML = renderLista(acoes10, 'Nenhum estudo formal pendente.');
+
+  modal.classList.remove('hidden');
+}
+
+function fecharModalMitigacaoGaps() {
+  const modal = document.getElementById('modal-mitigacao-gaps');
+  if (modal) modal.classList.add('hidden');
 }
 
 // ==============================================================================
