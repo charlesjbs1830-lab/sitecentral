@@ -2691,10 +2691,14 @@ async function consultarCNPJFormulario(notify = true) {
       const cnaeInput = document.getElementById('fu_cnae');
       const sizeInput = document.getElementById('fu_company_size');
       const addrInput = document.getElementById('fu_address');
+      const razaoSocialInput = document.getElementById('fu_razao_social');
+      const nomeFantasiaInput = document.getElementById('fu_nome_fantasia');
 
       if (clientNameInput && (!clientNameInput.value.trim() || clientNameInput.value.trim().toLowerCase().startsWith('lead'))) {
         clientNameInput.value = data.nome_fantasia || data.razao_social || clientNameInput.value;
       }
+      if (razaoSocialInput && data.razao_social) razaoSocialInput.value = data.razao_social;
+      if (nomeFantasiaInput && data.nome_fantasia) nomeFantasiaInput.value = data.nome_fantasia;
       if (cnaeInput && data.cnae) cnaeInput.value = data.cnae;
       if (sizeInput && data.company_size) sizeInput.value = data.company_size;
       if (addrInput && data.address) addrInput.value = data.address;
@@ -2768,6 +2772,8 @@ function filtrarTabelaFollowups() {
 
     const matchBusca = !busca ||
       String(fu.client_name || '').toLowerCase().includes(busca) ||
+      String(fu.razao_social || '').toLowerCase().includes(busca) ||
+      String(fu.nome_fantasia || '').toLowerCase().includes(busca) ||
       String(fu.contact_person || '').toLowerCase().includes(busca) ||
       String(fu.notes || '').toLowerCase().includes(busca) ||
       String(fu.area || '').toLowerCase().includes(busca) ||
@@ -2885,6 +2891,8 @@ function renderTabelaFollowups(itens) {
             <i class="fa-solid fa-building text-slate-400 text-xs"></i>
             <span>${escapeHTML(fu.client_name)}</span>
           </div>
+          ${(fu.razao_social && fu.razao_social.toLowerCase() !== (fu.client_name || '').toLowerCase()) ? `<div class="text-[10px] text-slate-500 font-medium italic truncate max-w-[240px] flex items-center gap-1 mt-0.5" title="Razão Social: ${escapeHTML(fu.razao_social)}"><i class="fa-solid fa-landmark text-slate-400 text-[9px]"></i> ${escapeHTML(fu.razao_social)}</div>` : ''}
+          ${(fu.nome_fantasia && fu.nome_fantasia.toLowerCase() !== (fu.client_name || '').toLowerCase() && (!fu.razao_social || fu.nome_fantasia.toLowerCase() !== fu.razao_social.toLowerCase())) ? `<div class="text-[10px] text-slate-500 font-medium italic truncate max-w-[240px] flex items-center gap-1 mt-0.5" title="Nome Fantasia: ${escapeHTML(fu.nome_fantasia)}"><i class="fa-regular fa-bookmark text-slate-400 text-[9px]"></i> Fantasia: ${escapeHTML(fu.nome_fantasia)}</div>` : ''}
           ${fu.cnpj ? `<div class="text-[10px] text-slate-500 font-mono flex items-center gap-1 mt-0.5"><i class="fa-regular fa-id-card text-sky-500"></i> ${escapeHTML(fu.cnpj)}</div>` : ''}
           ${fu.address ? `<div class="text-[10px] text-slate-400 truncate max-w-[220px] flex items-center gap-1 mt-0.5" title="${escapeHTML(fu.address)}"><i class="fa-solid fa-location-dot text-slate-300"></i> ${escapeHTML(fu.address)}</div>` : ''}
         </td>
@@ -2974,6 +2982,8 @@ function preencherFormularioFollowup(id) {
 
   setVal('fu_cnpj', fu.cnpj || '');
   setVal('fu_client_name', fu.client_name || '');
+  setVal('fu_razao_social', fu.razao_social || '');
+  setVal('fu_nome_fantasia', fu.nome_fantasia || '');
   setVal('fu_contact_person', fu.contact_person || '');
   setVal('fu_status', fu.status || 'prospeccao');
   setVal('fu_interaction_type', fu.interaction_type || 'WhatsApp');
@@ -3033,6 +3043,8 @@ async function submeterFollowupCRM(event) {
 
   const clientNameInput = document.getElementById('fu_client_name');
   const cnpjInput = document.getElementById('fu_cnpj');
+  const razaoSocialInput = document.getElementById('fu_razao_social');
+  const nomeFantasiaInput = document.getElementById('fu_nome_fantasia');
   const contactPersonInput = document.getElementById('fu_contact_person');
   const statusSelect = document.getElementById('fu_status');
   const interactionTypeSelect = document.getElementById('fu_interaction_type');
@@ -3055,6 +3067,8 @@ async function submeterFollowupCRM(event) {
 
   const payload = {
     client_name: clientName,
+    razao_social: (razaoSocialInput?.value || '').trim() || null,
+    nome_fantasia: (nomeFantasiaInput?.value || '').trim() || null,
     cnpj: (cnpjInput?.value || '').trim() || null,
     contact_person: (contactPersonInput?.value || '').trim() || null,
     status: statusSelect?.value || 'prospeccao',
@@ -3769,6 +3783,212 @@ async function salvarPerfilUsuario(event) {
     if (btnSubmit) {
       btnSubmit.disabled = false;
       btnSubmit.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> <span>Salvar Alterações de Nome</span>';
+    }
+  }
+}
+
+// ==============================================================================
+// 4.9. INGESTÃO DE DADOS PÚBLICOS & DIRETÓRIOS CORPORATIVOS (/crm/ingest)
+// ==============================================================================
+
+function abrirModalIngestaoPublica() {
+  const modal = document.getElementById('modal-ingestao-publica');
+  if (!modal) return;
+
+  const areaSelect = document.getElementById('ingest_area');
+  if (areaSelect && currentUserSession?.area) {
+    areaSelect.value = currentUserSession.area;
+  }
+
+  const feedbackCard = document.getElementById('ingest_feedback_card');
+  if (feedbackCard) feedbackCard.classList.add('hidden');
+
+  modal.classList.remove('hidden');
+}
+
+function fecharModalIngestaoPublica() {
+  const modal = document.getElementById('modal-ingestao-publica');
+  if (modal) modal.classList.add('hidden');
+}
+
+function alternarExemploIngestao() {
+  const formato = document.getElementById('ingest_formato')?.value || 'json';
+  const textarea = document.getElementById('ingest_conteudo');
+  if (!textarea) return;
+
+  if (textarea.value.trim().startsWith('{') || textarea.value.trim().startsWith('[') || textarea.value.trim().includes(';')) {
+    carregarExemploIngestao();
+  }
+}
+
+function carregarExemploIngestao() {
+  const formato = document.getElementById('ingest_formato')?.value || 'json';
+  const textarea = document.getElementById('ingest_conteudo');
+  if (!textarea) return;
+
+  if (formato === 'json') {
+    textarea.value = JSON.stringify({
+      "leads": [
+        {
+          "cnpj": "12.345.678/0001-95",
+          "razao_social": "Padaria & Confeitaria Bela Vista Ltda",
+          "nome_fantasia": "Bela Vista Pães",
+          "cnae": "1091 - Panificação",
+          "company_size": "ME",
+          "area": "Comercial",
+          "estimated_value": 3000.0,
+          "tags": "#dados_abertos, #panificacao",
+          "notes": "Extraído de cadastro público da Junta Comercial"
+        },
+        {
+          "cnpj": "98.765.432/0001-10",
+          "razao_social": "Oficina Mecânica São Cristóvão EIRELI",
+          "nome_fantasia": "Auto Center São Cristóvão",
+          "cnae": "4520 - Reparação de veículos",
+          "company_size": "EPP",
+          "area": "Comercial",
+          "estimated_value": 4500.0,
+          "tags": "#automotivo, #prioridade",
+          "notes": "Empresa sem registro de marca no INPI"
+        }
+      ]
+    }, null, 2);
+  } else {
+    textarea.value = [
+      "cnpj;razao_social;nome_fantasia;cnae;porte;valor;tags;notes",
+      "55.444.333/0001-22;Distribuidora Capixaba de Bebidas S/A;Capixaba Bebidas;4635;DEMAIS;12000;#bebidas,#grande_porte;Diretório público do ES",
+      "22.111.000/0001-88;Restaurante e Churrascaria Boi Preto LTDA;Boi Preto Gourmet;5611;ME;3500;#alimentacao;Lead mapeado via OSM"
+    ].join('\n');
+  }
+}
+
+async function submeterIngestaoPublica(event) {
+  if (event) event.preventDefault();
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) {
+    showToast("⚠️ Sessão expirada. Efetue login novamente.");
+    return;
+  }
+
+  const formato = document.getElementById('ingest_formato')?.value || 'json';
+  const areaDestino = document.getElementById('ingest_area')?.value || 'Comercial';
+  const conteudo = (document.getElementById('ingest_conteudo')?.value || '').trim();
+
+  if (!conteudo) {
+    showToast("⚠️ Forneça o conteúdo da carga em formato JSON ou CSV.");
+    return;
+  }
+
+  const btnProcessar = document.getElementById('btn-processar-ingest');
+  if (btnProcessar) {
+    btnProcessar.disabled = true;
+    btnProcessar.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processando Ingestão & Deduplicação...';
+  }
+
+  const feedbackCard = document.getElementById('ingest_feedback_card');
+  const feedbackTitle = document.getElementById('ingest_feedback_title');
+  const feedbackBadge = document.getElementById('ingest_feedback_badge');
+  const feedbackSummary = document.getElementById('ingest_feedback_summary');
+  const feedbackDetails = document.getElementById('ingest_feedback_details');
+
+  try {
+    let payload = null;
+    let contentType = 'application/json';
+
+    if (formato === 'json') {
+      try {
+        const parsed = JSON.parse(conteudo);
+        if (Array.isArray(parsed)) {
+          payload = { leads: parsed.map(item => ({ ...item, area: item.area || areaDestino })) };
+        } else if (parsed && typeof parsed === 'object') {
+          if (Array.isArray(parsed.leads)) {
+            payload = {
+              ...parsed,
+              leads: parsed.leads.map(item => ({ ...item, area: item.area || areaDestino }))
+            };
+          } else {
+            payload = { leads: [{ ...parsed, area: parsed.area || areaDestino }] };
+          }
+        } else {
+          throw new Error("Formato JSON inválido. Esperado array ou objeto com 'leads'.");
+        }
+      } catch (errJson) {
+        showToast(`❌ Erro no JSON: ${errJson.message}`);
+        return;
+      }
+    } else {
+      payload = { csv_content: conteudo };
+    }
+
+    const res = await fetch(API_BASE_URL + '/crm/ingest', {
+      method: 'POST',
+      headers: {
+        'Content-Type': contentType,
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (res.ok && data.status === 'success') {
+      showToast(`🎉 Ingestão concluída: ${data.inserted} inseridos, ${data.updated} atualizados.`);
+
+      if (feedbackCard && feedbackTitle && feedbackBadge && feedbackSummary && feedbackDetails) {
+        feedbackCard.classList.remove('hidden', 'bg-rose-50', 'border-rose-200', 'bg-amber-50', 'border-amber-200');
+        feedbackCard.classList.add('bg-emerald-50', 'border-emerald-200');
+
+        feedbackTitle.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-600"></i> Carga Processada com Sucesso';
+        feedbackBadge.className = 'text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800';
+        feedbackBadge.innerText = `${data.total_received} processados`;
+
+        feedbackSummary.innerHTML = `
+          <strong>Resultado da Operação:</strong><br>
+          ✨ <strong>${data.inserted}</strong> novos leads inseridos no CRM com Lead Score preditivo.<br>
+          🔄 <strong>${data.updated}</strong> registros existentes deduplicados e atualizados sem redundância.
+          ${data.errors && data.errors.length ? `<br>⚠️ <em>${data.errors.length} avisos durante o processamento.</em>` : ''}
+        `;
+
+        if (data.details && data.details.length) {
+          feedbackDetails.innerHTML = data.details.map(d => {
+            const isIns = d.action === 'inserted';
+            const actionBadge = isIns 
+              ? '<span class="text-emerald-700 bg-emerald-100 px-1 py-0.2 rounded font-bold">NOVO</span>'
+              : '<span class="text-sky-700 bg-sky-100 px-1 py-0.2 rounded font-bold">ATUALIZADO</span>';
+            return `<div class="p-1.5 bg-white rounded border border-slate-200 flex items-center justify-between gap-2">
+              <span class="truncate"><strong>${escapeHTML(d.client_name)}</strong> ${d.cnpj ? `(${escapeHTML(d.cnpj)})` : ''}</span>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <span class="text-slate-500 font-mono">Score: ${d.score}</span>
+                ${actionBadge}
+              </div>
+            </div>`;
+          }).join('');
+        } else {
+          feedbackDetails.innerHTML = '';
+        }
+      }
+
+      await carregarFollowupsCRM();
+
+    } else {
+      showToast(`❌ Falha na ingestão: ${data.detail || 'Verifique o formato da carga'}`);
+      if (feedbackCard && feedbackTitle && feedbackBadge && feedbackSummary) {
+        feedbackCard.classList.remove('hidden', 'bg-emerald-50', 'border-emerald-200');
+        feedbackCard.classList.add('bg-rose-50', 'border-rose-200');
+        feedbackTitle.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-600"></i> Erro no Processamento';
+        feedbackBadge.className = 'text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-100 text-rose-800';
+        feedbackBadge.innerText = 'Falha';
+        feedbackSummary.innerText = data.detail || 'Não foi possível processar a carga fornecida.';
+      }
+    }
+  } catch (err) {
+    console.error("[Ingestão Pública] Erro:", err);
+    showToast("⚠️ Falha de comunicação com o servidor EDbrain.");
+  } finally {
+    if (btnProcessar) {
+      btnProcessar.disabled = false;
+      btnProcessar.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> <span>Processar Carga de Dados</span>';
     }
   }
 }

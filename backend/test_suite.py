@@ -20,6 +20,14 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
     def setUpClass(cls):
         # Reiniciar banco e carregar whitelist
         init_db()
+        conn = get_connection()
+        conn.execute("DELETE FROM client_followups;")
+        conn.execute("DELETE FROM client_followups_fts;")
+        conn.execute("DELETE FROM transactions;")
+        conn.execute("DELETE FROM notices;")
+        conn.execute("DELETE FROM pdis;")
+        conn.commit()
+        conn.close()
         cls.client = TestClient(app)
         
         # Obter tokens para cada perfil
@@ -581,6 +589,142 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         res_inv = self.client.get("/crm/radar/cnpj/123", headers={"Authorization": f"Bearer {token_com}"})
         self.assertEqual(res_inv.status_code, 400)
         self.assertIn("14 dígitos", res_inv.json()["detail"])
+
+    def test_16_company_name_normalization(self):
+        """Valida a normalização léxica e tratamento de sufixos societários (normalize_company_name)"""
+        from utils import normalize_company_name, build_fts5_wildcard_query
+
+        # 1. Remoção de acentos, minúsculas e sufixos societários (LTDA, ME, S/A, etc.)
+        self.assertEqual(normalize_company_name("Padaria do Zé LTDA - ME"), "padaria ze")
+        self.assertEqual(normalize_company_name("J. S. Alimentos LTDA ME"), "j s alimentos")
+        self.assertEqual(normalize_company_name("Comércio e Indústria Silva S/A"), "silva")
+        self.assertEqual(normalize_company_name("SUPERMERCADO CENTRAL EIRELI"), "supermercado central")
+        self.assertEqual(normalize_company_name("Alpha Tecnologia SLU"), "alpha tecnologia")
+
+        # 2. Injeção de wildcards FTS5
+        self.assertEqual(build_fts5_wildcard_query("tec"), "tec*")
+        self.assertEqual(build_fts5_wildcard_query("Padaria do Ze"), "padaria* ze*")
+        self.assertEqual(build_fts5_wildcard_query("J. S. Alimentos"), "j* s* alimentos*")
+
+    def test_17_fts5_wildcard_search_and_double_index(self):
+        """Valida indexação dupla (razao_social e nome_fantasia) e operadores wildcard no Radar FTS5"""
+        token_pres = self.tokens["presidente"]
+
+        # Cadastrar lead com Razão Social e Nome Fantasia distintos
+        payload = {
+            "client_name": "Padaria do Zé",
+            "razao_social": "J. S. Alimentos LTDA ME",
+            "nome_fantasia": "Padaria do Zé",
+            "contact_person": "José Ferreira",
+            "status": "prospeccao",
+            "area": "Comercial",
+            "cnae": "1091-1/01 - Fabricação de produtos de panificação",
+            "tags": "#padaria, #panificadora"
+        }
+        res = self.client.post("/crm/followups", json=payload, headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res.status_code, 201)
+        lead = res.json()
+        self.assertEqual(lead["razao_social"], "J. S. Alimentos LTDA ME")
+        self.assertEqual(lead["nome_fantasia"], "Padaria do Zé")
+        self.assertEqual(lead["normalized_name"], "padaria ze")
+
+        # 1. Busca por Nome Fantasia "Padaria do Ze" encontra a empresa
+        res_fantasia = self.client.get("/crm/radar/search?search_query=Padaria do Ze", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_fantasia.status_code, 200)
+        found_f = res_fantasia.json()
+        self.assertTrue(any(l["id"] == lead["id"] for l in found_f))
+
+        # 2. Busca por Razão Social "Alimentos" encontra a mesma empresa
+        res_razao = self.client.get("/crm/radar/search?search_query=Alimentos", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_razao.status_code, 200)
+        found_r = res_razao.json()
+        self.assertTrue(any(l["id"] == lead["id"] for l in found_r))
+
+        # 3. Busca por prefixo wildcard (ex: 'padari' -> 'padari*')
+        res_prefix = self.client.get("/crm/radar/search?search_query=padari", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_prefix.status_code, 200)
+        found_p = res_prefix.json()
+        self.assertTrue(any(l["id"] == lead["id"] for l in found_p))
+
+    def test_18_batch_ingest_public_data_and_deduplication(self):
+        """Valida endpoint de importação em lote (/crm/ingest) com deduplicação e enriquecimento"""
+        token_pres = self.tokens["presidente"]
+        token_com = self.tokens["assessor_comercial"]
+
+        # 1. Ingestão em lote via JSON de dados abertos
+        batch_payload = {
+            "leads": [
+                {
+                    "cnpj": "12.345.678/0001-95",
+                    "razao_social": "Padaria & Confeitaria Bela Vista Ltda",
+                    "nome_fantasia": "Bela Vista Pães",
+                    "cnae": "1091 - Panificação",
+                    "company_size": "ME",
+                    "area": "Comercial",
+                    "estimated_value": 3000.0,
+                    "tags": "#public_data, #panificacao"
+                },
+                {
+                    "cnpj": "98.765.432/0001-10",
+                    "razao_social": "Oficina Mecânica São Cristóvão EIRELI",
+                    "nome_fantasia": "Auto Center São Cristóvão",
+                    "cnae": "4520 - Reparação de veículos",
+                    "company_size": "EPP",
+                    "area": "Comercial",
+                    "estimated_value": 4500.0,
+                    "tags": "#automotivo"
+                }
+            ]
+        }
+        res_batch = self.client.post("/crm/ingest", json=batch_payload, headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_batch.status_code, 200)
+        data_batch = res_batch.json()
+        self.assertEqual(data_batch["status"], "success")
+        self.assertEqual(data_batch["total_received"], 2)
+        self.assertGreaterEqual(data_batch["inserted"], 2)
+
+        # 2. Deduplicação Automática: Reenvio do mesmo CNPJ com novas notas e valor atualizado
+        reingest_payload = {
+            "leads": [
+                {
+                    "cnpj": "12.345.678/0001-95",
+                    "contact_person": "Dona Maria",
+                    "notes": "Cliente consultado via lista pública da Junta Comercial",
+                    "estimated_value": 5000.0,
+                    "tags": "#prioridade"
+                }
+            ]
+        }
+        res_re = self.client.post("/crm/ingest", json=reingest_payload, headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_re.status_code, 200)
+        data_re = res_re.json()
+        self.assertEqual(data_re["total_received"], 1)
+        self.assertEqual(data_re["updated"], 1)
+        self.assertEqual(data_re["inserted"], 0)
+
+        # 3. Deduplicação por Nome Normalizado (mesmo sem CNPJ)
+        norm_payload = {
+            "leads": [
+                {
+                    "client_name": "Bela Vista Paes LTDA ME",
+                    "notes": "Tentativa de duplicata por variação societária"
+                }
+            ]
+        }
+        res_norm = self.client.post("/crm/ingest", json=norm_payload, headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_norm.status_code, 200)
+        data_norm = res_norm.json()
+        # Deve ter sido atualizado e NÃO duplicado
+        self.assertEqual(data_norm["updated"], 1)
+        self.assertEqual(data_norm["inserted"], 0)
+
+        # 4. Ingestão via CSV estruturado
+        csv_data = "cnpj;razao_social;nome_fantasia;cnae;porte;valor\n55.444.333/0001-22;Distribuidora Capixaba de Bebidas S/A;Capixaba Bebidas;4635;DEMAIS;12000"
+        res_csv = self.client.post("/crm/ingest", json={"csv_content": csv_data}, headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_csv.status_code, 200)
+        data_csv = res_csv.json()
+        self.assertEqual(data_csv["total_received"], 1)
+        self.assertGreaterEqual(data_csv["inserted"], 1)
 
 if __name__ == "__main__":
     unittest.main()

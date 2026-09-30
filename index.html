@@ -922,8 +922,16 @@
                     <input type="text" id="fu_tags" placeholder="#quente, #indústria, #alta_prioridade" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-sky-500">
                   </div>
 
-                  <!-- Metadados Corporativos Enriquecidos (CNAE, Porte, Endereço) -->
-                  <div class="lg:col-span-6 grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 bg-sky-50/70 rounded-xl border border-sky-200">
+                  <!-- Metadados Corporativos Enriquecidos (CNAE, Porte, Endereço, Razão Social e Fantasia) -->
+                  <div class="lg:col-span-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3 bg-sky-50/70 rounded-xl border border-sky-200">
+                    <div>
+                      <label for="fu_razao_social" class="block text-[10px] font-bold text-slate-700 uppercase mb-1">Razão Social Oficial</label>
+                      <input type="text" id="fu_razao_social" placeholder="Auto-preenchido via BrasilAPI" class="w-full border border-slate-200 bg-white rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    </div>
+                    <div>
+                      <label for="fu_nome_fantasia" class="block text-[10px] font-bold text-slate-700 uppercase mb-1">Nome Fantasia Comercial</label>
+                      <input type="text" id="fu_nome_fantasia" placeholder="Auto-preenchido via BrasilAPI" class="w-full border border-slate-200 bg-white rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    </div>
                     <div>
                       <label for="fu_cnae" class="block text-[10px] font-bold text-slate-700 uppercase mb-1">CNAE Principal</label>
                       <input type="text" id="fu_cnae" placeholder="Auto-preenchido via BrasilAPI" class="w-full border border-slate-200 bg-white rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500">
@@ -932,7 +940,7 @@
                       <label for="fu_company_size" class="block text-[10px] font-bold text-slate-700 uppercase mb-1">Porte Corporativo</label>
                       <input type="text" id="fu_company_size" placeholder="ME, EPP, DEMAIS..." class="w-full border border-slate-200 bg-white rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500">
                     </div>
-                    <div>
+                    <div class="sm:col-span-2 lg:col-span-4">
                       <label for="fu_address" class="block text-[10px] font-bold text-slate-700 uppercase mb-1">Endereço Comercial</label>
                       <input type="text" id="fu_address" placeholder="Logradouro, Bairro, Município - UF" class="w-full border border-slate-200 bg-white rounded-lg p-2 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500">
                     </div>
@@ -967,6 +975,10 @@
                 </div>
 
                 <div class="flex items-center gap-2">
+                  <button type="button" onclick="abrirModalIngestaoPublica()" title="Importar Lote de Diretórios Públicos (JSON / CSV)" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-xs transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-file-import"></i>
+                    <span>Importar Carga</span>
+                  </button>
                   <button type="button" onclick="toggleFiltrosAvancados()" id="btn-toggle-filtros" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 transition flex items-center gap-1.5">
                     <i class="fa-solid fa-sliders text-sky-600"></i>
                     <span>Filtros Avançados</span>
@@ -2075,6 +2087,96 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
             <button type="submit" id="btn-salvar-perfil" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-1.5 transition">
               <i class="fa-solid fa-floppy-disk"></i>
               <span>Salvar Alterações de Nome</span>
+            </button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: INGESTÃO DE DADOS PÚBLICOS & DIRETÓRIOS CORPORATIVOS (POST /crm/ingest) -->
+  <div id="modal-ingestao-publica" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <!-- Header do Modal -->
+      <div class="bg-[#0b1d3a] text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center font-bold text-white border border-emerald-400 text-sm">
+            <i class="fa-solid fa-file-import"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Ingestão de Dados Públicos & Diretórios Corporativos</h3>
+            <span class="text-[10px] text-emerald-300 font-mono">LGPD Compliant • Deduplicação & FTS5 SQLite</span>
+          </div>
+        </div>
+        <button onclick="fecharModalIngestaoPublica()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4 text-xs">
+        
+        <!-- Banner Informativo LGPD -->
+        <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-950 flex items-start gap-2.5">
+          <i class="fa-solid fa-shield-halved text-emerald-600 text-base shrink-0 mt-0.5"></i>
+          <div>
+            <strong class="font-bold">Conformidade LGPD & Deduplicação Automática:</strong>
+            <p class="text-[11px] text-emerald-900 mt-0.5 leading-relaxed">
+              Importação estruturada de <strong>dados abertos empresariais</strong> (Juntas Comerciais, Receita Federal, OpenStreetMap).
+              Registros com CNPJ ou Razão Social já cadastrados serão <strong>atualizados sem duplicação</strong>. Novos CNPJs recebem enriquecimento assíncrono via BrasilAPI e Lead Scoring preditivo.
+            </p>
+          </div>
+        </div>
+
+        <form id="form-ingestao-publica" onsubmit="submeterIngestaoPublica(event)" class="space-y-4">
+          
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label for="ingest_formato" class="block font-bold text-slate-700 uppercase tracking-wider mb-1 text-[11px]">Formato da Carga</label>
+              <select id="ingest_formato" onchange="alternarExemploIngestao()" class="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                <option value="json">JSON Estruturado (Array ou Objeto {"leads": [...]})</option>
+                <option value="csv">CSV Delimitado por Ponto e Vírgula (;)</option>
+              </select>
+            </div>
+
+            <div>
+              <label for="ingest_area" class="block font-bold text-slate-700 uppercase tracking-wider mb-1 text-[11px]">Área de Destino (RBAC)</label>
+              <select id="ingest_area" class="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-600">
+                <option value="Comercial" selected>💼 Comercial & Vendas</option>
+                <option value="Projetos">🛡️ Projetos / RMs</option>
+                <option value="Presidência">🏛️ Presidência</option>
+                <option value="Marketing">📣 Marketing</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label for="ingest_conteudo" class="block font-bold text-slate-700 uppercase tracking-wider text-[11px]">
+                Conteúdo da Carga (Cole o JSON ou CSV abaixo)
+              </label>
+              <button type="button" onclick="carregarExemploIngestao()" class="text-[10px] text-emerald-700 hover:text-emerald-900 font-bold underline flex items-center gap-1">
+                <i class="fa-solid fa-wand-magic-sparkles text-amber-500"></i> Preencher com Exemplo
+              </button>
+            </div>
+            <textarea id="ingest_conteudo" rows="8" required placeholder="Cole aqui seu JSON ou CSV..." class="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-slate-800 font-mono text-[11px] focus:outline-none focus:ring-2 focus:ring-emerald-600"></textarea>
+          </div>
+
+          <!-- Card de Feedback / Resultados da Ingestão -->
+          <div id="ingest_feedback_card" class="hidden p-4 rounded-xl border transition-all space-y-2">
+            <div class="flex items-center justify-between">
+              <div id="ingest_feedback_title" class="font-bold text-xs flex items-center gap-2"></div>
+              <span id="ingest_feedback_badge" class="text-[10px] px-2 py-0.5 rounded-full font-bold"></span>
+            </div>
+            <p id="ingest_feedback_summary" class="text-[11px] leading-relaxed"></p>
+            <div id="ingest_feedback_details" class="max-h-36 overflow-y-auto space-y-1 pt-1 font-mono text-[10px]"></div>
+          </div>
+
+          <div class="pt-3 border-t border-slate-200 flex items-center justify-between">
+            <button type="button" onclick="fecharModalIngestaoPublica()" class="text-xs text-slate-500 hover:text-slate-800 font-semibold px-3 py-2">
+              Fechar
+            </button>
+            <button type="submit" id="btn-processar-ingest" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition">
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+              <span>Processar Carga de Dados</span>
             </button>
           </div>
         </form>

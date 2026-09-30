@@ -272,11 +272,14 @@ def init_db():
     );
     """)
 
-    # 5. Tabela de Follow-up de Clientes e CRM Comercial (Com Atributos Corporativos e Enriquecimento)
+    # 5. Tabela de Follow-up de Clientes e CRM Comercial (Com Atributos Corporativos, Razão Social e Nome Fantasia)
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS client_followups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         client_name TEXT NOT NULL,
+        razao_social TEXT,
+        nome_fantasia TEXT,
+        normalized_name TEXT,
         contact_person TEXT,
         status TEXT NOT NULL DEFAULT 'prospeccao' CHECK(status IN ('prospeccao', 'negociacao', 'fechado', 'perdido')),
         interaction_type TEXT,
@@ -305,7 +308,10 @@ def init_db():
         "address": "TEXT",
         "score": "INTEGER DEFAULT 50",
         "estimated_value": "REAL DEFAULT 0.0",
-        "tags": "TEXT"
+        "tags": "TEXT",
+        "razao_social": "TEXT",
+        "nome_fantasia": "TEXT",
+        "normalized_name": "TEXT"
     }
     for col_name, col_def in new_followup_cols.items():
         if col_name not in existing_followup_cols:
@@ -317,58 +323,81 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_followups_score ON client_followups(score);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_followups_next_date ON client_followups(next_followup_date);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_followups_created_at ON client_followups(created_at);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_followups_norm_name ON client_followups(normalized_name);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_followups_razao ON client_followups(razao_social);")
 
-    # Tabela Virtual FTS5 para buscas textuais avançadas e compostas
+    # Atualizar normalized_name para registros que ainda não possuem (executado antes dos triggers)
     try:
+        try:
+            from utils import normalize_company_name
+        except ImportError:
+            from backend.utils import normalize_company_name
+
+        cursor.execute("SELECT id, client_name, razao_social, nome_fantasia FROM client_followups WHERE normalized_name IS NULL OR normalized_name = '';")
+        unnorm_rows = cursor.fetchall()
+        for r in unnorm_rows:
+            target_str = r["nome_fantasia"] or r["razao_social"] or r["client_name"] or ""
+            norm = normalize_company_name(target_str)
+            cursor.execute("UPDATE client_followups SET normalized_name = ? WHERE id = ?;", (norm, r["id"]))
+    except Exception as norm_err:
+        print(f"[SQLite] Normalização inicial de registros: {norm_err}")
+
+    # Tabela Virtual FTS5 Otimizada para buscas textuais avançadas e compostas
+    try:
+        # Verificar se client_followups_fts já existe com as novas colunas razao_social e nome_fantasia
+        cursor.execute("PRAGMA table_info(client_followups_fts);")
+        fts_cols = [col[1] for col in cursor.fetchall()]
+        if fts_cols and ("razao_social" not in fts_cols or "nome_fantasia" not in fts_cols):
+            cursor.execute("DROP TRIGGER IF EXISTS client_followups_ai;")
+            cursor.execute("DROP TRIGGER IF EXISTS client_followups_ad;")
+            cursor.execute("DROP TRIGGER IF EXISTS client_followups_au;")
+            cursor.execute("DROP TABLE IF EXISTS client_followups_fts;")
+
         cursor.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS client_followups_fts USING fts5(
             client_name,
+            razao_social,
+            nome_fantasia,
             contact_person,
             notes,
             cnpj,
             cnae,
             tags,
             content='client_followups',
-            content_rowid='id'
+            content_rowid='id',
+            tokenize='unicode61 remove_diacritics 2'
         );
         """)
+
+        # Reconstrução integral do índice FTS5 a partir do conteúdo atual
+        cursor.execute("INSERT INTO client_followups_fts(client_followups_fts) VALUES('rebuild');")
 
         # Triggers de sincronização contínua FTS5
         cursor.execute("""
         CREATE TRIGGER IF NOT EXISTS client_followups_ai AFTER INSERT ON client_followups BEGIN
-          INSERT INTO client_followups_fts(rowid, client_name, contact_person, notes, cnpj, cnae, tags)
-          VALUES (new.id, new.client_name, new.contact_person, new.notes, new.cnpj, new.cnae, new.tags);
+          INSERT INTO client_followups_fts(rowid, client_name, razao_social, nome_fantasia, contact_person, notes, cnpj, cnae, tags)
+          VALUES (new.id, new.client_name, new.razao_social, new.nome_fantasia, new.contact_person, new.notes, new.cnpj, new.cnae, new.tags);
         END;
         """)
 
         cursor.execute("""
         CREATE TRIGGER IF NOT EXISTS client_followups_ad AFTER DELETE ON client_followups BEGIN
-          INSERT INTO client_followups_fts(client_followups_fts, rowid, client_name, contact_person, notes, cnpj, cnae, tags)
-          VALUES ('delete', old.id, old.client_name, old.contact_person, old.notes, old.cnpj, old.cnae, old.tags);
+          INSERT INTO client_followups_fts(client_followups_fts, rowid, client_name, razao_social, nome_fantasia, contact_person, notes, cnpj, cnae, tags)
+          VALUES ('delete', old.id, old.client_name, old.razao_social, old.nome_fantasia, old.contact_person, old.notes, old.cnpj, old.cnae, old.tags);
         END;
         """)
 
         cursor.execute("""
         CREATE TRIGGER IF NOT EXISTS client_followups_au AFTER UPDATE ON client_followups BEGIN
-          INSERT INTO client_followups_fts(client_followups_fts, rowid, client_name, contact_person, notes, cnpj, cnae, tags)
-          VALUES ('delete', old.id, old.client_name, old.contact_person, old.notes, old.cnpj, old.cnae, old.tags);
-          INSERT INTO client_followups_fts(rowid, client_name, contact_person, notes, cnpj, cnae, tags)
-          VALUES (new.id, new.client_name, new.contact_person, new.notes, new.cnpj, new.cnae, new.tags);
+          INSERT INTO client_followups_fts(client_followups_fts, rowid, client_name, razao_social, nome_fantasia, contact_person, notes, cnpj, cnae, tags)
+          VALUES ('delete', old.id, old.client_name, old.razao_social, old.nome_fantasia, old.contact_person, old.notes, old.cnpj, old.cnae, old.tags);
+          INSERT INTO client_followups_fts(rowid, client_name, razao_social, nome_fantasia, contact_person, notes, cnpj, cnae, tags)
+          VALUES (new.id, new.client_name, new.razao_social, new.nome_fantasia, new.contact_person, new.notes, new.cnpj, new.cnae, new.tags);
         END;
         """)
 
-        # Sincronizar registros legados no FTS5 se necessário
-        cursor.execute("SELECT COUNT(*) FROM client_followups_fts;")
-        fts_count = cursor.fetchone()[0]
-        cursor.execute("SELECT COUNT(*) FROM client_followups;")
-        raw_count = cursor.fetchone()[0]
-        if fts_count < raw_count:
-            cursor.execute("""
-            INSERT INTO client_followups_fts(rowid, client_name, contact_person, notes, cnpj, cnae, tags)
-            SELECT id, client_name, contact_person, notes, cnpj, cnae, tags FROM client_followups;
-            """)
     except Exception as fts_err:
-        print(f"[SQLite FTS5] Aviso na configuração FTS5 (contigência LIKE ativa): {fts_err}")
+        print(f"[SQLite FTS5] Aviso na configuração FTS5 (contingência LIKE ativa): {fts_err}")
 
     conn.commit()
 

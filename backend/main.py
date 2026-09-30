@@ -9,16 +9,35 @@ Bloqueio de Auto-Promoção e Módulo de PDIs para a VPGG com Geração de Trilh
 import os
 import json
 import re
+import csv
+import io
 import asyncio
 from datetime import datetime
 from contextlib import asynccontextmanager
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 
 import httpx
 
-from fastapi import FastAPI, Depends, HTTPException, status, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+try:
+    from utils import (
+        clean_cnpj,
+        format_cnpj,
+        normalize_company_name,
+        build_fts5_wildcard_query,
+        build_address_from_brasilapi
+    )
+except ImportError:
+    from backend.utils import (
+        clean_cnpj,
+        format_cnpj,
+        normalize_company_name,
+        build_fts5_wildcard_query,
+        build_address_from_brasilapi
+    )
 
 from database import (
     init_db,
@@ -166,6 +185,8 @@ VALID_CRM_STATUSES = {"prospeccao", "negociacao", "fechado", "perdido"}
 
 class ClientFollowupCreate(BaseModel):
     client_name: str = Field(..., min_length=1, description="Nome da empresa ou cliente (OBRIGATÓRIO)")
+    razao_social: Optional[str] = Field(None, description="Razão Social corporativa oficial")
+    nome_fantasia: Optional[str] = Field(None, description="Nome Fantasia da empresa")
     contact_person: Optional[str] = Field(None, description="Nome do contato principal")
     status: Optional[str] = Field("prospeccao", description="Status do ciclo comercial ('prospeccao', 'negociacao', 'fechado', 'perdido')")
     interaction_type: Optional[str] = Field(None, description="Tipo de interação (ex: Reunião, WhatsApp, Email, Proposta Enviada)")
@@ -182,6 +203,8 @@ class ClientFollowupCreate(BaseModel):
 
 class ClientFollowupUpdate(BaseModel):
     client_name: Optional[str] = None
+    razao_social: Optional[str] = None
+    nome_fantasia: Optional[str] = None
     contact_person: Optional[str] = None
     status: Optional[str] = None
     interaction_type: Optional[str] = None
@@ -199,6 +222,9 @@ class ClientFollowupUpdate(BaseModel):
 class ClientFollowupResponse(BaseModel):
     id: int
     client_name: str
+    razao_social: Optional[str] = None
+    nome_fantasia: Optional[str] = None
+    normalized_name: Optional[str] = None
     contact_person: Optional[str] = None
     status: str
     interaction_type: Optional[str] = None
@@ -216,6 +242,83 @@ class ClientFollowupResponse(BaseModel):
     created_at: Optional[str] = None
     days_stagnant: Optional[int] = 0
     is_stagnant: Optional[bool] = False
+
+class LeadIngestItem(BaseModel):
+    client_name: Optional[str] = None
+    razao_social: Optional[str] = None
+    nome_fantasia: Optional[str] = None
+    cnpj: Optional[str] = None
+    cnae: Optional[str] = None
+    company_size: Optional[str] = None
+    address: Optional[str] = None
+    contact_person: Optional[str] = None
+    status: Optional[str] = "prospeccao"
+    interaction_type: Optional[str] = "Radar Ingestão"
+    notes: Optional[str] = None
+    next_followup_date: Optional[str] = None
+    area: Optional[str] = "Comercial"
+    tags: Optional[str] = "#public_data"
+    estimated_value: Optional[float] = 0.0
+
+class LeadIngestBatchRequest(BaseModel):
+    leads: Optional[List[LeadIngestItem]] = None
+    csv_content: Optional[str] = None
+
+class IngestDetailItem(BaseModel):
+    id: int
+    client_name: str
+    cnpj: Optional[str] = None
+    action: str  # 'inserted' ou 'updated'
+    score: int
+    area: str
+
+class LeadIngestResponse(BaseModel):
+    status: str
+    total_received: int
+    inserted: int
+    updated: int
+    enriched_via_brasilapi: int
+    errors: int
+    details: List[IngestDetailItem] = []
+
+def parse_csv_leads(csv_text: str) -> List[LeadIngestItem]:
+    """Interpreta texto CSV delimitado por vírgula ou ponto-e-vírgula em objetos LeadIngestItem."""
+    items = []
+    if not csv_text or not csv_text.strip():
+        return items
+    f = io.StringIO(csv_text.strip())
+    first_line = csv_text.strip().split("\n")[0]
+    delimiter = ";" if ";" in first_line else ","
+    reader = csv.DictReader(f, delimiter=delimiter)
+    
+    for row in reader:
+        norm_row = {str(k).strip().lower(): str(v).strip() for k, v in row.items() if k and v}
+        est_val = 0.0
+        try:
+            raw_v = norm_row.get("estimated_value") or norm_row.get("valor") or "0"
+            est_val = float(raw_v.replace("R$", "").replace(".", "").replace(",", ".").strip())
+        except Exception:
+            est_val = 0.0
+
+        item = LeadIngestItem(
+            cnpj=norm_row.get("cnpj"),
+            razao_social=norm_row.get("razao_social") or norm_row.get("razao") or norm_row.get("empresa"),
+            nome_fantasia=norm_row.get("nome_fantasia") or norm_row.get("fantasia"),
+            client_name=norm_row.get("client_name") or norm_row.get("nome") or norm_row.get("razao_social") or norm_row.get("empresa"),
+            cnae=norm_row.get("cnae"),
+            company_size=norm_row.get("company_size") or norm_row.get("porte"),
+            address=norm_row.get("address") or norm_row.get("endereco"),
+            contact_person=norm_row.get("contact_person") or norm_row.get("contato"),
+            status=norm_row.get("status") or "prospeccao",
+            interaction_type=norm_row.get("interaction_type") or "Radar Ingestão",
+            notes=norm_row.get("notes") or norm_row.get("observacoes") or norm_row.get("historico"),
+            next_followup_date=norm_row.get("next_followup_date") or norm_row.get("proximo_contato"),
+            area=norm_row.get("area") or "Comercial",
+            tags=norm_row.get("tags") or "#public_data",
+            estimated_value=est_val
+        )
+        items.append(item)
+    return items
 
 # ==============================================================================
 # 1. AUTENTICAÇÃO, PERFIL E BLOQUEIO DE AUTO-PROMOÇÃO (RBAC SHIELD)
@@ -1141,7 +1244,7 @@ def calculate_lead_score(
     return max(0, min(100, score))
 
 def enrich_lead_dict(row: dict) -> dict:
-    """Preenche campos dinâmicos calculados (days_stagnant, is_stagnant, score default)"""
+    """Preenche campos dinâmicos calculados (days_stagnant, is_stagnant, score default, normalized_name)"""
     d = dict(row)
     created_at = d.get("created_at")
     days_stagnant = calculate_days_stagnant(created_at)
@@ -1149,6 +1252,12 @@ def enrich_lead_dict(row: dict) -> dict:
     is_stagnant = days_stagnant >= 14 and st in ("prospeccao", "negociacao")
     d["days_stagnant"] = days_stagnant
     d["is_stagnant"] = is_stagnant
+
+    # Garantir presença de razao_social, nome_fantasia e normalized_name
+    if not d.get("normalized_name"):
+        target_name = d.get("nome_fantasia") or d.get("razao_social") or d.get("client_name") or ""
+        d["normalized_name"] = normalize_company_name(target_name)
+
     if d.get("score") is None:
         d["score"] = calculate_lead_score(
             status=d.get("status") or "prospeccao",
@@ -1174,7 +1283,7 @@ async def query_cnpj_brasilapi(cnpj: str, current_user: dict = Depends(get_curre
     Consulta assíncrona gratuita na BrasilAPI para enriquecer ou validar dados fiscais
     (Razão Social, CNAE, Porte, Endereço) antes ou durante a criação de um lead comercial.
     """
-    clean = re.sub(r"\D", "", cnpj)
+    clean = clean_cnpj(cnpj)
     if len(clean) != 14:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -1187,22 +1296,7 @@ async def query_cnpj_brasilapi(cnpj: str, current_user: dict = Depends(get_curre
             detail=f"CNPJ {format_cnpj(clean)} não encontrado na base da BrasilAPI ou serviço temporariamente inacessível."
         )
 
-    addr_parts = []
-    if data.get("logradouro"):
-        l = data.get("logradouro")
-        if data.get("numero"):
-            l += f", {data.get('numero')}"
-        if data.get("complemento"):
-            l += f" ({data.get('complemento')})"
-        addr_parts.append(l)
-    if data.get("bairro"):
-        addr_parts.append(data.get("bairro"))
-    if data.get("municipio") and data.get("uf"):
-        addr_parts.append(f"{data.get('municipio')} - {data.get('uf')}")
-    if data.get("cep"):
-        addr_parts.append(f"CEP {data.get('cep')}")
-    address = " • ".join(addr_parts) if addr_parts else None
-
+    address = build_address_from_brasilapi(data)
     cnae = f"{data.get('cnae_fiscal', '')} - {data.get('cnae_fiscal_descricao', '')}".strip(" -")
     company_size = data.get("descricao_porte") or data.get("porte") or ""
 
@@ -1261,40 +1355,36 @@ async def create_client_followup(
     verify_area_access(target_area, current_user)
 
     # 4. Enriquecimento Automático via BrasilAPI se CNPJ fornecido
-    clean_cnpj = re.sub(r"\D", "", payload.cnpj) if payload.cnpj else None
-    formatted_cnpj = format_cnpj(clean_cnpj) if clean_cnpj else None
+    clean_c = clean_cnpj(payload.cnpj) if payload.cnpj else None
+    formatted_cnpj = format_cnpj(clean_c) if clean_c and len(clean_c) == 14 else None
 
     final_cnae = payload.cnae
     final_company_size = payload.company_size
     final_address = payload.address
     final_client_name = payload.client_name.strip()
+    final_razao_social = payload.razao_social.strip() if payload.razao_social else None
+    final_nome_fantasia = payload.nome_fantasia.strip() if payload.nome_fantasia else None
 
-    if clean_cnpj and len(clean_cnpj) == 14:
-        cnpj_data = await fetch_brasilapi_cnpj(clean_cnpj)
+    if clean_c and len(clean_c) == 14:
+        cnpj_data = await fetch_brasilapi_cnpj(clean_c)
         if cnpj_data:
+            if not final_razao_social and cnpj_data.get("razao_social"):
+                final_razao_social = cnpj_data.get("razao_social")
+            if not final_nome_fantasia and cnpj_data.get("nome_fantasia"):
+                final_nome_fantasia = cnpj_data.get("nome_fantasia")
             if not final_cnae and (cnpj_data.get("cnae_fiscal") or cnpj_data.get("cnae_fiscal_descricao")):
                 final_cnae = f"{cnpj_data.get('cnae_fiscal', '')} - {cnpj_data.get('cnae_fiscal_descricao', '')}".strip(" -")
             if not final_company_size and (cnpj_data.get("descricao_porte") or cnpj_data.get("porte")):
                 final_company_size = cnpj_data.get("descricao_porte") or cnpj_data.get("porte")
             if not final_address:
-                addr_parts = []
-                if cnpj_data.get("logradouro"):
-                    l = cnpj_data.get("logradouro")
-                    if cnpj_data.get("numero"):
-                        l += f", {cnpj_data.get('numero')}"
-                    if cnpj_data.get("complemento"):
-                        l += f" ({cnpj_data.get('complemento')})"
-                    addr_parts.append(l)
-                if cnpj_data.get("bairro"):
-                    addr_parts.append(cnpj_data.get("bairro"))
-                if cnpj_data.get("municipio") and cnpj_data.get("uf"):
-                    addr_parts.append(f"{cnpj_data.get('municipio')} - {cnpj_data.get('uf')}")
-                if cnpj_data.get("cep"):
-                    addr_parts.append(f"CEP {cnpj_data.get('cep')}")
-                if addr_parts:
-                    final_address = " • ".join(addr_parts)
-            if final_client_name.lower().startswith("lead") and cnpj_data.get("razao_social"):
-                final_client_name = cnpj_data.get("razao_social")
+                final_address = build_address_from_brasilapi(cnpj_data)
+            if final_client_name.lower().startswith("lead") and (final_nome_fantasia or final_razao_social):
+                final_client_name = final_nome_fantasia or final_razao_social
+
+    if not final_razao_social:
+        final_razao_social = final_client_name
+
+    final_normalized_name = normalize_company_name(final_nome_fantasia or final_razao_social or final_client_name)
 
     # 5. Cálculo preditivo do Lead Score
     if payload.score is not None:
@@ -1315,12 +1405,16 @@ async def create_client_followup(
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO client_followups (
-            client_name, contact_person, status, interaction_type, notes,
+            client_name, razao_social, nome_fantasia, normalized_name,
+            contact_person, status, interaction_type, notes,
             next_followup_date, area, cnpj, cnae, company_size, address,
             score, estimated_value, tags, created_by
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
     """, (
         final_client_name,
+        final_razao_social,
+        final_nome_fantasia,
+        final_normalized_name,
         payload.contact_person.strip() if payload.contact_person else None,
         raw_status,
         payload.interaction_type.strip() if payload.interaction_type else None,
@@ -1476,19 +1570,34 @@ async def search_radar_leads(
 
     if search_query:
         sq = search_query.strip()
+        fts_query = build_fts5_wildcard_query(sq)
         fts_applied = False
-        try:
-            cursor.execute("SELECT 1 FROM client_followups_fts LIMIT 1;")
-            query += " AND id IN (SELECT rowid FROM client_followups_fts WHERE client_followups_fts MATCH ?)"
-            params.append(f'"{sq}"*')
-            fts_applied = True
-        except Exception:
-            pass
+        if fts_query:
+            try:
+                cursor.execute("SELECT 1 FROM client_followups_fts LIMIT 1;")
+                query += " AND id IN (SELECT rowid FROM client_followups_fts WHERE client_followups_fts MATCH ?)"
+                params.append(fts_query)
+                fts_applied = True
+            except Exception as e:
+                print(f"[FTS5] Erro na consulta MATCH ({fts_query}): {e}")
+                pass
 
         if not fts_applied:
-            query += " AND (LOWER(client_name) LIKE LOWER(?) OR LOWER(contact_person) LIKE LOWER(?) OR LOWER(notes) LIKE LOWER(?) OR LOWER(cnpj) LIKE LOWER(?) OR LOWER(cnae) LIKE LOWER(?) OR LOWER(tags) LIKE LOWER(?))"
+            norm_q = normalize_company_name(sq)
+            query += """ AND (
+                LOWER(client_name) LIKE LOWER(?) OR 
+                LOWER(contact_person) LIKE LOWER(?) OR 
+                LOWER(notes) LIKE LOWER(?) OR 
+                LOWER(cnpj) LIKE LOWER(?) OR 
+                LOWER(cnae) LIKE LOWER(?) OR 
+                LOWER(tags) LIKE LOWER(?) OR
+                LOWER(razao_social) LIKE LOWER(?) OR
+                LOWER(nome_fantasia) LIKE LOWER(?) OR
+                LOWER(normalized_name) LIKE LOWER(?)
+            )"""
             p = f"%{sq}%"
-            params.extend([p, p, p, p, p, p])
+            p_norm = f"%{norm_q}%" if norm_q else p
+            params.extend([p, p, p, p, p, p, p, p, p_norm])
 
     order_dir = "ASC" if (order or "").lower() == "asc" else "DESC"
     if sort_by == "estimated_value":
@@ -1530,7 +1639,7 @@ async def update_client_followup(
     Atualiza status, observações ou metadados de um follow-up existente,
     respeitando as regras de escopo por área.
     Se o CNPJ for atualizado, enriquece automaticamente via BrasilAPI.
-    Recalcula preditivamente o Lead Score.
+    Recalcula preditivamente o Lead Score e a normalização léxica.
     """
     conn = get_connection()
     cursor = conn.cursor()
@@ -1555,6 +1664,21 @@ async def update_client_followup(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nome do cliente não pode ser vazio.")
         updates.append("client_name = ?")
         params.append(payload.client_name.strip())
+
+    if payload.razao_social is not None:
+        updates.append("razao_social = ?")
+        params.append(payload.razao_social.strip() if payload.razao_social else None)
+
+    if payload.nome_fantasia is not None:
+        updates.append("nome_fantasia = ?")
+        params.append(payload.nome_fantasia.strip() if payload.nome_fantasia else None)
+
+    if any(k is not None for k in [payload.client_name, payload.razao_social, payload.nome_fantasia]):
+        cand_nome = payload.nome_fantasia if payload.nome_fantasia is not None else existing["nome_fantasia"]
+        cand_razao = payload.razao_social if payload.razao_social is not None else existing["razao_social"]
+        cand_client = payload.client_name if payload.client_name is not None else existing["client_name"]
+        updates.append("normalized_name = ?")
+        params.append(normalize_company_name(cand_nome or cand_razao or cand_client))
 
     if payload.contact_person is not None:
         updates.append("contact_person = ?")
@@ -1591,7 +1715,7 @@ async def update_client_followup(
 
     # Enriquecimento via BrasilAPI em caso de novo CNPJ
     if payload.cnpj is not None:
-        clean_c = re.sub(r"\D", "", payload.cnpj)
+        clean_c = clean_cnpj(payload.cnpj)
         formatted_c = format_cnpj(clean_c) if clean_c else None
         updates.append("cnpj = ?")
         params.append(formatted_c)
@@ -1599,6 +1723,12 @@ async def update_client_followup(
         if clean_c and len(clean_c) == 14 and (payload.cnae is None or payload.address is None):
             cnpj_data = await fetch_brasilapi_cnpj(clean_c)
             if cnpj_data:
+                if payload.razao_social is None and cnpj_data.get("razao_social"):
+                    updates.append("razao_social = ?")
+                    params.append(cnpj_data.get("razao_social"))
+                if payload.nome_fantasia is None and cnpj_data.get("nome_fantasia"):
+                    updates.append("nome_fantasia = ?")
+                    params.append(cnpj_data.get("nome_fantasia"))
                 if payload.cnae is None and cnpj_data.get("cnae_fiscal"):
                     cnae_fmt = f"{cnpj_data.get('cnae_fiscal', '')} - {cnpj_data.get('cnae_fiscal_descricao', '')}".strip(" -")
                     updates.append("cnae = ?")
@@ -1608,23 +1738,10 @@ async def update_client_followup(
                     updates.append("company_size = ?")
                     params.append(porte_val)
                 if payload.address is None:
-                    addr_parts = []
-                    if cnpj_data.get("logradouro"):
-                        l = cnpj_data.get("logradouro")
-                        if cnpj_data.get("numero"):
-                            l += f", {cnpj_data.get('numero')}"
-                        if cnpj_data.get("complemento"):
-                            l += f" ({cnpj_data.get('complemento')})"
-                        addr_parts.append(l)
-                    if cnpj_data.get("bairro"):
-                        addr_parts.append(cnpj_data.get("bairro"))
-                    if cnpj_data.get("municipio") and cnpj_data.get("uf"):
-                        addr_parts.append(f"{cnpj_data.get('municipio')} - {cnpj_data.get('uf')}")
-                    if cnpj_data.get("cep"):
-                        addr_parts.append(f"CEP {cnpj_data.get('cep')}")
-                    if addr_parts:
+                    addr_val = build_address_from_brasilapi(cnpj_data)
+                    if addr_val:
                         updates.append("address = ?")
-                        params.append(" • ".join(addr_parts))
+                        params.append(addr_val)
 
     if payload.cnae is not None:
         updates.append("cnae = ?")
@@ -1677,6 +1794,281 @@ async def update_client_followup(
     row = cursor.fetchone()
     conn.close()
     return enrich_lead_dict(row)
+
+# ==============================================================================
+# 6.1 PIPELINE DE INGESTÃO DE DADOS PÚBLICOS E DEDUPLICAÇÃO
+# ==============================================================================
+
+@app.post(
+    "/crm/ingest",
+    response_model=LeadIngestResponse,
+    summary="Ingestão em lote de dados públicos com deduplicação e enriquecimento assíncrono"
+)
+@app.post(
+    "/api/crm/ingest",
+    response_model=LeadIngestResponse,
+    include_in_schema=False
+)
+async def ingest_public_leads(
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Recebe cargas estruturadas (JSON ou CSV) de diretórios públicos de empresas (LGPD compliant).
+    1. Deduplicação Automática: cruza CNPJ e nome normalizado com a base SQLite.
+       Se já existir, atualiza metadados sem duplicar a linha.
+    2. Enriquecimento Assíncrono via BrasilAPI para novos CNPJs, calculando Lead Score inicial.
+    3. Alocação na área comercial correspondente com validação de escopo RBAC.
+    """
+    user_role = (current_user.get("role") or "").lower().strip()
+    user_area = (current_user.get("area") or current_user.get("setor") or "Comercial").strip()
+
+    content_type = request.headers.get("content-type", "")
+    items_to_process: List[LeadIngestItem] = []
+
+    if "text/csv" in content_type:
+        body_bytes = await request.body()
+        csv_str = body_bytes.decode("utf-8", errors="ignore")
+        items_to_process = parse_csv_leads(csv_str)
+    else:
+        try:
+            raw_json = await request.json()
+            if isinstance(raw_json, list):
+                for obj in raw_json:
+                    items_to_process.append(LeadIngestItem(**obj))
+            elif isinstance(raw_json, dict):
+                if "csv_content" in raw_json and raw_json["csv_content"]:
+                    items_to_process = parse_csv_leads(raw_json["csv_content"])
+                elif "leads" in raw_json and isinstance(raw_json["leads"], list):
+                    for obj in raw_json["leads"]:
+                        items_to_process.append(LeadIngestItem(**obj))
+                else:
+                    items_to_process.append(LeadIngestItem(**raw_json))
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Carga de dados inválida. Forneça JSON com lista de leads ou CSV estruturado: {str(e)}"
+            )
+
+    if not items_to_process:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Nenhum registro de lead válido encontrado na carga enviada."
+        )
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    inserted_count = 0
+    updated_count = 0
+    enriched_count = 0
+    error_count = 0
+    details: List[IngestDetailItem] = []
+
+    for item in items_to_process:
+        try:
+            c_clean = clean_cnpj(item.cnpj)
+            c_fmt = format_cnpj(c_clean) if len(c_clean) == 14 else None
+
+            raw_name = (item.client_name or item.nome_fantasia or item.razao_social or "").strip()
+            if not raw_name:
+                raw_name = f"Empresa CNPJ {c_fmt}" if c_fmt else "Empresa Ingerida"
+
+            norm_name = normalize_company_name(item.nome_fantasia or item.razao_social or raw_name)
+
+            target_area = item.area.strip() if item.area and item.area.strip() else user_area
+            if user_role not in {"presidente", "diretor"}:
+                if not check_area_access(target_area, current_user):
+                    target_area = user_area
+
+            # 2. Deduplicação com a base SQLite
+            existing_row = None
+            if c_clean and len(c_clean) == 14:
+                cursor.execute("""
+                    SELECT * FROM client_followups 
+                    WHERE cnpj = ? OR REPLACE(REPLACE(REPLACE(cnpj, '.', ''), '/', ''), '-', '') = ?
+                    LIMIT 1;
+                """, (c_fmt, c_clean))
+                existing_row = cursor.fetchone()
+
+            if not existing_row and norm_name:
+                cursor.execute("SELECT * FROM client_followups WHERE normalized_name = ? LIMIT 1;", (norm_name,))
+                existing_row = cursor.fetchone()
+
+                if not existing_row:
+                    cursor.execute("SELECT id, client_name, razao_social, nome_fantasia FROM client_followups WHERE client_name IS NOT NULL;")
+                    for cand in cursor.fetchall():
+                        for cand_name in [cand["nome_fantasia"], cand["razao_social"], cand["client_name"]]:
+                            if cand_name and normalize_company_name(cand_name) == norm_name:
+                                cursor.execute("SELECT * FROM client_followups WHERE id = ?;", (cand["id"],))
+                                existing_row = cursor.fetchone()
+                                break
+                        if existing_row:
+                            break
+
+            # 3. Atualizar existente (Deduplicação)
+            if existing_row:
+                lead_id = existing_row["id"]
+                upd_fields = []
+                upd_params = []
+
+                if c_fmt and not existing_row["cnpj"]:
+                    upd_fields.append("cnpj = ?")
+                    upd_params.append(c_fmt)
+
+                if item.razao_social and not existing_row["razao_social"]:
+                    upd_fields.append("razao_social = ?")
+                    upd_params.append(item.razao_social.strip())
+
+                if item.nome_fantasia and not existing_row["nome_fantasia"]:
+                    upd_fields.append("nome_fantasia = ?")
+                    upd_params.append(item.nome_fantasia.strip())
+
+                if item.cnae and not existing_row["cnae"]:
+                    upd_fields.append("cnae = ?")
+                    upd_params.append(item.cnae.strip())
+
+                if item.company_size and not existing_row["company_size"]:
+                    upd_fields.append("company_size = ?")
+                    upd_params.append(item.company_size.strip())
+
+                if item.address and not existing_row["address"]:
+                    upd_fields.append("address = ?")
+                    upd_params.append(item.address.strip())
+
+                if item.contact_person and not existing_row["contact_person"]:
+                    upd_fields.append("contact_person = ?")
+                    upd_params.append(item.contact_person.strip())
+
+                if item.notes:
+                    old_notes = existing_row["notes"] or ""
+                    combined_notes = f"{old_notes} • [Ingestão]: {item.notes.strip()}".strip(" • ")
+                    upd_fields.append("notes = ?")
+                    upd_params.append(combined_notes)
+
+                if item.tags:
+                    old_tags = existing_row["tags"] or ""
+                    tag_list = [t.strip() for t in re.split(r"[,;\s]+", f"{old_tags} {item.tags}") if t.strip()]
+                    merged_tags = ", ".join(sorted(list(set(tag_list))))
+                    upd_fields.append("tags = ?")
+                    upd_params.append(merged_tags)
+
+                if norm_name and not existing_row["normalized_name"]:
+                    upd_fields.append("normalized_name = ?")
+                    upd_params.append(norm_name)
+
+                if item.estimated_value and item.estimated_value > 0 and (not existing_row["estimated_value"] or existing_row["estimated_value"] == 0):
+                    upd_fields.append("estimated_value = ?")
+                    upd_params.append(float(item.estimated_value))
+
+                if upd_fields:
+                    upd_params.append(lead_id)
+                    cursor.execute(f"UPDATE client_followups SET {', '.join(upd_fields)} WHERE id = ?;", upd_params)
+
+                updated_count += 1
+                details.append(IngestDetailItem(
+                    id=lead_id,
+                    client_name=existing_row["client_name"],
+                    cnpj=existing_row["cnpj"] or c_fmt,
+                    action="updated",
+                    score=existing_row["score"] or 50,
+                    area=existing_row["area"]
+                ))
+
+            # 4. Inserir novo registro com enriquecimento assíncrono
+            else:
+                razao_social = item.razao_social
+                nome_fantasia = item.nome_fantasia
+                cnae = item.cnae
+                company_size = item.company_size
+                address = item.address
+                client_name = raw_name
+
+                if c_clean and len(c_clean) == 14:
+                    cnpj_data = await fetch_brasilapi_cnpj(c_clean)
+                    if cnpj_data:
+                        if not razao_social and cnpj_data.get("razao_social"):
+                            razao_social = cnpj_data.get("razao_social")
+                        if not nome_fantasia and cnpj_data.get("nome_fantasia"):
+                            nome_fantasia = cnpj_data.get("nome_fantasia")
+                        if not cnae and (cnpj_data.get("cnae_fiscal") or cnpj_data.get("cnae_fiscal_descricao")):
+                            cnae = f"{cnpj_data.get('cnae_fiscal', '')} - {cnpj_data.get('cnae_fiscal_descricao', '')}".strip(" -")
+                        if not company_size and (cnpj_data.get("descricao_porte") or cnpj_data.get("porte")):
+                            company_size = cnpj_data.get("descricao_porte") or cnpj_data.get("porte")
+                        if not address:
+                            address = build_address_from_brasilapi(cnpj_data)
+                        if client_name.lower().startswith("empresa cnpj") or client_name.lower().startswith("lead"):
+                            client_name = nome_fantasia or razao_social or client_name
+                        norm_name = normalize_company_name(nome_fantasia or razao_social or client_name)
+                        enriched_count += 1
+
+                if not razao_social:
+                    razao_social = client_name
+
+                score = calculate_lead_score(
+                    status=item.status or "prospeccao",
+                    created_at=datetime.now().strftime("%Y-%m-%d"),
+                    next_followup_date=item.next_followup_date,
+                    company_size=company_size,
+                    estimated_value=item.estimated_value or 0.0,
+                    has_cnpj=bool(c_fmt),
+                    tags=item.tags
+                )
+
+                cursor.execute("""
+                    INSERT INTO client_followups (
+                        client_name, razao_social, nome_fantasia, normalized_name,
+                        contact_person, status, interaction_type, notes,
+                        next_followup_date, area, cnpj, cnae, company_size, address,
+                        score, estimated_value, tags, created_by
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """, (
+                    client_name,
+                    razao_social,
+                    nome_fantasia,
+                    norm_name,
+                    item.contact_person.strip() if item.contact_person else None,
+                    item.status or "prospeccao",
+                    item.interaction_type or "Radar Ingestão",
+                    item.notes.strip() if item.notes else "Importado via Pipeline de Dados Públicos",
+                    item.next_followup_date.strip() if item.next_followup_date else None,
+                    target_area,
+                    c_fmt,
+                    cnae.strip() if cnae else None,
+                    company_size.strip() if company_size else None,
+                    address.strip() if address else None,
+                    score,
+                    float(item.estimated_value or 0.0),
+                    item.tags.strip() if item.tags else "#public_data",
+                    current_user.get("email") or current_user.get("nome")
+                ))
+                new_id = cursor.lastrowid
+                inserted_count += 1
+                details.append(IngestDetailItem(
+                    id=new_id,
+                    client_name=client_name,
+                    cnpj=c_fmt,
+                    action="inserted",
+                    score=score,
+                    area=target_area
+                ))
+
+        except Exception as item_err:
+            print(f"[CRM Ingest] Erro ao processar item: {item_err}")
+            error_count += 1
+
+    conn.commit()
+    conn.close()
+
+    return LeadIngestResponse(
+        status="success",
+        total_received=len(items_to_process),
+        inserted=inserted_count,
+        updated=updated_count,
+        enriched_via_brasilapi=enriched_count,
+        errors=error_count,
+        details=details
+    )
 
 # ==============================================================================
 # 7. DADOS OPERACIONAIS E AUDITORIA
