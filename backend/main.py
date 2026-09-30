@@ -42,32 +42,114 @@ except ImportError:
         generate_commercial_pitch
     )
 
-from database import (
-    init_db,
-    get_user_by_email,
-    get_user_by_id,
-    get_all_users,
-    get_followup_by_id,
-    get_connection,
-    log_audit,
-    get_audit_logs,
-    count_audit_logs,
-    create_database_snapshot,
-    get_database_stats,
-    DB_PATH,
-    get_backups_dir,
-    VALID_ROLES
-)
-from auth import (
-    verify_password,
-    create_access_token,
-    get_current_user,
-    require_role,
-    verify_area_access,
-    check_area_access,
-    verify_vpgg_access,
-    check_vpgg_access
-)
+try:
+    from database import (
+        init_db,
+        get_user_by_email,
+        get_user_by_id,
+        get_all_users,
+        get_followup_by_id,
+        get_connection,
+        log_audit,
+        get_audit_logs,
+        count_audit_logs,
+        create_database_snapshot,
+        get_database_stats,
+        DB_PATH,
+        get_backups_dir,
+        VALID_ROLES,
+        create_campaign,
+        get_campaign_by_id,
+        update_campaign,
+        delete_campaign,
+        list_campaigns,
+        get_campaign_roi_metrics,
+        create_psel_candidate,
+        get_psel_candidate_by_id,
+        update_psel_candidate,
+        update_psel_candidate_stage,
+        delete_psel_candidate,
+        list_psel_candidates,
+        approve_and_onboard_candidate,
+        create_brand_asset,
+        get_brand_asset_by_id,
+        update_brand_asset,
+        delete_brand_asset,
+        list_brand_assets,
+        get_marketing_dashboard_analytics,
+        CampaignORM,
+        PselCandidateORM,
+        BrandAssetORM,
+        get_db_session
+    )
+    from auth import (
+        verify_password,
+        create_access_token,
+        get_current_user,
+        require_role,
+        verify_area_access,
+        check_area_access,
+        verify_vpgg_access,
+        check_vpgg_access,
+        check_marketing_access,
+        verify_marketing_access,
+        check_psel_management_access,
+        verify_psel_access
+    )
+except ImportError:
+    from backend.database import (
+        init_db,
+        get_user_by_email,
+        get_user_by_id,
+        get_all_users,
+        get_followup_by_id,
+        get_connection,
+        log_audit,
+        get_audit_logs,
+        count_audit_logs,
+        create_database_snapshot,
+        get_database_stats,
+        DB_PATH,
+        get_backups_dir,
+        VALID_ROLES,
+        create_campaign,
+        get_campaign_by_id,
+        update_campaign,
+        delete_campaign,
+        list_campaigns,
+        get_campaign_roi_metrics,
+        create_psel_candidate,
+        get_psel_candidate_by_id,
+        update_psel_candidate,
+        update_psel_candidate_stage,
+        delete_psel_candidate,
+        list_psel_candidates,
+        approve_and_onboard_candidate,
+        create_brand_asset,
+        get_brand_asset_by_id,
+        update_brand_asset,
+        delete_brand_asset,
+        list_brand_assets,
+        get_marketing_dashboard_analytics,
+        CampaignORM,
+        PselCandidateORM,
+        BrandAssetORM,
+        get_db_session
+    )
+    from backend.auth import (
+        verify_password,
+        create_access_token,
+        get_current_user,
+        require_role,
+        verify_area_access,
+        check_area_access,
+        verify_vpgg_access,
+        check_vpgg_access,
+        check_marketing_access,
+        verify_marketing_access,
+        check_psel_management_access,
+        verify_psel_access
+    )
 
 # Caminho para o payload operacional oficial
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -364,6 +446,154 @@ class LeadIngestResponse(BaseModel):
     enriched_via_brasilapi: int
     errors: int
     details: List[IngestDetailItem] = []
+
+# ==============================================================================
+# SCHEMAS DO MÓDULO MARKETING & CAMPANHAS (ROI, PSEL, BRAND KIT)
+# ==============================================================================
+
+class CampaignCreate(BaseModel):
+    name: str = Field(..., min_length=2, description="Nome da campanha (ex: Maré de Vendas 2026)")
+    type: str = Field(..., description="Tipo da ação: 'captacao_projetos', 'processo_seletivo' ou 'branding_institucional'")
+    channel: str = Field(..., description="Canal principal: 'instagram', 'linkedin', 'outbound' ou 'indicacao'")
+    status: Optional[str] = Field("ativa", description="'planejamento', 'ativa', 'pausada', 'concluida'")
+    budget: Optional[float] = Field(0.0, ge=0, description="Orçamento planejado em Reais")
+    actual_cost: Optional[float] = Field(0.0, ge=0, description="Custo efetivo / investimento realizado em Reais")
+    target_leads: Optional[int] = Field(0, ge=0, description="Meta de leads ou inscritos")
+    start_date: Optional[str] = Field(None, description="Data de início (YYYY-MM-DD)")
+    end_date: Optional[str] = Field(None, description="Data de término (YYYY-MM-DD)")
+    responsible: str = Field(..., description="Membro responsável pela condução da campanha")
+    description: Optional[str] = Field("", description="Objetivos e escopo da campanha")
+    tenant_id: Optional[str] = Field("edv_jr", description="Identificador do tenant")
+
+class CampaignUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    channel: Optional[str] = None
+    status: Optional[str] = None
+    budget: Optional[float] = None
+    actual_cost: Optional[float] = None
+    target_leads: Optional[int] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    responsible: Optional[str] = None
+    description: Optional[str] = None
+
+class CampaignResponse(BaseModel):
+    id: int
+    tenant_id: str
+    name: str
+    type: str
+    channel: str
+    status: str
+    budget: float
+    actual_cost: float
+    target_leads: int
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    responsible: str
+    description: Optional[str] = None
+    created_by: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    leads_count: Optional[int] = 0
+    leads_fechados: Optional[int] = 0
+    receita_gerada: Optional[float] = 0.0
+    lucro_liquido: Optional[float] = 0.0
+    roi: Optional[float] = 0.0
+    taxa_conversao: Optional[float] = 0.0
+    cpl: Optional[float] = 0.0
+    cac: Optional[float] = 0.0
+
+class PselCandidateCreate(BaseModel):
+    campaign_id: Optional[int] = Field(None, description="ID da campanha de divulgação do PSEL associada")
+    name: str = Field(..., min_length=2, description="Nome completo do candidato")
+    email: str = Field(..., min_length=5, description="E-mail de contato")
+    phone: Optional[str] = Field(None, description="Telefone / WhatsApp")
+    course: Optional[str] = Field("Direito", description="Curso de graduação")
+    period: Optional[str] = Field(None, description="Período acadêmico atual")
+    stage: Optional[str] = Field("inscricao", description="Estágio no funil ('inscricao', 'dinamica', 'entrevista', 'onboarding', 'aprovado', 'reprovado', 'desistente')")
+    target_area: Optional[str] = Field("Comercial", description="Área pretendida (Comercial, Projetos, Marketing, VPGG, Jurídico, Tesouraria)")
+    score_dinamica: Optional[float] = Field(0.0, ge=0, le=10, description="Nota na fase de dinâmica em grupo (0 a 10)")
+    score_entrevista: Optional[float] = Field(0.0, ge=0, le=10, description="Nota na entrevista individual (0 a 10)")
+    notes: Optional[str] = Field("", description="Anotações e parecer dos avaliadores")
+    interviewer: Optional[str] = Field("", description="Nome do entrevistador / assessor líder")
+    competency_focus: Optional[str] = Field("Gestão", description="Competência Brasil Júnior chave ('Liderança', 'Gestão', 'Autoconhecimento', 'Visão Sistêmica', 'Orientação para Resultados')")
+    tenant_id: Optional[str] = Field("edv_jr", description="Identificador do tenant")
+
+class PselCandidateUpdate(BaseModel):
+    campaign_id: Optional[int] = None
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    course: Optional[str] = None
+    period: Optional[str] = None
+    stage: Optional[str] = None
+    target_area: Optional[str] = None
+    score_dinamica: Optional[float] = None
+    score_entrevista: Optional[float] = None
+    notes: Optional[str] = None
+    interviewer: Optional[str] = None
+    competency_focus: Optional[str] = None
+
+class PselStageUpdate(BaseModel):
+    stage: str = Field(..., description="Novo estágio ('inscricao', 'dinamica', 'entrevista', 'onboarding', 'aprovado', 'reprovado', 'desistente')")
+    notes: Optional[str] = Field(None, description="Parecer adicional ou justificativa da transição")
+
+class PselCandidateResponse(BaseModel):
+    id: int
+    tenant_id: str
+    campaign_id: Optional[int] = None
+    name: str
+    email: str
+    phone: Optional[str] = None
+    course: str
+    period: Optional[str] = None
+    stage: str
+    target_area: str
+    score_dinamica: float
+    score_entrevista: float
+    notes: Optional[str] = None
+    interviewer: Optional[str] = None
+    competency_focus: Optional[str] = "Gestão"
+    created_by: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+class BrandAssetCreate(BaseModel):
+    title: str = Field(..., min_length=2, description="Título do ativo (ex: Manual de Identidade Visual 2026)")
+    category: str = Field(..., description="Categoria: 'logo', 'manual_marca', 'proposta_comercial', 'apresentacao_institucional', 'papelaria', 'pitch_deck', 'outros'")
+    file_format: str = Field(..., description="Formato do arquivo (PNG, SVG, PDF, PPTX, DOCX, FIGMA)")
+    version: Optional[str] = Field("v1.0", description="Versão do ativo (ex: v1.0, v2.1)")
+    file_url: str = Field(..., description="URL ou link no Google Drive / CDN oficial")
+    description: Optional[str] = Field("", description="Descrição das diretrizes de uso")
+    tags: Optional[str] = Field("", description="Tags separadas por vírgula para busca")
+    is_official: Optional[bool] = Field(True, description="Indicador se é o ativo oficial homologado")
+    tenant_id: Optional[str] = Field("edv_jr", description="Identificador do tenant")
+
+class BrandAssetUpdate(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+    file_format: Optional[str] = None
+    version: Optional[str] = None
+    file_url: Optional[str] = None
+    description: Optional[str] = None
+    tags: Optional[str] = None
+    is_official: Optional[bool] = None
+
+class BrandAssetResponse(BaseModel):
+    id: int
+    tenant_id: str
+    title: str
+    category: str
+    file_format: str
+    version: str
+    file_url: str
+    description: Optional[str] = None
+    tags: Optional[str] = None
+    is_official: int
+    uploaded_by: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
 def parse_csv_leads(csv_text: str) -> List[LeadIngestItem]:
     """Interpreta texto CSV delimitado por vírgula ou ponto-e-vírgula em objetos LeadIngestItem."""
@@ -2650,6 +2880,367 @@ async def get_compliance_pops(current_user: dict = Depends(get_current_user)):
             }
         ]
     }
+
+# ==============================================================================
+# 7.5. MÓDULO DE MARKETING & CAMPANHAS, FUNIL PSEL E BRAND KIT (MEJ / RBAC)
+# ==============================================================================
+
+@app.get(
+    "/api/marketing/dashboard",
+    summary="Dashboard consolidado de Marketing, ROI comercial e Recrutamento PSEL"
+)
+async def get_marketing_dashboard_endpoint(
+    tenant_id: str = Query("edv_jr", description="Tenant ID"),
+    current_user: dict = Depends(get_current_user)
+):
+    stats = get_marketing_dashboard_analytics(tenant_id=tenant_id)
+    return {"status": "success", "data": stats}
+
+# --- CAMPANHAS E ROI ---
+
+@app.get(
+    "/api/marketing/campaigns",
+    response_model=List[CampaignResponse],
+    summary="Listar campanhas de marketing com métricas calculadas de ROI e conversão"
+)
+async def list_campaigns_endpoint(
+    tenant_id: str = Query("edv_jr", description="Tenant ID"),
+    type: Optional[str] = Query(None, description="Tipo ('captacao_projetos', 'processo_seletivo', 'branding_institucional')"),
+    channel: Optional[str] = Query(None, description="Canal ('instagram', 'linkedin', 'outbound', 'indicacao')"),
+    status: Optional[str] = Query(None, description="Status ('planejamento', 'ativa', 'pausada', 'concluida')"),
+    current_user: dict = Depends(get_current_user)
+):
+    campaigns = list_campaigns(tenant_id=tenant_id, campaign_type=type, channel=channel, status=status)
+    return [CampaignResponse(**c) for c in campaigns]
+
+@app.post(
+    "/api/marketing/campaigns",
+    response_model=CampaignResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Criar nova campanha de marketing (Restrito: Marketing e Diretoria)"
+)
+async def create_campaign_endpoint(
+    payload: CampaignCreate,
+    current_user: dict = Depends(verify_marketing_access)
+):
+    data = payload.model_dump()
+    data["created_by"] = current_user["email"]
+    new_campaign = create_campaign(data)
+    log_audit(
+        current_user["email"],
+        "MARKETING_CAMPAIGN_CREATED",
+        f"/api/marketing/campaigns/{new_campaign['id']}",
+        201,
+        {"name": new_campaign["name"], "type": new_campaign["type"], "budget": new_campaign["budget"]}
+    )
+    return CampaignResponse(**new_campaign)
+
+@app.get(
+    "/api/marketing/campaigns/{campaign_id}",
+    response_model=CampaignResponse,
+    summary="Detalhes de uma campanha por ID"
+)
+async def get_campaign_endpoint(
+    campaign_id: int,
+    tenant_id: str = Query("edv_jr"),
+    current_user: dict = Depends(get_current_user)
+):
+    campaign = get_campaign_by_id(campaign_id, tenant_id=tenant_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail=f"Campanha #{campaign_id} não encontrada.")
+    return CampaignResponse(**campaign)
+
+@app.put(
+    "/api/marketing/campaigns/{campaign_id}",
+    response_model=CampaignResponse,
+    summary="Atualizar dados e custos de uma campanha (Restrito: Marketing e Diretoria)"
+)
+async def update_campaign_endpoint(
+    campaign_id: int,
+    payload: CampaignUpdate,
+    tenant_id: str = Query("edv_jr"),
+    current_user: dict = Depends(verify_marketing_access)
+):
+    updated = update_campaign(campaign_id, payload.model_dump(exclude_unset=True), tenant_id=tenant_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Campanha #{campaign_id} não encontrada.")
+    log_audit(
+        current_user["email"],
+        "MARKETING_CAMPAIGN_UPDATED",
+        f"/api/marketing/campaigns/{campaign_id}",
+        200,
+        payload.model_dump(exclude_unset=True)
+    )
+    return CampaignResponse(**updated)
+
+@app.delete(
+    "/api/marketing/campaigns/{campaign_id}",
+    summary="Excluir campanha de marketing (Restrito: Marketing e Diretoria)"
+)
+async def delete_campaign_endpoint(
+    campaign_id: int,
+    tenant_id: str = Query("edv_jr"),
+    current_user: dict = Depends(verify_marketing_access)
+):
+    success = delete_campaign(campaign_id, tenant_id=tenant_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Campanha #{campaign_id} não encontrada.")
+    log_audit(
+        current_user["email"],
+        "MARKETING_CAMPAIGN_DELETED",
+        f"/api/marketing/campaigns/{campaign_id}",
+        200,
+        {"campaign_id": campaign_id}
+    )
+    return {"status": "success", "message": f"Campanha #{campaign_id} excluída com sucesso."}
+
+@app.get(
+    "/api/marketing/campaigns/{campaign_id}/roi",
+    summary="Dossiê detalhado de atribuição de ROI e leads vinculados à campanha"
+)
+async def get_campaign_roi_endpoint(
+    campaign_id: int,
+    tenant_id: str = Query("edv_jr"),
+    current_user: dict = Depends(get_current_user)
+):
+    roi_data = get_campaign_roi_metrics(campaign_id, tenant_id=tenant_id)
+    if not roi_data:
+        raise HTTPException(status_code=404, detail=f"Campanha #{campaign_id} não encontrada.")
+    return {"status": "success", "data": roi_data}
+
+# --- FUNIL DE PROCESSO SELETIVO (PSEL) ---
+
+@app.get(
+    "/api/marketing/psel/candidates",
+    response_model=List[PselCandidateResponse],
+    summary="Listar candidatos do processo seletivo no funil (Restrito: Marketing, VPGG e Diretoria)"
+)
+async def list_psel_candidates_endpoint(
+    tenant_id: str = Query("edv_jr"),
+    stage: Optional[str] = Query(None, description="Estágio ('inscricao', 'dinamica', 'entrevista', 'onboarding', 'aprovado')"),
+    target_area: Optional[str] = Query(None, description="Área de interesse"),
+    campaign_id: Optional[int] = Query(None, description="Filtrar por campanha de atração"),
+    current_user: dict = Depends(verify_psel_access)
+):
+    candidates = list_psel_candidates(tenant_id=tenant_id, stage=stage, target_area=target_area, campaign_id=campaign_id)
+    return [PselCandidateResponse(**c) for c in candidates]
+
+@app.post(
+    "/api/marketing/psel/candidates",
+    response_model=PselCandidateResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Cadastrar novo candidato no PSEL (Restrito: Marketing, VPGG e Diretoria)"
+)
+async def create_psel_candidate_endpoint(
+    payload: PselCandidateCreate,
+    current_user: dict = Depends(verify_psel_access)
+):
+    data = payload.model_dump()
+    data["created_by"] = current_user["email"]
+    candidate = create_psel_candidate(data)
+    log_audit(
+        current_user["email"],
+        "PSEL_CANDIDATE_CREATED",
+        f"/api/marketing/psel/candidates/{candidate['id']}",
+        201,
+        {"name": candidate["name"], "target_area": candidate["target_area"], "stage": candidate["stage"]}
+    )
+    return PselCandidateResponse(**candidate)
+
+@app.get(
+    "/api/marketing/psel/candidates/{candidate_id}",
+    response_model=PselCandidateResponse,
+    summary="Obter dados de um candidato específico (Restrito: Marketing, VPGG e Diretoria)"
+)
+async def get_psel_candidate_endpoint(
+    candidate_id: int,
+    tenant_id: str = Query("edv_jr"),
+    current_user: dict = Depends(verify_psel_access)
+):
+    candidate = get_psel_candidate_by_id(candidate_id, tenant_id=tenant_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail=f"Candidato #{candidate_id} não encontrado.")
+    return PselCandidateResponse(**candidate)
+
+@app.put(
+    "/api/marketing/psel/candidates/{candidate_id}",
+    response_model=PselCandidateResponse,
+    summary="Atualizar dados e notas do candidato (Restrito: Marketing, VPGG e Diretoria)"
+)
+async def update_psel_candidate_endpoint(
+    candidate_id: int,
+    payload: PselCandidateUpdate,
+    tenant_id: str = Query("edv_jr"),
+    current_user: dict = Depends(verify_psel_access)
+):
+    updated = update_psel_candidate(candidate_id, payload.model_dump(exclude_unset=True), tenant_id=tenant_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Candidato #{candidate_id} não encontrado.")
+    log_audit(
+        current_user["email"],
+        "PSEL_CANDIDATE_UPDATED",
+        f"/api/marketing/psel/candidates/{candidate_id}",
+        200,
+        payload.model_dump(exclude_unset=True)
+    )
+    return PselCandidateResponse(**updated)
+
+@app.put(
+    "/api/marketing/psel/candidates/{candidate_id}/stage",
+    response_model=PselCandidateResponse,
+    summary="Avançar estágio do candidato no funil (Inscrição -> Dinâmica -> Entrevista -> Onboarding)"
+)
+async def update_psel_candidate_stage_endpoint(
+    candidate_id: int,
+    payload: PselStageUpdate,
+    tenant_id: str = Query("edv_jr"),
+    current_user: dict = Depends(verify_psel_access)
+):
+    updated = update_psel_candidate_stage(candidate_id, payload.stage, payload.notes, tenant_id=tenant_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Candidato #{candidate_id} não encontrado.")
+    log_audit(
+        current_user["email"],
+        "PSEL_CANDIDATE_STAGE_CHANGED",
+        f"/api/marketing/psel/candidates/{candidate_id}/stage",
+        200,
+        {"stage": payload.stage, "notes": payload.notes}
+    )
+    return PselCandidateResponse(**updated)
+
+@app.post(
+    "/api/marketing/psel/candidates/{candidate_id}/approve-and-onboard",
+    summary="Migrar candidato aprovado em 1 clique para Gente & Gestão (VPGG) e gerar PDI Brasil Júnior"
+)
+async def approve_and_onboard_candidate_endpoint(
+    candidate_id: int,
+    tenant_id: str = Query("edv_jr"),
+    current_user: dict = Depends(verify_psel_access)
+):
+    try:
+        result = approve_and_onboard_candidate(candidate_id, current_user["email"], tenant_id=tenant_id)
+        return result
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao realizar onboarding do candidato: {e}")
+
+@app.delete(
+    "/api/marketing/psel/candidates/{candidate_id}",
+    summary="Excluir candidato do PSEL (Restrito: Marketing, VPGG e Diretoria)"
+)
+async def delete_psel_candidate_endpoint(
+    candidate_id: int,
+    tenant_id: str = Query("edv_jr"),
+    current_user: dict = Depends(verify_psel_access)
+):
+    success = delete_psel_candidate(candidate_id, tenant_id=tenant_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Candidato #{candidate_id} não encontrado.")
+    log_audit(
+        current_user["email"],
+        "PSEL_CANDIDATE_DELETED",
+        f"/api/marketing/psel/candidates/{candidate_id}",
+        200,
+        {"candidate_id": candidate_id}
+    )
+    return {"status": "success", "message": f"Candidato #{candidate_id} excluído com sucesso."}
+
+# --- BRAND KIT (REPOSITÓRIO DE ATIVOS OFICIAIS DE MARCA) ---
+
+@app.get(
+    "/api/marketing/brand-kit",
+    response_model=List[BrandAssetResponse],
+    summary="Listar ativos de marca oficiais (Disponível para todos os membros autenticados)"
+)
+async def list_brand_assets_endpoint(
+    tenant_id: str = Query("edv_jr"),
+    category: Optional[str] = Query(None, description="Categoria do ativo"),
+    current_user: dict = Depends(get_current_user)
+):
+    assets = list_brand_assets(tenant_id=tenant_id, category=category)
+    return [BrandAssetResponse(**a) for a in assets]
+
+@app.post(
+    "/api/marketing/brand-kit",
+    response_model=BrandAssetResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Cadastrar novo ativo no Brand Kit (Restrito: Marketing e Diretoria)"
+)
+async def create_brand_asset_endpoint(
+    payload: BrandAssetCreate,
+    current_user: dict = Depends(verify_marketing_access)
+):
+    data = payload.model_dump()
+    data["uploaded_by"] = current_user["email"]
+    asset = create_brand_asset(data)
+    log_audit(
+        current_user["email"],
+        "BRAND_ASSET_CREATED",
+        f"/api/marketing/brand-kit/{asset['id']}",
+        201,
+        {"title": asset["title"], "category": asset["category"], "version": asset["version"]}
+    )
+    return BrandAssetResponse(**asset)
+
+@app.get(
+    "/api/marketing/brand-kit/{asset_id}",
+    response_model=BrandAssetResponse,
+    summary="Visualizar detalhes de um ativo de marca específico"
+)
+async def get_brand_asset_endpoint(
+    asset_id: int,
+    tenant_id: str = Query("edv_jr"),
+    current_user: dict = Depends(get_current_user)
+):
+    asset = get_brand_asset_by_id(asset_id, tenant_id=tenant_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail=f"Ativo de marca #{asset_id} não encontrado.")
+    return BrandAssetResponse(**asset)
+
+@app.put(
+    "/api/marketing/brand-kit/{asset_id}",
+    response_model=BrandAssetResponse,
+    summary="Atualizar ativo no Brand Kit (Restrito: Marketing e Diretoria)"
+)
+async def update_brand_asset_endpoint(
+    asset_id: int,
+    payload: BrandAssetUpdate,
+    tenant_id: str = Query("edv_jr"),
+    current_user: dict = Depends(verify_marketing_access)
+):
+    updated = update_brand_asset(asset_id, payload.model_dump(exclude_unset=True), tenant_id=tenant_id)
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Ativo de marca #{asset_id} não encontrado.")
+    log_audit(
+        current_user["email"],
+        "BRAND_ASSET_UPDATED",
+        f"/api/marketing/brand-kit/{asset_id}",
+        200,
+        payload.model_dump(exclude_unset=True)
+    )
+    return BrandAssetResponse(**updated)
+
+@app.delete(
+    "/api/marketing/brand-kit/{asset_id}",
+    summary="Excluir ativo do Brand Kit (Restrito: Marketing e Diretoria)"
+)
+async def delete_brand_asset_endpoint(
+    asset_id: int,
+    tenant_id: str = Query("edv_jr"),
+    current_user: dict = Depends(verify_marketing_access)
+):
+    success = delete_brand_asset(asset_id, tenant_id=tenant_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Ativo de marca #{asset_id} não encontrado.")
+    log_audit(
+        current_user["email"],
+        "BRAND_ASSET_DELETED",
+        f"/api/marketing/brand-kit/{asset_id}",
+        200,
+        {"asset_id": asset_id}
+    )
+    return {"status": "success", "message": f"Ativo de marca #{asset_id} excluído com sucesso."}
 
 # ==============================================================================
 # 8. TRILHA DE AUDITORIA IMUTÁVEL E CENTRAL DE SNAPSHOTS/BACKUP

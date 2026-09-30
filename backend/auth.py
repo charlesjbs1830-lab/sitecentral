@@ -9,7 +9,10 @@ import bcrypt
 import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from database import get_user_by_email, VALID_ROLES
+try:
+    from database import get_user_by_email, VALID_ROLES
+except ImportError:
+    from backend.database import get_user_by_email, VALID_ROLES
 
 SECRET_KEY = os.getenv("EDV_JWT_SECRET", "edv_junior_secure_jwt_token_secret_key_gestao_2026_enterprise_rbac_sig")
 ALGORITHM = "HS256"
@@ -176,3 +179,65 @@ def verify_vpgg_access(current_user: dict = Depends(get_current_user)) -> dict:
             )
         )
     return current_user
+
+def check_marketing_access(user: dict) -> bool:
+    """
+    Retorna True se o usuário pertencer à área Marketing (assessor, gerente, diretor de Marketing)
+    ou possuir liderança executiva global (presidente ou diretor).
+    """
+    if not user:
+        return False
+    role = (user.get("role") or "").lower().strip()
+    if role in {"presidente", "diretor"}:
+        return True
+    area = (user.get("area") or user.get("setor") or "").lower().strip()
+    return "marketing" in area
+
+def verify_marketing_access(current_user: dict = Depends(get_current_user)) -> dict:
+    """
+    Validação de Escopo de Marketing (RBAC).
+    Restringe operações estratégicas de campanhas e Brand Kit a colaboradores de Marketing
+    e liderança executiva (Presidente e Diretores).
+    """
+    if not current_user or not check_marketing_access(current_user):
+        role = current_user.get("role", "desconhecido") if current_user else "anônimo"
+        area = current_user.get("area", current_user.get("setor", "indefinida")) if current_user else "indefinida"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Acesso negado: Perfil '{role}' da área '{area}' não possui permissão para gerenciar o módulo de Marketing e Campanhas. "
+                f"Operação restrita à equipe de Marketing e liderança institucional (Presidente e Diretores)."
+            )
+        )
+    return current_user
+
+def check_psel_management_access(user: dict) -> bool:
+    """
+    Retorna True se o usuário tiver permissão para gerenciar candidatos do Processo Seletivo (PSEL):
+    Liderança executiva (Presidente/Diretor) ou integrantes das áreas de Marketing e VPGG (Gente & Gestão).
+    """
+    if not user:
+        return False
+    role = (user.get("role") or "").lower().strip()
+    if role in {"presidente", "diretor"}:
+        return True
+    area = (user.get("area") or user.get("setor") or "").lower().strip()
+    return "marketing" in area or "vpgg" in area
+
+def verify_psel_access(current_user: dict = Depends(get_current_user)) -> dict:
+    """
+    Validação de Acesso ao Funil de Recrutamento PSEL (RBAC).
+    Permite acesso a membros do Marketing, VPGG e Diretoria Executiva.
+    """
+    if not current_user or not check_psel_management_access(current_user):
+        role = current_user.get("role", "desconhecido") if current_user else "anônimo"
+        area = current_user.get("area", current_user.get("setor", "indefinida")) if current_user else "indefinida"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Acesso negado: Perfil '{role}' da área '{area}' não possui permissão para gerenciar o Funil de Recrutamento (PSEL). "
+                f"Acesso restrito às áreas de Marketing, VPGG (Gente & Gestão) e Diretoria Executiva."
+            )
+        )
+    return current_user
+

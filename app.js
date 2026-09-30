@@ -521,6 +521,8 @@ function switchTab(tabId) {
       carregarAnalyticsVPGG();
       popularSelectsVPGG();
     }
+  } else if (tabId === 'marketing') {
+    carregarModuloMarketing();
   }
 }
 
@@ -4971,6 +4973,964 @@ function renderTutoriaisDrive() {
 }
 
 // ==============================================================================
+// 5.9 MÓDULO MARKETING & CAMPANHAS: ROI, FUNIL PSEL E BRAND KIT (MEJ)
+// ==============================================================================
+
+let marketingState = {
+  campanhas: [],
+  candidatos: [],
+  brandAssets: [],
+  analytics: null,
+  filtroCampanhaTipo: '',
+  filtroCampanhaCanal: '',
+  filtroCampanhaStatus: '',
+  filtroPselArea: 'todas',
+  filtroBrandKitCat: 'todos',
+  currentSubtab: 'campanhas'
+};
+
+function switchMarketingSubtab(subtab) {
+  marketingState.currentSubtab = subtab;
+  const subtabs = ['campanhas', 'psel', 'brandkit', 'analytics'];
+  subtabs.forEach(st => {
+    const view = document.getElementById(`mkt-subview-${st}`);
+    const btn = document.getElementById(`subtab-mkt-${st}`);
+    if (view) {
+      if (st === subtab) view.classList.remove('hidden');
+      else view.classList.add('hidden');
+    }
+    if (btn) {
+      if (st === subtab) {
+        btn.classList.remove('subtab-inactive');
+        btn.classList.add('subtab-active');
+      } else {
+        btn.classList.remove('subtab-active');
+        btn.classList.add('subtab-inactive');
+      }
+    }
+  });
+
+  if (subtab === 'campanhas') renderizarCampanhasMarketing();
+  else if (subtab === 'psel') renderizarCandidatosPSEL();
+  else if (subtab === 'brandkit') renderizarBrandKit();
+  else if (subtab === 'analytics') renderizarAnalyticsMarketing();
+}
+
+async function carregarModuloMarketing() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+  try {
+    // 1. Carregar Campanhas
+    const resCamp = await fetch(`${API_BASE_URL}/api/marketing/campaigns`, { headers });
+    if (resCamp.ok) {
+      marketingState.campanhas = await resCamp.json();
+      const badge = document.getElementById('badge-mkt-campanhas');
+      if (badge) badge.innerText = marketingState.campanhas.length;
+    }
+
+    // 2. Carregar Candidatos do PSEL
+    try {
+      const resPsel = await fetch(`${API_BASE_URL}/api/marketing/psel/candidates`, { headers });
+      if (resPsel.ok) {
+        marketingState.candidatos = await resPsel.json();
+        const badgePsel = document.getElementById('badge-mkt-psel');
+        if (badgePsel) badgePsel.innerText = marketingState.candidatos.length;
+      }
+    } catch (ePsel) {
+      console.warn("[Marketing] Sem permissão para candidatos PSEL ou offline:", ePsel);
+    }
+
+    // 3. Carregar Brand Kit
+    const resBrand = await fetch(`${API_BASE_URL}/api/marketing/brand-kit`, { headers });
+    if (resBrand.ok) {
+      marketingState.brandAssets = await resBrand.json();
+      const badgeBk = document.getElementById('badge-mkt-brandkit');
+      if (badgeBk) badgeBk.innerText = marketingState.brandAssets.length;
+    }
+
+    // 4. Carregar Analytics Geral
+    const resDash = await fetch(`${API_BASE_URL}/api/marketing/dashboard`, { headers });
+    if (resDash.ok) {
+      const jsonDash = await resDash.json();
+      marketingState.analytics = jsonDash.data;
+    }
+  } catch (err) {
+    console.warn("[Marketing] Falha ao consultar API FastAPI. Contingência local ativa.", err);
+  }
+
+  // Renderizar a sub-aba ativa
+  renderizarCampanhasMarketing();
+  renderizarCandidatosPSEL();
+  renderizarBrandKit();
+  renderizarAnalyticsMarketing();
+}
+
+function filtrarCampanhasMarketing() {
+  const tipoEl = document.getElementById('filtro-mkt-tipo');
+  const canalEl = document.getElementById('filtro-mkt-canal');
+  const statusEl = document.getElementById('filtro-mkt-status');
+
+  marketingState.filtroCampanhaTipo = tipoEl ? tipoEl.value : '';
+  marketingState.filtroCampanhaCanal = canalEl ? canalEl.value : '';
+  marketingState.filtroCampanhaStatus = statusEl ? statusEl.value : '';
+
+  renderizarCampanhasMarketing();
+}
+
+function renderizarCampanhasMarketing() {
+  const tbody = document.getElementById('tabela-mkt-campanhas-body');
+  if (!tbody) return;
+
+  let lista = marketingState.campanhas || [];
+
+  if (marketingState.filtroCampanhaTipo) {
+    lista = lista.filter(c => c.type === marketingState.filtroCampanhaTipo);
+  }
+  if (marketingState.filtroCampanhaCanal) {
+    lista = lista.filter(c => c.channel === marketingState.filtroCampanhaCanal);
+  }
+  if (marketingState.filtroCampanhaStatus) {
+    lista = lista.filter(c => c.status === marketingState.filtroCampanhaStatus);
+  }
+
+  // Atualizar contagem
+  const countEl = document.getElementById('mkt-campanhas-contagem');
+  if (countEl) countEl.innerText = `${lista.length} campanha(s) listada(s)`;
+
+  // Atualizar KPIs superiores
+  let totalInvest = 0;
+  let totalReceita = 0;
+  let totalLeads = 0;
+  let totalFechados = 0;
+
+  (marketingState.campanhas || []).forEach(c => {
+    totalInvest += parseFloat(c.actual_cost || c.budget || 0);
+    totalReceita += parseFloat(c.receita_gerada || 0);
+    totalLeads += parseInt(c.leads_count || 0);
+    totalFechados += parseInt(c.leads_fechados || 0);
+  });
+
+  const kpiInvest = document.getElementById('kpi-mkt-investimento');
+  const kpiRec = document.getElementById('kpi-mkt-receita');
+  const kpiRoi = document.getElementById('kpi-mkt-roi');
+  const kpiLeads = document.getElementById('kpi-mkt-leads');
+  const kpiConv = document.getElementById('kpi-mkt-conversao');
+  const kpiFechadosInfo = document.getElementById('kpi-mkt-fechados-info');
+
+  if (kpiInvest) kpiInvest.innerText = formatBRL(totalInvest);
+  if (kpiRec) kpiRec.innerText = formatBRL(totalReceita);
+  if (kpiLeads) kpiLeads.innerText = totalLeads;
+  if (kpiFechadosInfo) kpiFechadosInfo.innerText = `${totalFechados} RMs Fechados`;
+
+  if (kpiRoi) {
+    const roiGeral = totalInvest > 0 ? (((totalReceita - totalInvest) / totalInvest) * 100).toFixed(1) : (totalReceita > 0 ? '100.0' : '0.0');
+    kpiRoi.innerText = `${roiGeral}%`;
+    kpiRoi.className = `text-lg font-black block mt-1 ${parseFloat(roiGeral) >= 0 ? 'text-purple-700' : 'text-rose-700'}`;
+  }
+
+  if (kpiConv) {
+    const convGeral = totalLeads > 0 ? ((totalFechados / totalLeads) * 100).toFixed(1) : '0.0';
+    kpiConv.innerText = `${convGeral}%`;
+  }
+
+  if (lista.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="11" class="px-4 py-8 text-center text-slate-400">
+          <i class="fa-solid fa-bullhorn text-2xl text-slate-300 mb-2 block"></i>
+          Nenhuma campanha encontrada com os filtros selecionados.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  const tipoLabels = {
+    'captacao_projetos': '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">Projetos & RMs</span>',
+    'processo_seletivo': '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-800">PSEL Novos Membros</span>',
+    'branding_institucional': '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">Branding & Parcerias</span>'
+  };
+
+  const canalLabels = {
+    'instagram': '<span class="inline-flex items-center gap-1 font-medium"><i class="fa-brands fa-instagram text-pink-600"></i> Instagram</span>',
+    'linkedin': '<span class="inline-flex items-center gap-1 font-medium"><i class="fa-brands fa-linkedin text-blue-600"></i> LinkedIn</span>',
+    'outbound': '<span class="inline-flex items-center gap-1 font-medium"><i class="fa-solid fa-phone text-emerald-600"></i> Outbound</span>',
+    'indicacao': '<span class="inline-flex items-center gap-1 font-medium"><i class="fa-solid fa-handshake text-indigo-600"></i> Indicação</span>'
+  };
+
+  const statusBadges = {
+    'ativa': '<span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">🟢 Ativa</span>',
+    'planejamento': '<span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">🟡 Planejamento</span>',
+    'pausada': '<span class="px-2 py-0.5 bg-slate-100 text-slate-700 rounded font-bold text-[10px]">🟠 Pausada</span>',
+    'concluida': '<span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold text-[10px]">🔵 Concluída</span>'
+  };
+
+  tbody.innerHTML = lista.map(c => {
+    const roiNum = parseFloat(c.roi || 0);
+    const roiClass = roiNum > 0 ? 'bg-emerald-100 text-emerald-800' : (roiNum === 0 ? 'bg-slate-100 text-slate-700' : 'bg-rose-100 text-rose-800');
+    const roiSign = roiNum > 0 ? `+${roiNum}%` : `${roiNum}%`;
+
+    return `
+      <tr class="hover:bg-slate-50/70 transition">
+        <td class="px-4 py-3">
+          <strong class="text-slate-800 block text-xs">${escapeHTML(c.name)}</strong>
+          <span class="text-[10px] text-slate-400 font-mono">${escapeHTML(c.start_date || 'Início não definido')}</span>
+        </td>
+        <td class="px-4 py-3 space-y-1">
+          <div>${tipoLabels[c.type] || c.type}</div>
+          <div class="text-[11px] text-slate-600">${canalLabels[c.channel] || c.channel}</div>
+        </td>
+        <td class="px-4 py-3 text-slate-600 text-xs font-medium">
+          ${escapeHTML(c.responsible || '-')}
+        </td>
+        <td class="px-4 py-3 text-right font-mono font-bold text-slate-800">
+          ${formatBRL(c.actual_cost || c.budget || 0)}
+        </td>
+        <td class="px-4 py-3 text-center font-mono font-bold text-slate-700">
+          ${c.leads_count || 0}
+        </td>
+        <td class="px-4 py-3 text-center font-mono font-bold text-blue-600">
+          ${c.leads_fechados || 0}
+        </td>
+        <td class="px-4 py-3 text-right font-mono font-bold text-emerald-700">
+          ${formatBRL(c.receita_gerada || 0)}
+        </td>
+        <td class="px-4 py-3 text-center">
+          <span class="px-2 py-0.5 rounded font-mono font-bold text-[10px] ${roiClass}">
+            ${roiSign}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-center font-mono text-[11px] text-slate-600">
+          ${c.taxa_conversao || 0}%
+        </td>
+        <td class="px-4 py-3 text-center">
+          ${statusBadges[c.status] || c.status}
+        </td>
+        <td class="px-4 py-3 text-center">
+          <div class="flex items-center justify-center gap-1">
+            <button onclick="abrirModalROICampanha(${c.id})" title="Dossiê de Atribuição de ROI & Leads" class="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition">
+              <i class="fa-solid fa-chart-line"></i>
+            </button>
+            <button onclick="abrirModalNovaCampanha(${c.id})" title="Editar Campanha" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button onclick="excluirCampanhaMarketing(${c.id})" title="Excluir Campanha" class="p-1.5 text-rose-600 hover:bg-rose-50 rounded transition">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function abrirModalNovaCampanha(id = null) {
+  const modal = document.getElementById('modal-nova-campanha');
+  const titleEl = document.getElementById('modal-campanha-titulo');
+  const form = document.getElementById('form-nova-campanha');
+  if (!modal || !form) return;
+
+  form.reset();
+  document.getElementById('campanha_id').value = '';
+
+  if (id) {
+    const c = (marketingState.campanhas || []).find(item => item.id === id);
+    if (c) {
+      if (titleEl) titleEl.innerText = "Editar Campanha de Marketing & Vendas";
+      document.getElementById('campanha_id').value = c.id;
+      document.getElementById('campanha_nome').value = c.name || '';
+      document.getElementById('campanha_tipo').value = c.type || 'captacao_projetos';
+      document.getElementById('campanha_canal').value = c.channel || 'instagram';
+      document.getElementById('campanha_budget').value = c.budget || 0;
+      document.getElementById('campanha_custo').value = c.actual_cost || 0;
+      document.getElementById('campanha_target_leads').value = c.target_leads || 0;
+      document.getElementById('campanha_responsavel').value = c.responsible || '';
+      document.getElementById('campanha_status').value = c.status || 'ativa';
+      document.getElementById('campanha_start_date').value = c.start_date || '';
+      document.getElementById('campanha_end_date').value = c.end_date || '';
+      document.getElementById('campanha_descricao').value = c.description || '';
+    }
+  } else {
+    if (titleEl) titleEl.innerText = "Cadastrar Nova Ação de Marketing & Vendas";
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function fecharModalNovaCampanha() {
+  const modal = document.getElementById('modal-nova-campanha');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function salvarCampanhaMarketing(event) {
+  event.preventDefault();
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) {
+    showToast("🔒 Faça login com credenciais institucionais para salvar campanhas.");
+    return;
+  }
+
+  const id = document.getElementById('campanha_id').value;
+  const payload = {
+    name: document.getElementById('campanha_nome').value.trim(),
+    type: document.getElementById('campanha_tipo').value,
+    channel: document.getElementById('campanha_canal').value,
+    budget: parseFloat(document.getElementById('campanha_budget').value) || 0.0,
+    actual_cost: parseFloat(document.getElementById('campanha_custo').value) || 0.0,
+    target_leads: parseInt(document.getElementById('campanha_target_leads').value) || 0,
+    responsible: document.getElementById('campanha_responsavel').value.trim(),
+    status: document.getElementById('campanha_status').value,
+    start_date: document.getElementById('campanha_start_date').value || null,
+    end_date: document.getElementById('campanha_end_date').value || null,
+    description: document.getElementById('campanha_descricao').value.trim(),
+    tenant_id: 'edv_jr'
+  };
+
+  try {
+    const url = id ? `${API_BASE_URL}/api/marketing/campaigns/${id}` : `${API_BASE_URL}/api/marketing/campaigns`;
+    const method = id ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method: method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      fecharModalNovaCampanha();
+      showToast(id ? "✅ Campanha atualizada com sucesso!" : "🚀 Nova campanha criada com sucesso!");
+      await carregarModuloMarketing();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Erro: ${err.detail || 'Não foi possível salvar a campanha.'}`);
+    }
+  } catch (e) {
+    showToast(`❌ Erro de conexão com o servidor EDbrain: ${e.message}`);
+  }
+}
+
+async function excluirCampanhaMarketing(id) {
+  if (!confirm("⚠️ Tem certeza que deseja excluir esta campanha de marketing?\nOs leads associados no CRM não serão excluídos, apenas desvinculados.")) {
+    return;
+  }
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/marketing/campaigns/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (res.ok) {
+      showToast("🗑️ Campanha excluída com sucesso.");
+      await carregarModuloMarketing();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Erro: ${err.detail || 'Falha ao excluir campanha.'}`);
+    }
+  } catch (e) {
+    showToast(`❌ Erro de conexão: ${e.message}`);
+  }
+}
+
+async function abrirModalROICampanha(id) {
+  const modal = document.getElementById('modal-dossie-roi');
+  if (!modal) return;
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/marketing/campaigns/${id}/roi`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!res.ok) {
+      showToast("❌ Não foi possível carregar o dossiê de ROI.");
+      return;
+    }
+
+    const json = await res.json();
+    const data = json.data;
+    const camp = data.campanha;
+    const metrics = data.metricas;
+    const leads = data.detalhe_leads || [];
+
+    document.getElementById('roi-modal-nome-campanha').innerText = `Dossiê de ROI: ${camp.name}`;
+    document.getElementById('roi-modal-subtitulo').innerText = `Canal: ${camp.channel.toUpperCase()} • Responsável: ${camp.responsible} • Status: ${camp.status.toUpperCase()}`;
+
+    document.getElementById('roi-detalhe-custo').innerText = formatBRL(metrics.custo_efetivo || 0);
+    document.getElementById('roi-detalhe-receita').innerText = formatBRL(metrics.receita_atribuida || 0);
+    document.getElementById('roi-detalhe-percentual').innerText = `${metrics.roi_percentual}%`;
+    document.getElementById('roi-detalhe-cpl').innerText = formatBRL(metrics.cpl || 0);
+    document.getElementById('roi-detalhe-cac-info').innerText = `CAC: ${formatBRL(metrics.cac || 0)} • Conv: ${metrics.taxa_conversao_percentual}%`;
+
+    const leadsBody = document.getElementById('roi-detalhe-leads-body');
+    if (leadsBody) {
+      if (leads.length === 0) {
+        leadsBody.innerHTML = `<tr><td colspan="4" class="px-3 py-4 text-center text-slate-400 italic">Nenhum lead ou candidato diretamente vinculado no momento.</td></tr>`;
+      } else {
+        leadsBody.innerHTML = leads.map(l => `
+          <tr class="hover:bg-slate-50">
+            <td class="px-3 py-2 font-bold text-slate-800">${escapeHTML(l.nome || l.razao_social || 'Lead')}</td>
+            <td class="px-3 py-2 text-center">
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold ${l.status === 'fechado' || l.fase === 'aprovado' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'}">
+                ${escapeHTML(l.status || l.fase || '-')}
+              </span>
+            </td>
+            <td class="px-3 py-2 text-right font-mono font-bold text-emerald-700">
+              ${l.valor_estimado ? formatBRL(l.valor_estimado) : (l.nota ? `Nota: ${l.nota}` : '-')}
+            </td>
+            <td class="px-3 py-2 text-slate-600 truncate max-w-[200px]" title="${escapeHTML(l.notas || l.interacao || '')}">
+              ${escapeHTML(l.interacao || l.notas || l.area || '-')}
+            </td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    modal.classList.remove('hidden');
+  } catch (e) {
+    showToast(`❌ Falha ao carregar ROI: ${e.message}`);
+  }
+}
+
+function fecharModalROICampanha() {
+  const modal = document.getElementById('modal-dossie-roi');
+  if (modal) modal.classList.add('hidden');
+}
+
+// --- PSEL (PROCESSO SELETIVO MEJ) ---
+
+function filtrarCandidatosPSEL(area) {
+  marketingState.filtroPselArea = area;
+  const areas = ['todas', 'Comercial', 'Projetos', 'Marketing', 'VPGG', 'Jurídico'];
+  areas.forEach(a => {
+    const btn = document.getElementById(`filtro-psel-${a.toLowerCase()}`);
+    if (btn) {
+      if (a === area) {
+        btn.className = "px-2.5 py-1 bg-white border border-slate-300 rounded font-bold text-slate-800 shadow-2xs";
+      } else {
+        btn.className = "px-2.5 py-1 text-slate-600 hover:text-slate-900";
+      }
+    }
+  });
+
+  renderizarCandidatosPSEL();
+}
+
+function renderizarCandidatosPSEL() {
+  const colInscricao = document.getElementById('psel-col-inscricao');
+  const colDinamica = document.getElementById('psel-col-dinamica');
+  const colEntrevista = document.getElementById('psel-col-entrevista');
+  const colOnboarding = document.getElementById('psel-col-onboarding');
+
+  if (!colInscricao || !colDinamica || !colEntrevista || !colOnboarding) return;
+
+  let candidatos = marketingState.candidatos || [];
+  if (marketingState.filtroPselArea !== 'todas') {
+    candidatos = candidatos.filter(c => c.target_area === marketingState.filtroPselArea);
+  }
+
+  // Contadores KPIs
+  const total = candidatos.length;
+  const countInsc = candidatos.filter(c => c.stage === 'inscricao').length;
+  const countDin = candidatos.filter(c => c.stage === 'dinamica').length;
+  const countEnt = candidatos.filter(c => c.stage === 'entrevista').length;
+  const countOnb = candidatos.filter(c => ['onboarding', 'aprovado'].includes(c.stage)).length;
+  const countAprov = candidatos.filter(c => c.stage === 'aprovado').length;
+
+  const elTotal = document.getElementById('kpi-psel-total');
+  const elDin = document.getElementById('kpi-psel-dinamica');
+  const elEnt = document.getElementById('kpi-psel-entrevista');
+  const elOnb = document.getElementById('kpi-psel-onboarding');
+  const elAprov = document.getElementById('kpi-psel-aprovados');
+
+  if (elTotal) elTotal.innerText = total;
+  if (elDin) elDin.innerText = countDin;
+  if (elEnt) elEnt.innerText = countEnt;
+  if (elOnb) elOnb.innerText = countOnb;
+  if (elAprov) elAprov.innerText = countAprov;
+
+  const cInsc = document.getElementById('psel-count-inscricao');
+  const cDin = document.getElementById('psel-count-dinamica');
+  const cEnt = document.getElementById('psel-count-entrevista');
+  const cOnb = document.getElementById('psel-count-onboarding');
+
+  if (cInsc) cInsc.innerText = countInsc;
+  if (cDin) cDin.innerText = countDin;
+  if (cEnt) cEnt.innerText = countEnt;
+  if (cOnb) cOnb.innerText = countOnb;
+
+  const areaColors = {
+    'Comercial': 'bg-sky-100 text-sky-800 border-sky-300',
+    'Projetos': 'bg-indigo-100 text-indigo-800 border-indigo-300',
+    'Marketing': 'bg-pink-100 text-pink-800 border-pink-300',
+    'VPGG': 'bg-purple-100 text-purple-800 border-purple-300',
+    'Jurídico': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+    'Tesouraria': 'bg-amber-100 text-amber-800 border-amber-300'
+  };
+
+  const compColors = {
+    'Orientação para Resultados': 'bg-pink-50 text-pink-700 border-pink-200',
+    'Gestão': 'bg-blue-50 text-blue-700 border-blue-200',
+    'Liderança': 'bg-purple-50 text-purple-700 border-purple-200',
+    'Autoconhecimento': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    'Visão Sistêmica': 'bg-amber-50 text-amber-700 border-amber-200'
+  };
+
+  function renderCard(c) {
+    const areaBadge = areaColors[c.target_area] || 'bg-slate-100 text-slate-800 border-slate-300';
+    const compBadge = compColors[c.competency_focus] || 'bg-slate-50 text-slate-700 border-slate-200';
+
+    return `
+      <div class="glass-card rounded-xl p-3.5 border shadow-2xs space-y-2.5 bg-white/95 hover:shadow-xs transition">
+        <div class="flex items-start justify-between gap-1">
+          <div>
+            <h5 class="font-bold text-xs text-slate-900 leading-snug">${escapeHTML(c.name)}</h5>
+            <span class="text-[10px] text-slate-400 font-mono block">${escapeHTML(c.course)} • ${escapeHTML(c.period || 'Graduando')}</span>
+          </div>
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${areaBadge}">
+            ${escapeHTML(c.target_area)}
+          </span>
+        </div>
+
+        <div class="flex items-center justify-between text-[11px] bg-slate-50 p-1.5 rounded-lg border border-slate-100 font-mono">
+          <span title="Nota Dinâmica">Dinâmica: <strong>${c.score_dinamica > 0 ? c.score_dinamica : '-'}</strong></span>
+          <span title="Nota Entrevista">Entrevista: <strong>${c.score_entrevista > 0 ? c.score_entrevista : '-'}</strong></span>
+        </div>
+
+        <div>
+          <span class="text-[9px] uppercase font-bold text-slate-400 block tracking-wider">Competência Brasil Júnior:</span>
+          <span class="inline-block mt-0.5 px-2 py-0.5 rounded text-[10px] font-bold border ${compBadge}">
+            🎯 ${escapeHTML(c.competency_focus || 'Gestão')}
+          </span>
+        </div>
+
+        ${c.notes ? `<p class="text-[11px] text-slate-500 italic bg-slate-50/50 p-1.5 rounded border border-slate-100 truncate" title="${escapeHTML(c.notes)}">"${escapeHTML(c.notes)}"</p>` : ''}
+
+        <div class="pt-2 border-t border-slate-100 flex flex-col gap-1.5">
+          <div class="flex items-center justify-between gap-1">
+            <select onchange="avancarEstagioPSEL(${c.id}, this.value)" class="text-[10px] border border-slate-200 rounded px-1.5 py-1 bg-white font-medium text-slate-700">
+              <option value="inscricao" ${c.stage === 'inscricao' ? 'selected' : ''}>1. Inscrição</option>
+              <option value="dinamica" ${c.stage === 'dinamica' ? 'selected' : ''}>2. Dinâmica</option>
+              <option value="entrevista" ${c.stage === 'entrevista' ? 'selected' : ''}>3. Entrevista</option>
+              <option value="onboarding" ${c.stage === 'onboarding' ? 'selected' : ''}>4. Onboarding</option>
+              <option value="aprovado" ${c.stage === 'aprovado' ? 'selected' : ''}>5. Aprovado</option>
+            </select>
+            <button onclick="excluirCandidatoPSEL(${c.id})" title="Excluir" class="text-slate-400 hover:text-rose-600 p-1 text-xs">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+
+          ${c.stage !== 'aprovado' ? `
+            <button type="button" onclick="aprovarEOnboardCandidato(${c.id}, '${escapeHTML(c.name)}', '${escapeHTML(c.target_area)}', '${escapeHTML(c.competency_focus || 'Gestão')}')" class="w-full bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white font-bold text-[10px] py-1.5 px-2 rounded-lg shadow-2xs flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-graduation-cap text-yellow-300"></i> Aprovar & Onboard VPGG (1-Clique)
+            </button>
+          ` : `
+            <div class="text-center text-[10px] font-bold text-emerald-700 bg-emerald-50 py-1 rounded border border-emerald-200 flex items-center justify-center gap-1">
+              <i class="fa-solid fa-circle-check"></i> Membro Homologado VPGG
+            </div>
+          `}
+        </div>
+      </div>
+    `;
+  }
+
+  const renderCol = (list, colEl, emptyText) => {
+    if (list.length === 0) {
+      colEl.innerHTML = `<div class="p-4 text-center text-slate-400 text-xs italic">${emptyText}</div>`;
+    } else {
+      colEl.innerHTML = list.map(renderCard).join('');
+    }
+  };
+
+  renderCol(candidatos.filter(c => c.stage === 'inscricao'), colInscricao, 'Nenhum candidato em inscrição');
+  renderCol(candidatos.filter(c => c.stage === 'dinamica'), colDinamica, 'Nenhum candidato em dinâmica');
+  renderCol(candidatos.filter(c => c.stage === 'entrevista'), colEntrevista, 'Nenhum candidato em entrevista');
+  renderCol(candidatos.filter(c => ['onboarding', 'aprovado'].includes(c.stage)), colOnboarding, 'Nenhum candidato em onboarding');
+}
+
+function abrirModalNovoCandidatoPSEL() {
+  const modal = document.getElementById('modal-novo-candidato-psel');
+  const form = document.getElementById('form-novo-candidato-psel');
+  if (modal && form) {
+    form.reset();
+    document.getElementById('psel_id').value = '';
+    modal.classList.remove('hidden');
+  }
+}
+
+function fecharModalNovoCandidatoPSEL() {
+  const modal = document.getElementById('modal-novo-candidato-psel');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function salvarCandidatoPSEL(event) {
+  event.preventDefault();
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) {
+    showToast("🔒 Faça login para gerenciar candidatos do PSEL.");
+    return;
+  }
+
+  const payload = {
+    name: document.getElementById('psel_nome').value.trim(),
+    email: document.getElementById('psel_email').value.trim().toLowerCase(),
+    phone: document.getElementById('psel_phone').value.trim(),
+    course: document.getElementById('psel_course').value.trim() || 'Direito',
+    period: document.getElementById('psel_period').value.trim(),
+    target_area: document.getElementById('psel_target_area').value,
+    stage: document.getElementById('psel_stage').value,
+    competency_focus: document.getElementById('psel_competency_focus').value,
+    score_dinamica: parseFloat(document.getElementById('psel_score_dinamica').value) || 0.0,
+    score_entrevista: parseFloat(document.getElementById('psel_score_entrevista').value) || 0.0,
+    interviewer: document.getElementById('psel_interviewer').value.trim(),
+    notes: document.getElementById('psel_notes').value.trim(),
+    tenant_id: 'edv_jr'
+  };
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/marketing/psel/candidates`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      fecharModalNovoCandidatoPSEL();
+      showToast("🎉 Candidato cadastrado com sucesso no funil PSEL!");
+      await carregarModuloMarketing();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Erro: ${err.detail || 'Não foi possível salvar o candidato.'}`);
+    }
+  } catch (e) {
+    showToast(`❌ Erro de conexão: ${e.message}`);
+  }
+}
+
+async function avancarEstagioPSEL(candidateId, newStage) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/marketing/psel/candidates/${candidateId}/stage`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ stage: newStage })
+    });
+
+    if (res.ok) {
+      showToast(`🔄 Estágio atualizado para: ${newStage.toUpperCase()}`);
+      await carregarModuloMarketing();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Erro: ${err.detail || 'Falha ao atualizar estágio.'}`);
+    }
+  } catch (e) {
+    showToast(`❌ Erro de conexão: ${e.message}`);
+  }
+}
+
+async function aprovarEOnboardCandidato(candidateId, nome, area, competencia) {
+  const msg = `Deseja aprovar e homologar o candidato ${nome} para a área ${area}?\n\n` +
+              `Esta ação automatizada executará:\n` +
+              `1. Criação do perfil institucional de membro em users;\n` +
+              `2. Geração do PDI oficial em pdis com meta em 90 dias ancorada na competência Brasil Júnior '${competencia}';\n` +
+              `3. Atualização do status para APROVADO com registro imutável em auditoria forense.`;
+
+  if (!confirm(msg)) return;
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/marketing/psel/candidates/${candidateId}/approve-and-onboard`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      showToast(`🚀 Sucesso! ${nome} foi migrado(a) para VPGG. E-mail: ${data.email_institucional}`);
+      await carregarModuloMarketing();
+      if (typeof carregarPDIsVPGG === 'function') carregarPDIsVPGG();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Falha no Onboarding: ${err.detail || 'Erro ao homologar candidato.'}`);
+    }
+  } catch (e) {
+    showToast(`❌ Erro de conexão: ${e.message}`);
+  }
+}
+
+async function excluirCandidatoPSEL(candidateId) {
+  if (!confirm("⚠️ Confirma a exclusão deste candidato do processo seletivo?")) return;
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/marketing/psel/candidates/${candidateId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      showToast("🗑️ Candidato removido.");
+      await carregarModuloMarketing();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Erro: ${err.detail || 'Falha ao remover candidato.'}`);
+    }
+  } catch (e) {
+    showToast(`❌ Erro: ${e.message}`);
+  }
+}
+
+// --- BRAND KIT (REPOSITÓRIO DE ATIVOS OFICIAIS) ---
+
+function filtrarBrandKit(cat) {
+  marketingState.filtroBrandKitCat = cat;
+  const cats = ['todos', 'logo', 'manual_marca', 'pitch_deck', 'proposta_comercial', 'apresentacao_institucional', 'papelaria'];
+  cats.forEach(c => {
+    const btn = document.getElementById(`filtro-bk-${c}`);
+    if (btn) {
+      if (c === cat) {
+        btn.className = "px-2.5 py-1 bg-white border border-slate-300 rounded font-bold text-slate-800 shadow-2xs";
+      } else {
+        btn.className = "px-2.5 py-1 text-slate-600 hover:text-slate-900";
+      }
+    }
+  });
+
+  renderizarBrandKit();
+}
+
+function renderizarBrandKit() {
+  const container = document.getElementById('grid-brand-assets');
+  if (!container) return;
+
+  let assets = marketingState.brandAssets || [];
+  if (marketingState.filtroBrandKitCat !== 'todos') {
+    assets = assets.filter(a => a.category === marketingState.filtroBrandKitCat);
+  }
+
+  if (assets.length === 0) {
+    container.innerHTML = `
+      <div class="col-span-full p-8 text-center text-slate-400 glass-card rounded-xl">
+        <i class="fa-solid fa-palette text-2xl text-slate-300 mb-2 block"></i>
+        Nenhum ativo oficial de marca encontrado nesta categoria.
+      </div>
+    `;
+    return;
+  }
+
+  const formatIcons = {
+    'PDF': { icon: 'fa-file-pdf', color: 'text-rose-600', bg: 'bg-rose-50 border-rose-200' },
+    'PPTX': { icon: 'fa-file-powerpoint', color: 'text-amber-600', bg: 'bg-amber-50 border-amber-200' },
+    'DOCX': { icon: 'fa-file-word', color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' },
+    'SVG': { icon: 'fa-bezier-curve', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' },
+    'PNG': { icon: 'fa-image', color: 'text-indigo-600', bg: 'bg-indigo-50 border-indigo-200' },
+    'FIGMA': { icon: 'fa-figma', color: 'text-purple-600', bg: 'bg-purple-50 border-purple-200' }
+  };
+
+  const categoryNames = {
+    'logo': 'Logotipo Oficial',
+    'manual_marca': 'Manual de Marca (MIV)',
+    'pitch_deck': 'Pitch Comercial',
+    'proposta_comercial': 'Proposta / Minuta Contratual',
+    'apresentacao_institucional': 'Apresentação Institucional',
+    'papelaria': 'Papelaria & Timbrado',
+    'outros': 'Ativo Complementar'
+  };
+
+  container.innerHTML = assets.map(a => {
+    const fmt = formatIcons[a.file_format] || { icon: 'fa-file', color: 'text-slate-600', bg: 'bg-slate-50 border-slate-200' };
+
+    return `
+      <div class="glass-card rounded-xl p-4 flex flex-col justify-between space-y-3 shadow-2xs hover:shadow-xs transition border-t-2 border-blue-500">
+        <div>
+          <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold border font-mono ${fmt.bg} ${fmt.color}">
+              <i class="fa-solid ${fmt.icon} mr-1"></i> ${escapeHTML(a.file_format)}
+            </span>
+            <div class="flex items-center gap-1.5 text-[10px]">
+              <span class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono font-bold">${escapeHTML(a.version || 'v1.0')}</span>
+              ${a.is_official ? '<span class="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded font-bold" title="Homologado Diretoria">✓ Oficial</span>' : ''}
+            </div>
+          </div>
+
+          <div class="mt-2.5">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 block">${categoryNames[a.category] || a.category}</span>
+            <h4 class="font-bold text-xs text-slate-900 leading-snug mt-0.5">${escapeHTML(a.title)}</h4>
+            <p class="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">${escapeHTML(a.description || 'Ativo padronizado para uso corporativo em conformidade com as diretrizes do MIV.')}</p>
+          </div>
+
+          ${a.tags ? `
+            <div class="mt-2 flex flex-wrap gap-1">
+              ${a.tags.split(',').map(t => `<span class="bg-slate-100 text-slate-600 text-[9px] px-1.5 py-0.5 rounded">#${escapeHTML(t.trim())}</span>`).join('')}
+            </div>
+          ` : ''}
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+          <button onclick="copiarLinkBrandKit('${escapeHTML(a.file_url)}')" class="flex-1 bg-slate-800 hover:bg-slate-900 text-white font-bold text-[11px] py-1.5 px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition">
+            <i class="fa-solid fa-copy"></i> Copiar Link (Drive)
+          </button>
+          <a href="${escapeHTML(a.file_url)}" target="_blank" rel="noopener noreferrer" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Abrir Link Original">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
+          <button onclick="excluirAtivoBrandKit(${a.id})" class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg transition" title="Excluir Ativo">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function copiarLinkBrandKit(url) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => {
+      showToast("📋 Link do ativo copiado para a área de transferência!");
+    }).catch(() => {
+      prompt("Copie o link abaixo:", url);
+    });
+  } else {
+    prompt("Copie o link abaixo:", url);
+  }
+}
+
+function abrirModalNovoAtivoBrandKit() {
+  const modal = document.getElementById('modal-novo-ativo-brandkit');
+  const form = document.getElementById('form-novo-ativo-brandkit');
+  if (modal && form) {
+    form.reset();
+    document.getElementById('asset_id').value = '';
+    modal.classList.remove('hidden');
+  }
+}
+
+function fecharModalNovoAtivoBrandKit() {
+  const modal = document.getElementById('modal-novo-ativo-brandkit');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function salvarAtivoBrandKit(event) {
+  event.preventDefault();
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) {
+    showToast("🔒 Faça login para cadastrar ativos no Brand Kit.");
+    return;
+  }
+
+  const payload = {
+    title: document.getElementById('asset_title').value.trim(),
+    category: document.getElementById('asset_category').value,
+    file_format: document.getElementById('asset_format').value,
+    version: document.getElementById('asset_version').value.trim(),
+    file_url: document.getElementById('asset_url').value.trim(),
+    description: document.getElementById('asset_description').value.trim(),
+    tags: document.getElementById('asset_tags').value.trim(),
+    is_official: document.getElementById('asset_is_official').checked,
+    tenant_id: 'edv_jr'
+  };
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/marketing/brand-kit`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      fecharModalNovoAtivoBrandKit();
+      showToast("🎨 Ativo cadastrado no Brand Kit com sucesso!");
+      await carregarModuloMarketing();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Erro: ${err.detail || 'Não foi possível cadastrar o ativo.'}`);
+    }
+  } catch (e) {
+    showToast(`❌ Erro de conexão: ${e.message}`);
+  }
+}
+
+async function excluirAtivoBrandKit(assetId) {
+  if (!confirm("⚠️ Tem certeza que deseja excluir este ativo do Brand Kit?")) return;
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/marketing/brand-kit/${assetId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      showToast("🗑️ Ativo removido do Brand Kit.");
+      await carregarModuloMarketing();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Erro: ${err.detail || 'Falha ao excluir ativo.'}`);
+    }
+  } catch (e) {
+    showToast(`❌ Erro de conexão: ${e.message}`);
+  }
+}
+
+// --- ANALYTICS DE MARKETING ---
+
+function renderizarAnalyticsMarketing() {
+  const container = document.getElementById('grid-canais-analytics');
+  if (!container) return;
+
+  const analytics = marketingState.analytics;
+  const canais = analytics ? analytics.desempenho_canais : {};
+
+  const canaisDef = [
+    { key: 'instagram', label: 'Instagram / Meta', icon: 'fa-brands fa-instagram text-pink-600', border: 'border-pink-500' },
+    { key: 'linkedin', label: 'LinkedIn B2B', icon: 'fa-brands fa-linkedin text-blue-600', border: 'border-blue-500' },
+    { key: 'outbound', label: 'Outbound / Radar', icon: 'fa-solid fa-phone text-emerald-600', border: 'border-emerald-500' },
+    { key: 'indicacao', label: 'Indicação / Parcerias', icon: 'fa-solid fa-handshake text-indigo-600', border: 'border-indigo-500' }
+  ];
+
+  container.innerHTML = canaisDef.map(c => {
+    const dados = canais[c.key] || { leads: 0, fechados: 0, custo: 0, receita: 0, roi: 0 };
+    return `
+      <div class="glass-card rounded-xl p-4 border-l-4 ${c.border} shadow-2xs space-y-2">
+        <div class="flex items-center justify-between text-xs font-bold text-slate-800">
+          <span><i class="${c.icon} mr-1"></i> ${c.label}</span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-mono ${dados.roi >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+            ROI: ${dados.roi > 0 ? `+${dados.roi}%` : `${dados.roi}%`}
+          </span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 pt-2 text-[11px] font-mono">
+          <div>
+            <span class="text-slate-400 block text-[10px]">Leads Captados</span>
+            <span class="font-bold text-slate-800">${dados.leads}</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block text-[10px]">Fechados</span>
+            <span class="font-bold text-emerald-700">${dados.fechados}</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block text-[10px]">Custo Total</span>
+            <span class="font-bold text-slate-700">${formatBRL(dados.custo)}</span>
+          </div>
+          <div>
+            <span class="text-slate-400 block text-[10px]">Receita</span>
+            <span class="font-bold text-emerald-700">${formatBRL(dados.receita)}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ==============================================================================
 // 6. INICIALIZAÇÃO DEFINITIVA DO ECOSSISTEMA
 // ==============================================================================
 function initApp() {
@@ -4990,6 +5950,7 @@ function initApp() {
   carregarFollowupsCRM();
   popularSelectsVPGG();
   carregarMetasPE();
+  carregarModuloMarketing();
 }
 
 document.addEventListener('DOMContentLoaded', initApp);

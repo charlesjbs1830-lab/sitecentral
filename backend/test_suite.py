@@ -63,6 +63,11 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         assert res.status_code == 200, res.text
         cls.tokens["assessor_vpgg"] = res.json()["access_token"]
 
+        # 7. Assessor Marketing: Alicia (Marketing)
+        res = cls.client.post("/api/auth/login", json={"email": "alicia.athayde@edvjr.com.br", "password": "edv2026!"})
+        assert res.status_code == 200, res.text
+        cls.tokens["assessor_marketing"] = res.json()["access_token"]
+
     def test_01_user_schema_and_roles(self):
         """Verifica se o esquema de usuários possui colunas area e role estritas"""
         conn = get_connection()
@@ -900,5 +905,230 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         self.assertIn("capacitacoes", op_data)
         self.assertIn("planilhas_drive", op_data)
 
+    def test_27_marketing_campaigns_and_roi_attribution(self):
+        """Valida criação de campanhas, métricas automáticas de ROI, CPL, CAC e blindagem RBAC"""
+        token_pres = self.tokens["presidente"]
+        token_mkt = self.tokens["assessor_marketing"]
+        token_proj = self.tokens["assessor_projetos"]
+
+        # 1. Assessor de Projetos tenta criar campanha de Marketing -> 403 Forbidden
+        payload_camp = {
+            "name": "Campanha Teste Não Autorizada",
+            "type": "captacao_projetos",
+            "channel": "instagram",
+            "budget": 500.0,
+            "actual_cost": 250.0,
+            "responsible": "Alice Mizuki"
+        }
+        res_blocked = self.client.post("/api/marketing/campaigns", json=payload_camp, headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res_blocked.status_code, 403)
+
+        # 2. Assessora de Marketing cria campanha autorizada -> 201 Created
+        payload_valid = {
+            "name": "Captação Startups Hub ES 2026",
+            "type": "captacao_projetos",
+            "channel": "linkedin",
+            "status": "ativa",
+            "budget": 800.0,
+            "actual_cost": 300.0,
+            "target_leads": 50,
+            "responsible": "Alicia Athayde",
+            "description": "Prospecção direcionada a fundadores de startups e empresas de tecnologia."
+        }
+        res_create = self.client.post("/api/marketing/campaigns", json=payload_valid, headers={"Authorization": f"Bearer {token_mkt}"})
+        self.assertEqual(res_create.status_code, 201)
+        camp_data = res_create.json()
+        camp_id = camp_data["id"]
+        self.assertEqual(camp_data["name"], "Captação Startups Hub ES 2026")
+        self.assertEqual(camp_data["channel"], "linkedin")
+        self.assertEqual(camp_data["actual_cost"], 300.0)
+        self.assertIn("roi", camp_data)
+        self.assertIn("cpl", camp_data)
+
+        # 3. Qualquer membro autenticado pode consultar campanhas (GET)
+        res_list = self.client.get("/api/marketing/campaigns", headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res_list.status_code, 200)
+        campaigns = res_list.json()
+        self.assertGreaterEqual(len(campaigns), 1)
+
+        # 4. Consulta dossiê detalhado de ROI
+        res_roi = self.client.get(f"/api/marketing/campaigns/{camp_id}/roi", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_roi.status_code, 200)
+        roi_resp = res_roi.json()
+        self.assertEqual(roi_resp["status"], "success")
+        self.assertIn("metricas", roi_resp["data"])
+        self.assertIn("detalhe_leads", roi_resp["data"])
+
+        # 5. Atualização de campanha pela Assessora de Marketing -> 200 OK
+        res_up = self.client.put(
+            f"/api/marketing/campaigns/{camp_id}",
+            json={"actual_cost": 450.0, "status": "concluida"},
+            headers={"Authorization": f"Bearer {token_mkt}"}
+        )
+        self.assertEqual(res_up.status_code, 200)
+        self.assertEqual(res_up.json()["actual_cost"], 450.0)
+        self.assertEqual(res_up.json()["status"], "concluida")
+
+    def test_28_psel_recruitment_funnel_and_rbac(self):
+        """Valida funil do Processo Seletivo (Inscrição -> Dinâmica -> Entrevista -> Onboarding) e RBAC"""
+        token_com = self.tokens["assessor_comercial"]
+        token_vpgg = self.tokens["assessor_vpgg"]
+        token_mkt = self.tokens["assessor_marketing"]
+        token_pres = self.tokens["presidente"]
+
+        # 1. Assessor Comercial sem permissão tenta listar candidatos -> 403 Forbidden
+        res_blocked = self.client.get("/api/marketing/psel/candidates", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_blocked.status_code, 403)
+
+        # 2. VPGG lista candidatos -> 200 OK
+        res_vpgg = self.client.get("/api/marketing/psel/candidates", headers={"Authorization": f"Bearer {token_vpgg}"})
+        self.assertEqual(res_vpgg.status_code, 200)
+        self.assertIsInstance(res_vpgg.json(), list)
+
+        # 3. Marketing cadastra novo candidato no funil -> 201 Created
+        cand_payload = {
+            "name": "Leonardo Da Vinci Junior",
+            "email": "leonardo.vinci@email.com",
+            "phone": "(27) 99123-4567",
+            "course": "Direito",
+            "period": "2º Período",
+            "stage": "inscricao",
+            "target_area": "Projetos",
+            "score_dinamica": 9.1,
+            "score_entrevista": 9.3,
+            "interviewer": "Laura",
+            "competency_focus": "Visão Sistêmica",
+            "notes": "Candidato proativo com interesse em direito marcário."
+        }
+        res_cand = self.client.post("/api/marketing/psel/candidates", json=cand_payload, headers={"Authorization": f"Bearer {token_mkt}"})
+        self.assertEqual(res_cand.status_code, 201)
+        new_cand = res_cand.json()
+        cand_id = new_cand["id"]
+        self.assertEqual(new_cand["stage"], "inscricao")
+
+        # 4. Transição de estágio: avança para 'dinamica' e depois 'entrevista'
+        res_stage = self.client.put(
+            f"/api/marketing/psel/candidates/{cand_id}/stage",
+            json={"stage": "entrevista", "notes": "Aprovado na dinâmica em grupo com louvor"},
+            headers={"Authorization": f"Bearer {token_vpgg}"}
+        )
+        self.assertEqual(res_stage.status_code, 200)
+        self.assertEqual(res_stage.json()["stage"], "entrevista")
+        self.assertIn("louvor", res_stage.json()["notes"])
+
+    def test_29_psel_candidate_one_click_onboarding_to_vpgg_and_pdi(self):
+        """Valida a migração em 1 clique do candidato aprovado para users e geração de PDI com competência Brasil Júnior"""
+        token_vpgg = self.tokens["assessor_vpgg"]
+
+        # 1. Cria candidato específico para o teste de onboarding
+        cand_payload = {
+            "name": "Mariana Barcellos MEJ",
+            "email": "mariana.barcellos@gmail.com",
+            "phone": "(27) 99222-3344",
+            "course": "Direito",
+            "period": "3º Período",
+            "stage": "entrevista",
+            "target_area": "Comercial",
+            "score_dinamica": 9.4,
+            "score_entrevista": 9.6,
+            "competency_focus": "Orientação para Resultados",
+            "notes": "Destaque absoluto em negociação e fit cultural."
+        }
+        res_cand = self.client.post("/api/marketing/psel/candidates", json=cand_payload, headers={"Authorization": f"Bearer {token_vpgg}"})
+        self.assertEqual(res_cand.status_code, 201)
+        cand_id = res_cand.json()["id"]
+
+        # 2. Executa a migração em 1 clique para Onboarding
+        res_onboard = self.client.post(
+            f"/api/marketing/psel/candidates/{cand_id}/approve-and-onboard",
+            headers={"Authorization": f"Bearer {token_vpgg}"}
+        )
+        self.assertEqual(res_onboard.status_code, 200)
+        onboard_data = res_onboard.json()
+        self.assertEqual(onboard_data["status"], "success")
+        self.assertEqual(onboard_data["area"], "Comercial")
+        self.assertEqual(onboard_data["competencia_brasil_junior"], "Orientação para Resultados")
+        inst_email = onboard_data["email_institucional"]
+        self.assertTrue(inst_email.endswith("@edvjr.com.br"))
+
+        # 3. Verifica no SQLite se o usuário foi criado com papel assessor na área Comercial
+        conn = get_connection()
+        user_row = conn.execute("SELECT email, area, role, cargo FROM users WHERE email = ?;", (inst_email,)).fetchone()
+        self.assertIsNotNone(user_row)
+        self.assertEqual(user_row["area"], "Comercial")
+        self.assertEqual(user_row["role"], "assessor")
+
+        # 4. Verifica no SQLite se o PDI foi criado com competência oficial Brasil Júnior
+        pdi_row = conn.execute("SELECT * FROM pdis WHERE id = ?;", (onboard_data["pdi_id"],)).fetchone()
+        self.assertIsNotNone(pdi_row)
+        self.assertEqual(pdi_row["competency_mej"], "Orientação para Resultados")
+        self.assertEqual(pdi_row["user_email"], inst_email)
+        self.assertEqual(pdi_row["status"], "em_andamento")
+        conn.close()
+
+    def test_30_brand_kit_repository_and_rbac(self):
+        """Valida repositório de Brand Kit, visualização por qualquer membro e blindagem de criação/edição"""
+        token_proj = self.tokens["assessor_projetos"]
+        token_mkt = self.tokens["assessor_marketing"]
+        token_pres = self.tokens["presidente"]
+
+        # 1. Qualquer membro pode visualizar os ativos de marca oficiais
+        res_assets = self.client.get("/api/marketing/brand-kit", headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res_assets.status_code, 200)
+        assets = res_assets.json()
+        self.assertGreaterEqual(len(assets), 1)
+
+        # 2. Assessor de Projetos tenta adicionar novo ativo de marca -> 403 Forbidden
+        asset_payload = {
+            "title": "Apresentação Não Autorizada",
+            "category": "pitch_deck",
+            "file_format": "PPTX",
+            "file_url": "https://drive.google.com/exemplo"
+        }
+        res_blocked = self.client.post("/api/marketing/brand-kit", json=asset_payload, headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res_blocked.status_code, 403)
+
+        # 3. Assessora de Marketing adiciona novo ativo oficial -> 201 Created
+        asset_valid = {
+            "title": "Pitch Comercial Registro de Software MEJ 2026",
+            "category": "pitch_deck",
+            "file_format": "PPTX",
+            "version": "v1.0",
+            "file_url": "https://drive.google.com/pitch_software_2026",
+            "description": "Pitch oficial para venda de registros de programa de computador e contratos de software.",
+            "tags": "software, inpi, comercial, pitch",
+            "is_official": True
+        }
+        res_create = self.client.post("/api/marketing/brand-kit", json=asset_valid, headers={"Authorization": f"Bearer {token_mkt}"})
+        self.assertEqual(res_create.status_code, 201)
+        created_asset = res_create.json()
+        asset_id = created_asset["id"]
+        self.assertEqual(created_asset["title"], "Pitch Comercial Registro de Software MEJ 2026")
+
+        # 4. Presidente edita o ativo -> 200 OK
+        res_edit = self.client.put(
+            f"/api/marketing/brand-kit/{asset_id}",
+            json={"version": "v1.1", "description": "Atualizado com novas regras INPI 2026"},
+            headers={"Authorization": f"Bearer {token_pres}"}
+        )
+        self.assertEqual(res_edit.status_code, 200)
+        self.assertEqual(res_edit.json()["version"], "v1.1")
+
+    def test_31_marketing_dashboard_analytics(self):
+        """Valida endpoint analítico consolidado do dashboard de marketing"""
+        token_com = self.tokens["assessor_comercial"]
+        res = self.client.get("/api/marketing/dashboard", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res.status_code, 200)
+        dash_data = res.json()
+        self.assertEqual(dash_data["status"], "success")
+        data = dash_data["data"]
+        self.assertIn("total_campanhas", data)
+        self.assertIn("investimento_total", data)
+        self.assertIn("roi_global_percentual", data)
+        self.assertIn("psel_metricas", data)
+        self.assertIn("desempenho_canais", data)
+        self.assertGreaterEqual(data["total_campanhas"], 1)
+
 if __name__ == "__main__":
     unittest.main()
+

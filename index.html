@@ -1393,61 +1393,340 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
 
         <!-- 5. MARKETING & CAMPANHAS -->
         <section id="view-marketing" class="hidden space-y-6">
-          <div class="glass-card rounded-xl p-5 border-t-4 border-pink-600">
+          
+          <!-- Banner Principal do Módulo de Marketing -->
+          <div class="glass-card rounded-xl p-5 border-t-4 border-pink-600 shadow-sm">
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <h3 class="text-base font-bold text-slate-800">📢 Marketing Estratégico & Campanhas Comerciais</h3>
-                <p class="text-xs text-slate-500 mt-0.5">Gestão de campanhas institucionais, Maré de Vendas, captação de leads e métricas de engajamento.</p>
+                <div class="flex items-center gap-2">
+                  <span class="text-xl">📢</span>
+                  <h3 class="text-base font-black text-slate-800">Marketing Estratégico, Funil PSEL & Brand Kit (MEJ)</h3>
+                  <span class="bg-pink-100 text-pink-800 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Atribuição de ROI</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-1">Captação comercial de projetos de registro de marcas, pipeline de atração de talentos (PSEL) com migração 1-clique para VPGG e repositório oficial de ativos de marca.</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="carregarModuloMarketing()" class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition flex items-center gap-1.5 border border-slate-200">
+                  <i class="fa-solid fa-arrows-rotate text-pink-600"></i> Atualizar Dados
+                </button>
               </div>
             </div>
           </div>
 
-          <div class="glass-card rounded-xl overflow-hidden shadow-sm">
-            <div class="px-5 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
-              <span class="font-bold text-sm text-slate-800">DataGrid de Campanhas Ativas da Gestão</span>
-              <span class="text-xs text-slate-500">Métricas de Aquisição</span>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="w-full text-xs text-left datagrid-table">
-                <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
-                  <tr>
-                    <th class="px-4 py-3">Campanha / Ação</th>
-                    <th class="px-4 py-3">Canal Principal</th>
-                    <th class="px-4 py-3">Responsável</th>
-                    <th class="px-4 py-3">Status</th>
-                    <th class="px-4 py-3">Meta de Leads</th>
-                    <th class="px-4 py-3">Conversão</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                  <tr>
-                    <td class="px-4 py-3 font-semibold text-slate-800">Maré de Vendas 2026</td>
-                    <td class="px-4 py-3 text-slate-600">Instagram & WhatsApp</td>
-                    <td class="px-4 py-3 text-slate-600">Evelyn & Alicia</td>
-                    <td class="px-4 py-3"><span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded font-bold text-[10px]">Ativa</span></td>
-                    <td class="px-4 py-3 font-mono">150 Leads</td>
-                    <td class="px-4 py-3 font-mono font-bold text-blue-600">18 RMs Fechados</td>
-                  </tr>
-                  <tr>
-                    <td class="px-4 py-3 font-semibold text-slate-800">Reels: "O que acontece se não registrar sua marca"</td>
-                    <td class="px-4 py-3 text-slate-600">Instagram Reels / TikTok</td>
-                    <td class="px-4 py-3 text-slate-600">Chillibão (João P.)</td>
-                    <td class="px-4 py-3"><span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded font-bold text-[10px]">Em Produção</span></td>
-                    <td class="px-4 py-3 font-mono">10.000 Views</td>
-                    <td class="px-4 py-3 font-mono font-bold text-slate-600">Inbound Contínuo</td>
-                  </tr>
-                  <tr>
-                    <td class="px-4 py-3 font-semibold text-slate-800">Parceria Aderes / Centros Comerciais de Vitória</td>
-                    <td class="px-4 py-3 text-slate-600">Eventos Presenciais</td>
-                    <td class="px-4 py-3 text-slate-600">Charles & Evelyn</td>
-                    <td class="px-4 py-3"><span class="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold text-[10px]">Alinhamento</span></td>
-                    <td class="px-4 py-3 font-mono">40 Empresas</td>
-                    <td class="px-4 py-3 font-mono font-bold text-slate-600">Diagnóstico Coletivo</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+          <!-- Seletor de Sub-Abas do Módulo de Marketing -->
+          <div class="flex border-b border-slate-200 gap-4 text-xs font-bold overflow-x-auto">
+            <button onclick="switchMarketingSubtab('campanhas')" id="subtab-mkt-campanhas" class="pb-3 subtab-active flex items-center gap-1.5 whitespace-nowrap">
+              <i class="fa-solid fa-bullhorn text-pink-600"></i> Campanhas & Atribuição de ROI
+              <span id="badge-mkt-campanhas" class="bg-pink-100 text-pink-800 text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold">0</span>
+            </button>
+            <button onclick="switchMarketingSubtab('psel')" id="subtab-mkt-psel" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
+              <i class="fa-solid fa-user-graduate text-purple-600"></i> Funil de Recrutamento PSEL
+              <span id="badge-mkt-psel" class="bg-purple-100 text-purple-800 text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold">0</span>
+            </button>
+            <button onclick="switchMarketingSubtab('brandkit')" id="subtab-mkt-brandkit" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
+              <i class="fa-solid fa-palette text-blue-600"></i> Brand Kit & Repositório de Ativos
+              <span id="badge-mkt-brandkit" class="bg-blue-100 text-blue-800 text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold">0</span>
+            </button>
+            <button onclick="switchMarketingSubtab('analytics')" id="subtab-mkt-analytics" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
+              <i class="fa-solid fa-chart-pie text-emerald-600"></i> Analytics & Performance de Canais
+            </button>
           </div>
+
+          <!-- ========================================== -->
+          <!-- SUB-ABA 1: CAMPANHAS & ATRIBUIÇÃO DE ROI -->
+          <!-- ========================================== -->
+          <div id="mkt-subview-campanhas" class="space-y-6">
+            
+            <!-- KPIs de Campanhas & Atribuição de ROI -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-blue-500 shadow-xs">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Investimento Efetivo</span>
+                <span id="kpi-mkt-investimento" class="text-lg font-black text-slate-800 block mt-1">R$ 0,00</span>
+                <span class="text-[10px] text-blue-600 font-medium">Meta & Ads</span>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-emerald-500 shadow-xs">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Receita Atribuída</span>
+                <span id="kpi-mkt-receita" class="text-lg font-black text-emerald-700 block mt-1">R$ 0,00</span>
+                <span class="text-[10px] text-emerald-600 font-medium">Fechados no CRM</span>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-purple-500 shadow-xs">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">ROI Médio Geral</span>
+                <span id="kpi-mkt-roi" class="text-lg font-black text-purple-700 block mt-1">0,0%</span>
+                <span class="text-[10px] text-purple-600 font-medium">(Receita - Custo) / Custo</span>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-amber-500 shadow-xs">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Leads Atraídos</span>
+                <span id="kpi-mkt-leads" class="text-lg font-black text-amber-700 block mt-1">0</span>
+                <span class="text-[10px] text-amber-600 font-medium">Base CRM Vinculada</span>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-pink-500 shadow-xs">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Conversão em Vendas</span>
+                <span id="kpi-mkt-conversao" class="text-lg font-black text-pink-700 block mt-1">0,0%</span>
+                <span id="kpi-mkt-fechados-info" class="text-[10px] text-pink-600 font-medium">0 RMs Fechados</span>
+              </div>
+            </div>
+
+            <!-- Barra de Filtros e Ações de Campanhas -->
+            <div class="glass-card rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+              <div class="flex flex-wrap items-center gap-2 text-xs">
+                <span class="font-bold text-slate-700">Filtros:</span>
+                <select id="filtro-mkt-tipo" onchange="filtrarCampanhasMarketing()" class="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs font-medium">
+                  <option value="">Todos os Tipos</option>
+                  <option value="captacao_projetos">Captação de Projetos</option>
+                  <option value="processo_seletivo">Processo Seletivo (PSEL)</option>
+                  <option value="branding_institucional">Branding Institucional</option>
+                </select>
+                <select id="filtro-mkt-canal" onchange="filtrarCampanhasMarketing()" class="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs font-medium">
+                  <option value="">Todos os Canais</option>
+                  <option value="instagram">Instagram / Meta</option>
+                  <option value="linkedin">LinkedIn</option>
+                  <option value="outbound">Outbound Ativo</option>
+                  <option value="indicacao">Indicação / Parcerias</option>
+                </select>
+                <select id="filtro-mkt-status" onchange="filtrarCampanhasMarketing()" class="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs font-medium">
+                  <option value="">Todos os Status</option>
+                  <option value="ativa">Ativa</option>
+                  <option value="planejamento">Planejamento</option>
+                  <option value="pausada">Pausada</option>
+                  <option value="concluida">Concluída</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" id="btn-nova-campanha" onclick="abrirModalNovaCampanha()" class="px-3.5 py-2 text-xs bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-lg shadow-sm transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-plus"></i> Nova Campanha
+                </button>
+              </div>
+            </div>
+
+            <!-- Tabela de Campanhas com Atribuição de ROI -->
+            <div class="glass-card rounded-xl overflow-hidden shadow-sm">
+              <div class="px-5 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+                <div>
+                  <span class="font-bold text-sm text-slate-800">Esteira de Campanhas & Atribuição de ROI ao CRM</span>
+                  <p class="text-[11px] text-slate-500 mt-0.5">Cálculo de retorno, custo por lead (CPL) e taxa de conversão integrada aos clientes do SQLite.</p>
+                </div>
+                <span id="mkt-campanhas-contagem" class="text-xs text-slate-500 font-mono font-medium">Carregando campanhas...</span>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-xs text-left datagrid-table">
+                  <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                    <tr>
+                      <th class="px-4 py-3">Campanha / Ação</th>
+                      <th class="px-4 py-3">Tipo & Canal</th>
+                      <th class="px-4 py-3">Responsável</th>
+                      <th class="px-4 py-3 text-right">Investimento</th>
+                      <th class="px-4 py-3 text-center">Leads</th>
+                      <th class="px-4 py-3 text-center">Fechados</th>
+                      <th class="px-4 py-3 text-right">Receita CRM</th>
+                      <th class="px-4 py-3 text-center">ROI %</th>
+                      <th class="px-4 py-3 text-center">Conversão</th>
+                      <th class="px-4 py-3 text-center">Status</th>
+                      <th class="px-4 py-3 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tabela-mkt-campanhas-body" class="divide-y divide-slate-100">
+                    <tr>
+                      <td colspan="11" class="px-4 py-6 text-center text-slate-400">
+                        <i class="fa-solid fa-spinner fa-spin text-lg mb-1 block"></i> Carregando dados de campanhas...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ========================================== -->
+          <!-- SUB-ABA 2: FUNIL DE PROCESSO SELETIVO (PSEL) -->
+          <!-- ========================================== -->
+          <div id="mkt-subview-psel" class="hidden space-y-6">
+            
+            <!-- KPIs do Funil PSEL -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-slate-500 shadow-xs">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Total de Inscritos</span>
+                <span id="kpi-psel-total" class="text-lg font-black text-slate-800 block mt-1">0</span>
+                <span class="text-[10px] text-slate-500 font-medium">Edital Vigente</span>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-blue-500 shadow-xs">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Em Dinâmica</span>
+                <span id="kpi-psel-dinamica" class="text-lg font-black text-blue-700 block mt-1">0</span>
+                <span class="text-[10px] text-blue-600 font-medium">1ª Fase Coletiva</span>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-amber-500 shadow-xs">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Em Entrevista</span>
+                <span id="kpi-psel-entrevista" class="text-lg font-black text-amber-700 block mt-1">0</span>
+                <span class="text-[10px] text-amber-600 font-medium">2ª Fase Individual</span>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-indigo-500 shadow-xs">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Em Onboarding</span>
+                <span id="kpi-psel-onboarding" class="text-lg font-black text-indigo-700 block mt-1">0</span>
+                <span class="text-[10px] text-indigo-600 font-medium">Imersão Trainee</span>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-emerald-500 shadow-xs">
+                <span class="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Aprovados / Membros</span>
+                <span id="kpi-psel-aprovados" class="text-lg font-black text-emerald-700 block mt-1">0</span>
+                <span class="text-[10px] text-emerald-600 font-medium">Migrados para VPGG</span>
+              </div>
+            </div>
+
+            <!-- Barra de Ações do Funil PSEL -->
+            <div class="glass-card rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+              <div class="flex flex-wrap items-center gap-2 text-xs">
+                <span class="font-bold text-slate-700">Filtrar por Área:</span>
+                <button onclick="filtrarCandidatosPSEL('todas')" id="filtro-psel-todas" class="px-2.5 py-1 bg-white border border-slate-300 rounded font-bold text-slate-800 shadow-2xs">Todas</button>
+                <button onclick="filtrarCandidatosPSEL('Comercial')" id="filtro-psel-comercial" class="px-2.5 py-1 text-slate-600 hover:text-slate-900">Comercial</button>
+                <button onclick="filtrarCandidatosPSEL('Projetos')" id="filtro-psel-projetos" class="px-2.5 py-1 text-slate-600 hover:text-slate-900">Projetos</button>
+                <button onclick="filtrarCandidatosPSEL('Marketing')" id="filtro-psel-marketing" class="px-2.5 py-1 text-slate-600 hover:text-slate-900">Marketing</button>
+                <button onclick="filtrarCandidatosPSEL('VPGG')" id="filtro-psel-vpgg" class="px-2.5 py-1 text-slate-600 hover:text-slate-900">VPGG</button>
+                <button onclick="filtrarCandidatosPSEL('Jurídico')" id="filtro-psel-juridico" class="px-2.5 py-1 text-slate-600 hover:text-slate-900">Jurídico</button>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="abrirModalNovoCandidatoPSEL()" class="px-3.5 py-2 text-xs bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow-sm transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-user-plus"></i> Novo Candidato PSEL
+                </button>
+              </div>
+            </div>
+
+            <!-- Kanban do Processo Seletivo (Inscrição -> Dinâmica -> Entrevista -> Onboarding & Aprovados) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+              
+              <!-- Coluna 1: Inscrição -->
+              <div class="bg-slate-100/90 rounded-xl p-3 border border-slate-200 shadow-xs flex flex-col">
+                <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-200">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-slate-400"></span>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800">1. Inscrição Homologada</h4>
+                  </div>
+                  <span id="psel-count-inscricao" class="bg-slate-200 text-slate-800 font-bold px-2 py-0.5 rounded-full text-[11px] font-mono">0</span>
+                </div>
+                <div id="psel-col-inscricao" class="kanban-col space-y-2.5 p-1 min-h-[220px]">
+                  <!-- Injetado dinamicamente -->
+                </div>
+              </div>
+
+              <!-- Coluna 2: Dinâmica em Grupo -->
+              <div class="bg-slate-100/90 rounded-xl p-3 border border-blue-200 shadow-xs flex flex-col">
+                <div class="flex items-center justify-between pb-2 mb-2 border-b border-blue-200">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-blue-900">2. Dinâmica em Grupo</h4>
+                  </div>
+                  <span id="psel-count-dinamica" class="bg-blue-200 text-blue-800 font-bold px-2 py-0.5 rounded-full text-[11px] font-mono">0</span>
+                </div>
+                <div id="psel-col-dinamica" class="kanban-col space-y-2.5 p-1 min-h-[220px]">
+                  <!-- Injetado dinamicamente -->
+                </div>
+              </div>
+
+              <!-- Coluna 3: Entrevista Individual -->
+              <div class="bg-slate-100/90 rounded-xl p-3 border border-amber-200 shadow-xs flex flex-col">
+                <div class="flex items-center justify-between pb-2 mb-2 border-b border-amber-200">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-amber-500"></span>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-amber-900">3. Entrevista Individual</h4>
+                  </div>
+                  <span id="psel-count-entrevista" class="bg-amber-200 text-amber-800 font-bold px-2 py-0.5 rounded-full text-[11px] font-mono">0</span>
+                </div>
+                <div id="psel-col-entrevista" class="kanban-col space-y-2.5 p-1 min-h-[220px]">
+                  <!-- Injetado dinamicamente -->
+                </div>
+              </div>
+
+              <!-- Coluna 4: Onboarding & Aprovados -->
+              <div class="bg-slate-100/90 rounded-xl p-3 border border-emerald-200 shadow-xs flex flex-col">
+                <div class="flex items-center justify-between pb-2 mb-2 border-b border-emerald-200">
+                  <div class="flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-900">4. Onboarding & VPGG</h4>
+                  </div>
+                  <span id="psel-count-onboarding" class="bg-emerald-200 text-emerald-800 font-bold px-2 py-0.5 rounded-full text-[11px] font-mono">0</span>
+                </div>
+                <div id="psel-col-onboarding" class="kanban-col space-y-2.5 p-1 min-h-[220px]">
+                  <!-- Injetado dinamicamente -->
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+          <!-- ========================================== -->
+          <!-- SUB-ABA 3: BRAND KIT & ATIVOS OFICIAIS -->
+          <!-- ========================================== -->
+          <div id="mkt-subview-brandkit" class="hidden space-y-6">
+            
+            <!-- Barra Superior do Brand Kit -->
+            <div class="glass-card rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xs">
+              <div class="flex flex-wrap items-center gap-1.5 text-xs">
+                <span class="font-bold text-slate-700 mr-1">Categoria:</span>
+                <button onclick="filtrarBrandKit('todos')" id="filtro-bk-todos" class="px-2.5 py-1 bg-white border border-slate-300 rounded font-bold text-slate-800 shadow-2xs">Todos</button>
+                <button onclick="filtrarBrandKit('logo')" id="filtro-bk-logo" class="px-2.5 py-1 text-slate-600 hover:text-slate-900">Logotipos</button>
+                <button onclick="filtrarBrandKit('manual_marca')" id="filtro-bk-manual_marca" class="px-2.5 py-1 text-slate-600 hover:text-slate-900">Manuais de Marca</button>
+                <button onclick="filtrarBrandKit('pitch_deck')" id="filtro-bk-pitch_deck" class="px-2.5 py-1 text-slate-600 hover:text-slate-900">Pitches Comerciais</button>
+                <button onclick="filtrarBrandKit('proposta_comercial')" id="filtro-bk-proposta_comercial" class="px-2.5 py-1 text-slate-600 hover:text-slate-900">Propostas & Minutas</button>
+                <button onclick="filtrarBrandKit('apresentacao_institucional')" id="filtro-bk-apresentacao_institucional" class="px-2.5 py-1 text-slate-600 hover:text-slate-900">Apresentações</button>
+                <button onclick="filtrarBrandKit('papelaria')" id="filtro-bk-papelaria" class="px-2.5 py-1 text-slate-600 hover:text-slate-900">Papelaria Oficial</button>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" id="btn-novo-brand-asset" onclick="abrirModalNovoAtivoBrandKit()" class="px-3.5 py-2 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-sm transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-cloud-arrow-up"></i> Cadastrar Ativo
+                </button>
+              </div>
+            </div>
+
+            <!-- Grade de Ativos do Brand Kit -->
+            <div id="grid-brand-assets" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <!-- Injetado dinamicamente -->
+            </div>
+
+          </div>
+
+          <!-- ========================================== -->
+          <!-- SUB-ABA 4: ANALYTICS & DESEMPENHO DE CANAIS -->
+          <!-- ========================================== -->
+          <div id="mkt-subview-analytics" class="hidden space-y-6">
+            
+            <!-- Cards de Desempenho por Canal -->
+            <div class="glass-card rounded-xl p-5 shadow-xs">
+              <h4 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-chart-simple text-blue-600"></i> Desempenho Comparativo por Canal de Aquisição
+              </h4>
+              <div id="grid-canais-analytics" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <!-- Injetado dinamicamente -->
+              </div>
+            </div>
+
+            <!-- Alinhamento com o Modelo de Crescimento Brasil Júnior -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="glass-card rounded-xl p-5 border-l-4 border-emerald-500 shadow-xs">
+                <span class="text-xs uppercase font-bold text-emerald-800 tracking-wider block">Alinhamento Estratégico MEJ</span>
+                <h4 class="text-sm font-black text-slate-800 mt-1">Cluster 4.0: Conectada, Alto Crescimento e Alto Impacto</h4>
+                <p class="text-xs text-slate-600 mt-2 leading-relaxed">
+                  A aquisição estruturada de marcas via marketing inbound e outbound alimenta o motor de fechamento comercial da EDV Jr., viabilizando a meta federada de faturamento e projetos de alto impacto econômico local.
+                </p>
+                <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>Meta de Conversão: <strong>15% a 25%</strong></span>
+                  <span class="text-emerald-700 font-bold">100% Homologado BJ</span>
+                </div>
+              </div>
+
+              <div class="glass-card rounded-xl p-5 border-l-4 border-purple-500 shadow-xs">
+                <span class="text-xs uppercase font-bold text-purple-800 tracking-wider block">Formação de Lideranças</span>
+                <h4 class="text-sm font-black text-slate-800 mt-1">Modelo de Competências Essenciais da Brasil Júnior</h4>
+                <p class="text-xs text-slate-600 mt-2 leading-relaxed">
+                  Os talentos aprovados no funil de recrutamento ingressam com PDIs diretamente ancorados nos 5 pilares do Movimento Empresa Júnior: <strong>Liderança, Gestão, Autoconhecimento, Visão Sistêmica e Orientação para Resultados</strong>.
+                </p>
+                <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>Trilha de Trainee: <strong>90 Dias</strong></span>
+                  <span class="text-purple-700 font-bold">Ciclo 2026 Ativo</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
         </section>
 
         <!-- 6. PROJETOS (RMs / INPI) DATAGRID COMPLETO -->
@@ -2821,6 +3100,375 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
           Fechar
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVA / EDITAR CAMPANHA DE MARKETING -->
+  <div id="modal-nova-campanha" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-[#0b1d3a] text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-pink-600 flex items-center justify-center font-bold text-white shadow-md text-base">
+            📢
+          </div>
+          <div>
+            <h3 id="modal-campanha-titulo" class="font-bold text-sm text-white">Cadastrar Nova Ação de Marketing & Vendas</h3>
+            <span class="text-[10px] text-pink-300 font-mono">Atribuição de ROI & Captação MEJ</span>
+          </div>
+        </div>
+        <button onclick="fecharModalNovaCampanha()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+      </div>
+
+      <form id="form-nova-campanha" onsubmit="salvarCampanhaMarketing(event)" class="p-6 overflow-y-auto space-y-4 text-xs">
+        <input type="hidden" id="campanha_id" value="">
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Nome da Campanha / Ação *</label>
+          <input type="text" id="campanha_nome" required placeholder="Ex: Maré de Vendas 2026 - RMs & Startups" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500">
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Tipo de Ação *</label>
+            <select id="campanha_tipo" required class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500 font-medium">
+              <option value="captacao_projetos">🎯 Captação de Projetos (RMs / Contratos)</option>
+              <option value="processo_seletivo">🎓 Processo Seletivo (PSEL)</option>
+              <option value="branding_institucional">🏛️ Branding Institucional & Parcerias</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Canal Principal *</label>
+            <select id="campanha_canal" required class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500 font-medium">
+              <option value="instagram">📱 Instagram / Meta Ads</option>
+              <option value="linkedin">💼 LinkedIn B2B</option>
+              <option value="outbound">📞 Outbound Ativo / Radar</option>
+              <option value="indicacao">🤝 Indicação & Parcerias</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Orçamento Previsto (R$)</label>
+            <input type="number" step="0.01" id="campanha_budget" placeholder="0.00" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500 font-mono">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Custo Efetivo Real (R$)</label>
+            <input type="number" step="0.01" id="campanha_custo" placeholder="0.00" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500 font-mono">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Meta de Leads</label>
+            <input type="number" id="campanha_target_leads" placeholder="100" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500 font-mono">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Membro Responsável *</label>
+            <input type="text" id="campanha_responsavel" required placeholder="Ex: Evelyn Roldi" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Status da Campanha</label>
+            <select id="campanha_status" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500 font-medium">
+              <option value="ativa">🟢 Ativa</option>
+              <option value="planejamento">🟡 Em Planejamento</option>
+              <option value="pausada">🟠 Pausada</option>
+              <option value="concluida">🔵 Concluída</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Data Início</label>
+            <input type="date" id="campanha_start_date" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Data Término</label>
+            <input type="date" id="campanha_end_date" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Descrição / Objetivos Estratégicos</label>
+          <textarea id="campanha_descricao" rows="2" placeholder="Detalhes do público-alvo, criativos, mensagens-chave e metas..." class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-pink-500"></textarea>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+          <button type="button" onclick="fecharModalNovaCampanha()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-pink-600 hover:bg-pink-700 text-white font-bold rounded-lg shadow-sm transition flex items-center gap-1.5">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Campanha
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: DOSSIÊ DE ATRIBUIÇÃO DE ROI & LEADS DA CAMPANHA -->
+  <div id="modal-dossie-roi" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-[#0b1d3a] text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center font-bold text-white shadow-md text-base">
+            📈
+          </div>
+          <div>
+            <h3 id="roi-modal-nome-campanha" class="font-bold text-sm text-white">Dossiê de Atribuição de ROI & Conversão</h3>
+            <span id="roi-modal-subtitulo" class="text-[10px] text-purple-300 font-mono">Cálculo de Retorno Econômico MEJ</span>
+          </div>
+        </div>
+        <button onclick="fecharModalROICampanha()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4 text-xs">
+        
+        <!-- Grid de Métricas de ROI -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div class="p-3 bg-slate-50 rounded-xl border border-slate-200">
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Custo Efetivo</span>
+            <span id="roi-detalhe-custo" class="text-lg font-black text-slate-800 block mt-1">R$ 0,00</span>
+            <span class="text-[10px] text-slate-500 font-mono">Investimento</span>
+          </div>
+          <div class="p-3 bg-emerald-50 rounded-xl border border-emerald-200">
+            <span class="text-[10px] uppercase font-bold text-emerald-800 block">Receita Atribuída</span>
+            <span id="roi-detalhe-receita" class="text-lg font-black text-emerald-700 block mt-1">R$ 0,00</span>
+            <span class="text-[10px] text-emerald-600 font-mono">Contratos Fechados</span>
+          </div>
+          <div class="p-3 bg-purple-50 rounded-xl border border-purple-200">
+            <span class="text-[10px] uppercase font-bold text-purple-800 block">ROI Efetivo</span>
+            <span id="roi-detalhe-percentual" class="text-lg font-black text-purple-700 block mt-1">0%</span>
+            <span class="text-[10px] text-purple-600 font-mono">(Receita - Custo) / Custo</span>
+          </div>
+          <div class="p-3 bg-blue-50 rounded-xl border border-blue-200">
+            <span class="text-[10px] uppercase font-bold text-blue-800 block">Custo por Lead (CPL)</span>
+            <span id="roi-detalhe-cpl" class="text-lg font-black text-blue-700 block mt-1">R$ 0,00</span>
+            <span id="roi-detalhe-cac-info" class="text-[10px] text-blue-600 font-mono">CAC: R$ 0,00</span>
+          </div>
+        </div>
+
+        <!-- Tabela de Oportunidades / Leads Vinculados -->
+        <div class="glass-card rounded-xl overflow-hidden border border-slate-200">
+          <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+            <span class="font-bold text-slate-800 text-xs">Leads & Oportunidades Convertidas</span>
+            <span class="text-[10px] text-slate-500 font-mono">Rastreamento Comercial</span>
+          </div>
+          <div class="overflow-x-auto max-h-[260px]">
+            <table class="w-full text-xs text-left datagrid-table">
+              <thead class="bg-slate-100 text-slate-600 uppercase font-semibold border-b border-slate-200 sticky top-0">
+                <tr>
+                  <th class="px-3 py-2">Lead / Razão Social</th>
+                  <th class="px-3 py-2 text-center">Status</th>
+                  <th class="px-3 py-2 text-right">Valor Negociado</th>
+                  <th class="px-3 py-2">Última Interação</th>
+                </tr>
+              </thead>
+              <tbody id="roi-detalhe-leads-body" class="divide-y divide-slate-100">
+                <!-- Injetado dinamicamente -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+        <button type="button" onclick="fecharModalROICampanha()" class="bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs px-4 py-2 rounded-lg transition">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVO CANDIDATO DO PROCESSO SELETIVO (PSEL) -->
+  <div id="modal-novo-candidato-psel" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-[#0b1d3a] text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center font-bold text-white shadow-md text-base">
+            🎓
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Cadastrar Candidato no Funil PSEL 2026</h3>
+            <span class="text-[10px] text-purple-300 font-mono">Alinhamento às Competências Brasil Júnior</span>
+          </div>
+        </div>
+        <button onclick="fecharModalNovoCandidatoPSEL()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+      </div>
+
+      <form id="form-novo-candidato-psel" onsubmit="salvarCandidatoPSEL(event)" class="p-6 overflow-y-auto space-y-4 text-xs">
+        <input type="hidden" id="psel_id" value="">
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Nome Completo do Candidato *</label>
+          <input type="text" id="psel_nome" required placeholder="Ex: Lucas Guimarães Ferreira" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">E-mail *</label>
+            <input type="email" id="psel_email" required placeholder="candidato@email.com" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Telefone / WhatsApp</label>
+            <input type="text" id="psel_phone" placeholder="(27) 99999-0000" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Curso</label>
+            <input type="text" id="psel_course" value="Direito" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Período Acadêmico</label>
+            <input type="text" id="psel_period" placeholder="2º Período" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Área Pretendida *</label>
+            <select id="psel_target_area" required class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium">
+              <option value="Comercial">💼 Comercial & Vendas</option>
+              <option value="Projetos">🛡️ Projetos / RMs (INPI)</option>
+              <option value="Marketing">📣 Marketing</option>
+              <option value="VPGG">👥 Gente & Gestão (VPGG)</option>
+              <option value="Jurídico">⚖️ Jurídico & Compliance</option>
+              <option value="Tesouraria">💰 Tesouraria</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Fase Inicial no Funil</label>
+            <select id="psel_stage" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium">
+              <option value="inscricao">1. Inscrição Homologada</option>
+              <option value="dinamica">2. Dinâmica em Grupo</option>
+              <option value="entrevista">3. Entrevista Individual</option>
+              <option value="onboarding">4. Onboarding / Trainee</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Competência Brasil Júnior Foco *</label>
+            <select id="psel_competency_focus" required class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium">
+              <option value="Orientação para Resultados">🎯 Orientação para Resultados</option>
+              <option value="Gestão">📊 Gestão</option>
+              <option value="Liderança">🦁 Liderança</option>
+              <option value="Autoconhecimento">🧘 Autoconhecimento</option>
+              <option value="Visão Sistêmica">🌐 Visão Sistêmica</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Nota Dinâmica (0-10)</label>
+            <input type="number" step="0.1" min="0" max="10" id="psel_score_dinamica" placeholder="0.0" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Nota Entrevista (0-10)</label>
+            <input type="number" step="0.1" min="0" max="10" id="psel_score_entrevista" placeholder="0.0" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Entrevistador / Líder</label>
+            <input type="text" id="psel_interviewer" placeholder="Ex: Laura" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Parecer dos Avaliadores / Observações</label>
+          <textarea id="psel_notes" rows="2" placeholder="Pontos fortes, fit cultural, oratória e observações técnicas..." class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-purple-500"></textarea>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+          <button type="button" onclick="fecharModalNovoCandidatoPSEL()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow-sm transition flex items-center gap-1.5">
+            <i class="fa-solid fa-user-check"></i> Salvar Candidato
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVO ATIVO DO BRAND KIT -->
+  <div id="modal-novo-ativo-brandkit" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-[#0b1d3a] text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white shadow-md text-base">
+            🎨
+          </div>
+          <div>
+            <h3 id="modal-ativo-titulo" class="font-bold text-sm text-white">Cadastrar Ativo no Brand Kit Oficial</h3>
+            <span class="text-[10px] text-blue-300 font-mono">Controle de Versão & Padronização de Marca</span>
+          </div>
+        </div>
+        <button onclick="fecharModalNovoAtivoBrandKit()" class="text-slate-400 hover:text-white text-lg font-bold p-1">✕</button>
+      </div>
+
+      <form id="form-novo-ativo-brandkit" onsubmit="salvarAtivoBrandKit(event)" class="p-6 overflow-y-auto space-y-4 text-xs">
+        <input type="hidden" id="asset_id" value="">
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Título do Ativo Oficial *</label>
+          <input type="text" id="asset_title" required placeholder="Ex: Manual de Identidade Visual 2026" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Categoria *</label>
+            <select id="asset_category" required class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium">
+              <option value="logo">Logotipo Oficial</option>
+              <option value="manual_marca">Manual de Marca (MIV)</option>
+              <option value="pitch_deck">Pitch Comercial</option>
+              <option value="proposta_comercial">Proposta / Minuta Contrato</option>
+              <option value="apresentacao_institucional">Apresentação Institucional</option>
+              <option value="papelaria">Papelaria / Timbrado</option>
+              <option value="outros">Outros</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Formato *</label>
+            <select id="asset_format" required class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium font-mono">
+              <option value="PDF">PDF</option>
+              <option value="PPTX">PPTX (PowerPoint)</option>
+              <option value="DOCX">DOCX (Word)</option>
+              <option value="SVG">SVG (Vetor)</option>
+              <option value="PNG">PNG Alta Resolução</option>
+              <option value="FIGMA">Figma / Design Link</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Versão *</label>
+            <input type="text" id="asset_version" required value="v1.0" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Link do Arquivo (Google Drive / URL Oficial) *</label>
+          <input type="url" id="asset_url" required placeholder="https://drive.google.com/..." class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono">
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Diretrizes de Uso / Descrição</label>
+          <textarea id="asset_description" rows="2" placeholder="Instruções para a equipe de como utilizar este material em conformidade com o MIV..." class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Tags para Busca Rápida</label>
+          <input type="text" id="asset_tags" placeholder="miv, pitch, inpi, contrato, oficial" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <div class="flex items-center gap-2 pt-1">
+          <input type="checkbox" id="asset_is_official" checked class="w-4 h-4 rounded text-blue-600 focus:ring-blue-500">
+          <label for="asset_is_official" class="text-xs text-slate-700 font-bold">Ativo Oficial Homologado pela Diretoria da EDV Jr.</label>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+          <button type="button" onclick="fecharModalNovoAtivoBrandKit()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition">Cancelar</button>
+          <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-sm transition flex items-center gap-1.5">
+            <i class="fa-solid fa-cloud-arrow-up"></i> Salvar no Brand Kit
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
