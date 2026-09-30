@@ -867,5 +867,38 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         stat_data = res_stat.json()
         self.assertGreater(stat_data["database"]["total_backups"], 0)
 
+    def test_26_drive_sync_and_status(self):
+        """Valida sincronização profunda com Google Drive e endpoint de telemetria /api/drive/status"""
+        token_pres = self.tokens["presidente"]
+
+        # 1. Consulta status da conexão com Google Drive
+        res_status = self.client.get("/api/drive/status", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_status.status_code, 200)
+        status_data = res_status.json()
+        self.assertEqual(status_data["status"], "success")
+        self.assertIn("drive_connected", status_data)
+        self.assertIn("sqlite_records", status_data)
+
+        # 2. Dispara sincronização integral do Google Drive
+        res_sync = self.client.post("/api/drive/sync", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_sync.status_code, 200)
+        sync_payload = res_sync.json()
+        self.assertEqual(sync_payload["status"], "success")
+        self.assertIn("data", sync_payload)
+        sync_info = sync_payload["data"]
+        self.assertGreaterEqual(sync_info.get("rms_total", 0), 80)
+        self.assertGreaterEqual(sync_info.get("transacoes_total", 0), 100)
+        self.assertGreaterEqual(sync_info.get("leads_crm_total", 0), 600)
+
+        # 3. Consulta dados operacionais protegidos e valida novas coleções
+        res_op = self.client.get("/api/data/operational", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_op.status_code, 200)
+        op_data = res_op.json()
+        self.assertIn("contratos", op_data)
+        self.assertIn("selo_ej", op_data)
+        self.assertIn("documentos_oficiais", op_data)
+        self.assertIn("capacitacoes", op_data)
+        self.assertIn("planilhas_drive", op_data)
+
 if __name__ == "__main__":
     unittest.main()

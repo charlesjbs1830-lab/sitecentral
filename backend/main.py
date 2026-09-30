@@ -2249,6 +2249,7 @@ async def get_operational_data(current_user: dict = Depends(get_current_user)) -
     user_role = current_user.get("role", "assessor")
     response_data = {
         "timestamp": data.get("timestamp"),
+        "drive_connected": data.get("drive_connected", False),
         "authenticated_as": {
             "nome": current_user.get("nome"),
             "email": current_user.get("email"),
@@ -2258,13 +2259,124 @@ async def get_operational_data(current_user: dict = Depends(get_current_user)) -
         },
         "rms": data.get("rms", []),
         "crm_leads": data.get("crm_leads", []),
+        "corrida_leads": data.get("corrida_leads", []),
         "fluxo": data.get("fluxo", []),
         "totais_financeiro": data.get("totais_financeiro", {}),
-        "vpgg": data.get("vpgg", []),
-        "selo_ej": data.get("selo_ej", [])
+        "contratos": data.get("contratos", []),
+        "selo_ej": data.get("selo_ej", []),
+        "documentos_oficiais": data.get("documentos_oficiais", []),
+        "capacitacoes": data.get("capacitacoes", []),
+        "desempenho_individual": data.get("desempenho_individual", []),
+        "planilhas_drive": data.get("planilhas_drive", []),
+        "vpgg": data.get("vpgg", [])
     }
     
     return response_data
+
+@app.post(
+    "/api/drive/sync",
+    summary="Disparar sincronização integral e ao vivo com o Google Drive"
+)
+@app.post("/drive/sync", include_in_schema=False)
+async def trigger_drive_sync(current_user: dict = Depends(get_current_user)):
+    """
+    Executa a sincronização profunda de dados do Google Drive:
+    - Controle de RMs (85 processos)
+    - Fluxo de Caixa Mensal e Cora (168+ transações)
+    - CRM Oficial e Corrida ENEJ (950+ leads)
+    - Contratos Assinados (19 contratos)
+    - Documentos do Selo EJ (14 arquivos das 4 fases)
+    - Atualização do banco relacional SQLite e JSON/JS estático
+    """
+    try:
+        try:
+            from sync_legacy_drive import sync_data
+        except ImportError:
+            import sys
+            sys.path.append(BASE_DIR)
+            from sync_legacy_drive import sync_data
+
+        sync_result = sync_data(sync_sqlite=True)
+
+        log_audit(
+            current_user.get("email"),
+            "DRIVE_SYNC_COMPLETED",
+            "/api/drive/sync",
+            200,
+            {
+                "rms": sync_result.get("rms_total"),
+                "leads": sync_result.get("leads_crm_total"),
+                "transacoes": sync_result.get("transacoes_total"),
+                "contratos": sync_result.get("contratos_assinados_total")
+            }
+        )
+
+        return {
+            "status": "success",
+            "message": "Sincronização com o Google Drive corporativo realizada com sucesso.",
+            "data": sync_result
+        }
+    except Exception as e:
+        log_audit(
+            current_user.get("email"),
+            "DRIVE_SYNC_FAILED",
+            "/api/drive/sync",
+            500,
+            str(e)
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Falha na sincronização com o Google Drive: {str(e)}"
+        )
+
+@app.get(
+    "/api/drive/status",
+    summary="Verificar status e integridade da conexão com o Google Drive"
+)
+@app.get("/drive/status", include_in_schema=False)
+async def get_drive_status(current_user: dict = Depends(get_current_user)):
+    drive_shared = r"G:\Drives compartilhados\Gestão 2026 - EDV Jr"
+    drive_meu = r"G:\Meu Drive"
+    is_connected = os.path.exists(drive_shared) or os.path.exists(drive_meu)
+
+    last_sync = None
+    counts = {}
+    if os.path.exists(LEGACY_DATA_PATH):
+        try:
+            with open(LEGACY_DATA_PATH, "r", encoding="utf-8") as f:
+                d = json.load(f)
+                last_sync = d.get("timestamp")
+                counts = {
+                    "rms": len(d.get("rms", [])),
+                    "leads_crm": len(d.get("crm_leads", [])),
+                    "transacoes": len(d.get("fluxo", [])),
+                    "contratos": len(d.get("contratos", [])),
+                    "selo_ej": len(d.get("selo_ej", [])),
+                    "documentos_oficiais": len(d.get("documentos_oficiais", [])),
+                    "capacitacoes": len(d.get("capacitacoes", []))
+                }
+        except Exception:
+            pass
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM client_followups;")
+    db_leads = cursor.fetchone()[0]
+    cursor.execute("SELECT COUNT(*) FROM transactions;")
+    db_transactions = cursor.fetchone()[0]
+    conn.close()
+
+    return {
+        "status": "success",
+        "drive_connected": is_connected,
+        "drive_path": drive_shared if os.path.exists(drive_shared) else drive_meu,
+        "last_sync": last_sync,
+        "cached_counts": counts,
+        "sqlite_records": {
+            "client_followups": db_leads,
+            "transactions": db_transactions
+        }
+    }
 
 # ==============================================================================
 # 7. PLANEJAMENTO ESTRATÉGICO BRASIL JÚNIOR, IMPACTO MEJ E COMPLIANCE

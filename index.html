@@ -257,15 +257,27 @@
           <span id="view-subtitle" class="text-xs text-slate-500 font-medium">Visão global dos eixos estratégicos da EDV Jr.</span>
         </div>
 
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2.5">
+          <!-- Botão Sincronizar Google Drive -->
+          <button id="btn-sync-drive" onclick="sincronizarGoogleDrive()" class="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-lg text-xs shadow-xs transition cursor-pointer" title="Sincronizar todo o sistema com as planilhas e arquivos do Google Drive">
+            <i class="fa-brands fa-google-drive text-amber-300"></i>
+            <span id="btn-sync-drive-text">Sincronizar Drive</span>
+          </button>
+
+          <!-- Status do Drive -->
+          <div id="badge-drive-status" class="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-[11px] text-emerald-700 font-medium">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span id="drive-status-text">Drive: <strong>Conectado (Ao Vivo)</strong></span>
+          </div>
+
           <button onclick="toggleTutorialModal(true)" class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg text-xs text-amber-800 font-bold shadow-xs transition">
-            <span>💡 Como Usar o Sistema</span>
+            <span>💡 Como Usar</span>
           </button>
 
           <!-- Alerta RPI INPI -->
-          <div class="hidden md:flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-[11px] text-blue-700 font-medium">
+          <div class="hidden xl:flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-[11px] text-blue-700 font-medium">
             <span class="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-            <span>Próxima RPI INPI: <strong>Terça-feira</strong></span>
+            <span>RPI INPI: <strong>Terça-feira</strong></span>
           </div>
 
           <!-- Seletor RBAC Sandbox -->
@@ -2067,69 +2079,139 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
           </div>
         </section>
 
-        <!-- 9. BASE DE TUTORIAIS -->
+        <!-- 9. BASE DE TUTORIAIS & CAPACITAÇÕES -->
         <section id="view-tutoriais" class="hidden space-y-6">
-          <div class="glass-card rounded-xl p-5 border-t-4 border-emerald-500">
-            <h3 class="text-base font-bold text-slate-800">📖 Base de Conhecimento e Tutoriais do Google Drive</h3>
-            <p class="text-xs text-slate-500 mt-0.5">Procedimentos operacionais padrão (POPs) mapeados para consulta rápida da equipe.</p>
+          <div class="glass-card rounded-xl p-5 border-t-4 border-emerald-500 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                📖 Base de Conhecimento, Capacitações & Materiais do Google Drive
+                <span class="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">Oficial 2026</span>
+              </h3>
+              <p class="text-xs text-slate-500 mt-0.5">Apostilas, manuais de onboarding, playbooks comerciais, gravações e POPs mapeados diretamente da nuvem.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="sincronizarGoogleDrive()" class="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-2xs flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-arrows-rotate"></i> Atualizar Materiais
+              </button>
+            </div>
           </div>
-          
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="glass-card rounded-xl p-5 border-l-4 border-blue-600">
-              <h4 class="font-bold text-xs text-slate-800">Como Protocolar Pedido de Marca no INPI</h4>
-              <p class="text-xs text-slate-500 mt-1">Passo a passo com emissão de GRU, preenchimento do formulário e upload da logo.</p>
-              <button onclick="openTutorialReader('Como Protocolar Marca no INPI', '04. Projetos/Tutoriais/POP_INPI.gdoc', 'Manual oficial de depósito de marcas.', [{'title':'Gerar GRU','desc':'Acesse o e-INPI e emita a guia código 389.'},{'title':'Preencher Formulário','desc':'Vincule o titular e a classificação de Nice.'},{'title':'Protocolar','desc':'Guarde o número de processo de 9 dígitos.'}])" class="mt-3 text-xs font-bold text-blue-600 hover:underline">Ler Tutorial &rarr;</button>
-            </div>
 
-            <div class="glass-card rounded-xl p-5 border-l-4 border-emerald-600">
-              <h4 class="font-bold text-xs text-slate-800">Rotina Semanal de Conferência da RPI</h4>
-              <p class="text-xs text-slate-500 mt-1">Como cruzar os 85 processos ativos na Revista da Propriedade Industrial toda terça-feira.</p>
-              <button onclick="openTutorialReader('Rotina da RPI', '04. Projetos/RPI_Checklist.gdoc', 'Checklist semanal de acompanhamento.', [{'title':'Baixar PDF','desc':'Acesse o portal do INPI às terças.'},{'title':'Buscar Pedidos','desc':'Faça busca por número e titular.'},{'title':'Anotar Despachos','desc':'Atualize imediatamente a planilha de RMs.'}])" class="mt-3 text-xs font-bold text-emerald-600 hover:underline">Ler Tutorial &rarr;</button>
+          <!-- Grade Dinâmica de Capacitações e Materiais do Google Drive -->
+          <div class="space-y-4">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <i class="fa-solid fa-graduation-cap text-emerald-600"></i> Capacitações Gravadas & Manuais de Estudo (Drive 13. Capacitações & 06. Comercial)
+            </h4>
+            <div id="container-capacitacoes-drive" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <!-- Preenchido via app.js (renderTutoriaisDrive) -->
             </div>
+          </div>
 
-            <div class="glass-card rounded-xl p-5 border-l-4 border-amber-600">
-              <h4 class="font-bold text-xs text-slate-800">Emissão de Nota Fiscal & Boleto Cora</h4>
-              <p class="text-xs text-slate-500 mt-1">Fluxo completo de cobrança de honorários parcelados e prestação de contas na CJA.</p>
-              <button onclick="openTutorialReader('Emissão NF e Cora', '05. VPGG/Financeiro/NotaFiscal.gdoc', 'Emissão de cobrança pelo Cora.', [{'title':'Gerar Carnê','desc':'Emita as parcelas no banco Cora.'},{'title':'Emitir NF','desc':'No portal da Prefeitura de Vitória.'},{'title':'Enviar ao Cliente','desc':'Notifique via WhatsApp com o contrato.'}])" class="mt-3 text-xs font-bold text-amber-600 hover:underline">Ler Tutorial &rarr;</button>
+          <!-- POPs Operacionais Tradicionais -->
+          <div class="space-y-4 pt-4 border-t border-slate-200">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+              <i class="fa-solid fa-book-open text-blue-600"></i> Procedimentos Operacionais Padrão (POPs de Rotina)
+            </h4>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="glass-card rounded-xl p-5 border-l-4 border-blue-600">
+                <h4 class="font-bold text-xs text-slate-800">Como Protocolar Pedido de Marca no INPI</h4>
+                <p class="text-xs text-slate-500 mt-1">Passo a passo com emissão de GRU código 389, preenchimento do formulário e upload da logo.</p>
+                <button onclick="openTutorialReader('Como Protocolar Marca no INPI', '04. Projetos/Tutoriais/POP_INPI.gdoc', 'Manual oficial de depósito de marcas.', [{'title':'Gerar GRU','desc':'Acesse o e-INPI e emita a guia código 389.'},{'title':'Preencher Formulário','desc':'Vincule o titular e a classificação de Nice.'},{'title':'Protocolar','desc':'Guarde o número de processo de 9 dígitos.'}])" class="mt-3 text-xs font-bold text-blue-600 hover:underline">Ler Tutorial &rarr;</button>
+              </div>
+
+              <div class="glass-card rounded-xl p-5 border-l-4 border-emerald-600">
+                <h4 class="font-bold text-xs text-slate-800">Rotina Semanal de Conferência da RPI</h4>
+                <p class="text-xs text-slate-500 mt-1">Como cruzar os 85 processos ativos na Revista da Propriedade Industrial toda terça-feira.</p>
+                <button onclick="openTutorialReader('Rotina da RPI', '04. Projetos/RPI_Checklist.gdoc', 'Checklist semanal de acompanhamento.', [{'title':'Baixar PDF','desc':'Acesse o portal do INPI às terças.'},{'title':'Buscar Pedidos','desc':'Faça busca por número e titular.'},{'title':'Anotar Despachos','desc':'Atualize imediatamente a planilha de RMs.'}])" class="mt-3 text-xs font-bold text-emerald-600 hover:underline">Ler Tutorial &rarr;</button>
+              </div>
+
+              <div class="glass-card rounded-xl p-5 border-l-4 border-amber-600">
+                <h4 class="font-bold text-xs text-slate-800">Emissão de Nota Fiscal & Boleto Cora</h4>
+                <p class="text-xs text-slate-500 mt-1">Fluxo completo de cobrança de honorários parcelados e prestação de contas na CJA.</p>
+                <button onclick="openTutorialReader('Emissão NF e Cora', '05. VPGG/Financeiro/NotaFiscal.gdoc', 'Emissão de cobrança pelo Cora.', [{'title':'Gerar Carnê','desc':'Emita as parcelas no banco Cora.'},{'title':'Emitir NF','desc':'No portal da Prefeitura de Vitória.'},{'title':'Enviar ao Cliente','desc':'Notifique via WhatsApp com o contrato.'}])" class="mt-3 text-xs font-bold text-amber-600 hover:underline">Ler Tutorial &rarr;</button>
+              </div>
             </div>
           </div>
         </section>
 
-        <!-- 10. CENTRAL DE PLANILHAS -->
+        <!-- 10. CENTRAL DE PLANILHAS E REPOSITÓRIO GOOGLE DRIVE -->
         <section id="view-planilhas" class="hidden space-y-6">
-          <div class="glass-card rounded-xl p-5 border-t-4 border-sky-600">
-            <h3 class="text-base font-bold text-slate-800">📁 Central de Planilhas e Repositório do Google Drive</h3>
-            <p class="text-xs text-slate-500 mt-0.5">Acesso direto e catalogado aos arquivos oficiais sincronizados na nuvem.</p>
+          <div class="glass-card rounded-xl p-5 border-t-4 border-sky-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                📁 Central de Planilhas e Repositório do Google Drive
+                <span id="planilhas-drive-badge" class="text-[10px] bg-sky-100 text-sky-800 px-2 py-0.5 rounded-full font-bold">Nuvem Conectada</span>
+              </h3>
+              <p class="text-xs text-slate-500 mt-0.5">Centro de comando unificado com sincronização profunda dos arquivos e bases de dados da Gestão 2026.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="sincronizarGoogleDrive()" id="btn-sync-planilhas-page" class="px-3 py-1.5 text-xs bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-lg shadow-2xs flex items-center gap-1.5 transition">
+                <i class="fa-brands fa-google-drive"></i> Sincronizar Tudo Agora
+              </button>
+            </div>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="glass-card rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <span class="text-xs font-bold text-slate-800 block">Controle de RMs.xlsx</span>
-                <span class="text-[11px] text-slate-500">04. Projetos • 85 Processos mapeados</span>
+          <!-- Cards de Telemetria de Sincronização -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div class="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Leads Sincronizados</span>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span id="drive-stat-leads" class="text-xl font-black text-slate-800 font-mono">983</span>
+                <span class="text-[10px] text-blue-600 font-bold">CRM + ENEJ</span>
               </div>
-              <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full">Sincronizado</span>
             </div>
-            <div class="glass-card rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <span class="text-xs font-bold text-slate-800 block">Fluxo_de_Caixa_Unificado_2026.xlsx</span>
-                <span class="text-[11px] text-slate-500">Meu Drive / Tesouraria • 78 Transações</span>
+            <div class="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Transações no Banco</span>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span id="drive-stat-fluxo" class="text-xl font-black text-emerald-600 font-mono">168</span>
+                <span class="text-[10px] text-emerald-700 font-bold">Jan - Ago</span>
               </div>
-              <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full">Sincronizado</span>
             </div>
-            <div class="glass-card rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <span class="text-xs font-bold text-slate-800 block">EDV Jr CRM atualizado v2.xlsx</span>
-                <span class="text-[11px] text-slate-500">06. Comercial / CRM • 693 Leads</span>
+            <div class="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Contratos Assinados</span>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span id="drive-stat-contratos" class="text-xl font-black text-indigo-600 font-mono">19</span>
+                <span class="text-[10px] text-indigo-700 font-bold">Comercial</span>
               </div>
-              <span class="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full">Sincronizado</span>
             </div>
-            <div class="glass-card rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <span class="text-xs font-bold text-slate-800 block">Metropolitana_parte1.xlsx</span>
-                <span class="text-[11px] text-slate-500">04. Projetos • Acervo Histórico</span>
+            <div class="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Processos de Marca</span>
+              <div class="flex items-baseline gap-2 mt-1">
+                <span id="drive-stat-rms" class="text-xl font-black text-amber-600 font-mono">85</span>
+                <span class="text-[10px] text-amber-700 font-bold">INPI Ativos</span>
               </div>
-              <span class="px-2.5 py-1 bg-blue-100 text-blue-800 text-[10px] font-bold rounded-full">Disponível</span>
+            </div>
+          </div>
+
+          <!-- 10.1 Planilhas Oficiais Sincronizadas -->
+          <div class="space-y-3">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-2">
+              <i class="fa-solid fa-file-excel text-emerald-600"></i> Planilhas Oficiais Catalogadas no Google Drive
+            </h4>
+            <div id="container-planilhas-drive" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <!-- Preenchido via app.js -->
+            </div>
+          </div>
+
+          <!-- 10.2 Contratos Comerciais Assinados -->
+          <div class="space-y-3 pt-3 border-t border-slate-200">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-2">
+                <i class="fa-solid fa-file-signature text-blue-600"></i> Contratos Comerciais Assinados (06. Comercial / CONTRATOS)
+              </h4>
+              <span id="badge-total-contratos" class="text-[11px] font-bold text-slate-500 font-mono">19 Contratos Vigentes</span>
+            </div>
+            <div id="container-contratos-drive" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <!-- Preenchido via app.js -->
+            </div>
+          </div>
+
+          <!-- 10.3 Documentos Oficiais & Selo EJ -->
+          <div class="space-y-3 pt-3 border-t border-slate-200">
+            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-2">
+              <i class="fa-solid fa-stamp text-amber-600"></i> Acervo Institucional & Conformidade do Selo EJ (10. Selo EJ & 02. Documentos Oficiais)
+            </h4>
+            <div id="container-docs-drive" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <!-- Preenchido via app.js -->
             </div>
           </div>
         </section>
