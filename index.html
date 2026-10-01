@@ -2429,16 +2429,23 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
                   <p class="text-xs text-slate-500 mt-0.5">Gera automaticamente uma trilha estruturada (Hard & Soft Skills, Ações Práticas e Marcos Temporais) calibrada para a área e o cargo hierárquico do colaborador.</p>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div class="md:col-span-2">
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                  <div class="md:col-span-5">
                     <label for="trilha_member_email" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Selecionar Membro *</label>
                     <select id="trilha_member_email" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold">
                       <option value="">-- Escolha um colaborador para gerar a trilha --</option>
                     </select>
                   </div>
-                  <div>
+                  <div class="md:col-span-4">
                     <label for="trilha_foco" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Foco Especial Opcional</label>
                     <input type="text" id="trilha_foco" placeholder="Ex: Liderança, SPIN Selling, Oratória..." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                  </div>
+                  <div class="md:col-span-3">
+                    <label for="trilha_sanitization_mode" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Filtro de Intenção</label>
+                    <select id="trilha_sanitization_mode" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium">
+                      <option value="adaptive" selected>🤖 Adaptativo (IA Inteligente)</option>
+                      <option value="restrictive">🛡️ Restritivo (Governança MEJ)</option>
+                    </select>
                   </div>
                 </div>
 

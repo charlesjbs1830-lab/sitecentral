@@ -221,6 +221,21 @@ except ImportError:
         login_rate_limiter
     )
 
+try:
+    from semantic_nlp import (
+        SemanticIntentProcessor,
+        calcular_matriz_combinatoria,
+        montar_trilha_algoritmica,
+        gerar_hash_singularidade
+    )
+except ImportError:
+    from backend.semantic_nlp import (
+        SemanticIntentProcessor,
+        calcular_matriz_combinatoria,
+        montar_trilha_algoritmica,
+        gerar_hash_singularidade
+    )
+
 # Caminho para o payload operacional oficial
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEGACY_DATA_PATH = os.path.join(BASE_DIR, "data", "legacy_data.json")
@@ -370,6 +385,7 @@ class PDIResponse(BaseModel):
 class PDIGenerateRequest(BaseModel):
     member_email: str = Field(..., description="E-mail corporativo do membro para geração da trilha")
     foco_adicional: Optional[str] = Field(None, description="Foco customizado opcional (ex: liderança, oratória, vendas)")
+    sanitization_mode: Optional[str] = Field("adaptive", description="Modo de saneamento: 'adaptive' (IA inteligente) ou 'restrictive' (governança rígida)")
 
 class Evaluation360Create(BaseModel):
     evaluatee_email: str = Field(..., description="E-mail institucional do colaborador avaliado")
@@ -1397,177 +1413,35 @@ async def get_notices(
 # 5. MÓDULO DE PDIS PARA A VPGG (PLANO DE DESENVOLVIMENTO INDIVIDUAL) & TRILHAS
 # ==============================================================================
 
-def generate_pdi_trail(member: dict, foco_adicional: Optional[str] = None) -> dict:
+def generate_pdi_trail(
+    member: dict,
+    foco_adicional: Optional[str] = None,
+    modo_saneamento: str = "adaptive"
+) -> dict:
     """
-    Motor de Geração de PDIs:
-    Gera trilhas estruturadas de ideias de desenvolvimento, competências técnicas e comportamentais
-    com base estrita no cargo, área e nível hierárquico atual do membro avaliado.
+    Motor de Geração de PDIs (Assembly Line Algorítmica):
+    Cruza Vetores G (Gaps 360º), H (Hard Data) e F (Foco Semântico Modulado)
+    e seleciona dinamicamente 4 a 6 micro-blocos atômicos com garantia matemática de singularidade.
     """
-    role = (member.get("role") or "assessor").lower().strip()
-    area = (member.get("area") or "Geral").strip()
-    cargo = member.get("cargo") or f"{role.capitalize()} de {area}"
-
-    trilhas_por_area = {
-        "Projetos": {
-            "hard_skills": [
-                "Classificação de Nice (NCL) e busca de anterioridade fonética e figurativa no INPI",
-                "Análise de colidência de marcas e elaboração de oposições e recursos administrativos",
-                "Monitoramento de despachos na RPI e gestão rigorosa do prazo fatal de 60 dias"
-            ],
-            "soft_skills": [
-                "Atenção aos detalhes jurídicos e rigor processual analítico",
-                "Comunicação técnica clara com titulares de marcas e clientes",
-                "Organização e gestão de múltiplos processos em paralelo"
-            ],
-            "acoes_edv": [
-                "Conduzir no mínimo 5 buscas de anterioridade com emissão de parecer formal de viabilidade",
-                "Apresentar na Ágora semanal um caso prático de despacho de exigência do INPI",
-                "Contribuir para a revisão e melhoria contínua do POP de depósito de marcas da EDV Jr."
-            ]
-        },
-        "Comercial": {
-            "hard_skills": [
-                "Metodologia SPIN Selling e qualificação consultiva de leads B2B",
-                "Triagem fiscal rápida de CNPJs na Receita Federal via BrasilAPI",
-                "Elaboração de propostas comerciais de registro de marca e condução de negociações"
-            ],
-            "soft_skills": [
-                "Escuta ativa e contorno consultivo de objeções de clientes",
-                "Resiliência e ritmo acelerado de cadência de follow-up",
-                "Persuasão ética fundamentada em valor jurídico de proteção de ativos"
-            ],
-            "acoes_edv": [
-                "Atingir meta individual de abordagens qualificadas semanais via Radar",
-                "Converter no mínimo 2 contratos de registro de marca no ciclo de gestão",
-                "Gravar simulação de pitch de vendas de marcas para capacitação de novos membros"
-            ]
-        },
-        "VPGG": {
-            "hard_skills": [
-                "Desenho, acompanhamento e revisão de PDIs e metas individuais",
-                "Estruturação de processos seletivos, entrevistas por competências e onboarding",
-                "Análise de métricas de clima, assiduidade em Ágoras e cálculo de eNPS"
-            ],
-            "soft_skills": [
-                "Empatia e condução estruturada de conversas de alinhamento e feedbacks 1-on-1",
-                "Comunicação institucional inspiradora e acolhimento de membros",
-                "Visão sistêmica de desenvolvimento humano e liderança"
-            ],
-            "acoes_edv": [
-                "Realizar rodadas mensais de One-on-One com 100% dos membros atribuídos",
-                "Implementar diagnóstico de clima trimestral e plano de ação correspondente",
-                "Organizar uma oficina interna de oratória e autogestão para a empresa"
-            ]
-        },
-        "Marketing": {
-            "hard_skills": [
-                "Estratégia de Inbound Marketing jurídico em conformidade com o Provimento OAB",
-                "Copywriting persuasivo e criação de narrativas institucionais para Reels/LinkedIn",
-                "Análise de métricas de alcance, engajamento e CPL de campanhas"
-            ],
-            "soft_skills": [
-                "Criatividade orientada a resultados e metas de geração de leads",
-                "Alinhamento estratégico contínuo com o time comercial",
-                "Gestão de cronograma editorial e consistência de postagens"
-            ],
-            "acoes_edv": [
-                "Criar e publicar 3 carrosséis educativos sobre riscos de marcas não registradas",
-                "Apoiar a campanha 'Maré de Vendas' com criativos visuais de alta conversão",
-                "Otimizar o fluxo de captação de leads inbound pelo Instagram institucional"
-            ]
-        },
-        "Jurídico": {
-            "hard_skills": [
-                "Análise estatutária e conformidade com critérios do Selo EJ (Brasil Júnior)",
-                "Redação e revisão de minutas contratuais de prestação de serviços e parcerias",
-                "Gestão de compliance, governança e certidões negativas corporativas"
-            ],
-            "soft_skills": [
-                "Raciocínio jurídico analítico e precisão terminológica",
-                "Pensamento preventivo de riscos contratuais e societários",
-                "Postura ética e sigilo profissional estrito"
-            ],
-            "acoes_edv": [
-                "Garantir a vigência e homologação de 100% dos critérios do Selo EJ 2026",
-                "Revisar o modelo padrão de contrato de honorários de consultoria da EDV Jr.",
-                "Elaborar parecer sobre adequação às normas da LGPD no tratamento de dados de leads"
-            ]
-        },
-        "Tesouraria": {
-            "hard_skills": [
-                "Metodologia de Orçamento Base Zero (OBZ) e conciliação bancária Cora/CJA",
-                "Projeção de fluxo de caixa, controle de inadimplência e emissão de notas fiscais",
-                "Análise de viabilidade financeira e precificação de serviços"
-            ],
-            "soft_skills": [
-                "Disciplina financeira e rigor contábil",
-                "Transparência na prestação de contas à Diretoria Executiva",
-                "Pensamento analítico de otimização de recursos"
-            ],
-            "acoes_edv": [
-                "Realizar conciliação bancária semanal do Livro Caixa",
-                "Elaborar o relatório financeiro consolidado mensal para apresentação nas Ágoras",
-                "Acompanhar pagamentos de custas de GRU do INPI para evitar perda de prazos"
-            ]
-        },
-        "Presidência": {
-            "hard_skills": [
-                "Planejamento Estratégico trienal (PE 25-27) e governança executiva",
-                "Negociação de parcerias com entidades federadas e patrocinadores",
-                "Gestão de crises e representação institucional da empresa"
-            ],
-            "soft_skills": [
-                "Liderança servidora e visão macro de futuro",
-                "Capacidade de tomada de decisão sob incerteza",
-                "Oratória institucional e alinhamento de propósito"
-            ],
-            "acoes_edv": [
-                "Conduzir as reuniões de Diretoria Executiva e Assembleias Gerais",
-                "Garantir o atingimento das metas de faturamento e projetos de alto impacto",
-                "Fortalecer a conexão da EDV Jr. com o ecossistema do MEJ capixaba e nacional"
-            ]
-        }
-    }
-
-    if role == "presidente":
-        diretriz_hierarquica = "Liderança de conselho, representação institucional no MEJ nacional e governança executiva."
-    elif role == "diretor":
-        diretriz_hierarquica = "Liderança de diretoria, gestão de equipes, metas globais do PE e alinhamento cross-area."
-    elif role == "gerente":
-        diretriz_hierarquica = "Gestão tática direta de projetos, garantia de prazos críticos, delegação e condução de 1-on-1s."
-    else:
-        diretriz_hierarquica = "Execução de excelência operacional, protagonismo na área e desenvolvimento de liderança para o ciclo 2026."
-
-    trilha_base = trilhas_por_area.get(area, trilhas_por_area["Projetos"])
-
-    acoes = list(trilha_base["acoes_edv"])
-    if foco_adicional:
-        acoes.append(f"Projeto de foco especial: {foco_adicional.strip()}")
-
-    return {
-        "membro": {
-            "nome": member.get("nome"),
-            "email": member.get("email"),
-            "area": area,
-            "cargo": cargo,
-            "role": role
-        },
-        "diretriz_hierarquica": diretriz_hierarquica,
-        "objetivos_sugeridos": [
-            f"Consolidar domínio das rotinas técnicas e padrões operacionais da área de {area}",
-            f"Alcançar 100% de pontualidade nas entregas e compromissos corporativos da EDV Jr.",
-            f"Desenvolver competências de liderança e comunicação para evolução de nível no ciclo 2026"
-        ],
-        "hard_skills_prioritarias": trilha_base["hard_skills"],
-        "soft_skills_essenciais": trilha_base["soft_skills"],
-        "acoes_praticas_edv": acoes,
-        "metas_com_prazos": [
-            {"marco": "Diagnóstico inicial e alinhamento com VPGG", "prazo_dias": 15},
-            {"marco": "Execução da primeira ação prática de alto impacto", "prazo_dias": 45},
-            {"marco": "Avaliação intermediária de evolução e ajustes no plano", "prazo_dias": 60},
-            {"marco": "Apresentação de resultados e conclusão formal do ciclo do PDI", "prazo_dias": 90}
-        ]
-    }
+    email = member.get("email")
+    triang = {}
+    if email:
+        try:
+            triang = calculate_triangulation(email)
+        except Exception:
+            triang = {}
+    res = montar_trilha_algoritmica(
+        member=member,
+        foco_adicional=foco_adicional,
+        modo_saneamento=modo_saneamento,
+        triangulacao=triang
+    )
+    if res.get("error"):
+        raise HTTPException(
+            status_code=res.get("status_code", 400),
+            detail=res.get("detail", "Foco rejeitado pelo modo restritivo de governança MEJ.")
+        )
+    return res
 
 @app.post(
     "/vpgg/pdis",
@@ -1724,7 +1598,7 @@ async def update_pdi(
 
     return dict(row)
 
-def _build_pdi_analytics_and_trail(target_email: str, foco: Optional[str] = None) -> dict:
+def _build_pdi_analytics_and_trail(target_email: str, foco: Optional[str] = None, modo_saneamento: str = "adaptive") -> dict:
     target_member = get_user_by_email(target_email)
     if not target_member:
         raise HTTPException(
@@ -1747,7 +1621,7 @@ def _build_pdi_analytics_and_trail(target_email: str, foco: Optional[str] = None
     membro_pdis = [dict(r) for r in cursor.fetchall()]
     conn.close()
 
-    sugestoes_trilha = generate_pdi_trail(target_member, foco)
+    sugestoes_trilha = generate_pdi_trail(target_member, foco, modo_saneamento)
 
     return {
         "status": "success",
@@ -1789,7 +1663,8 @@ async def generate_pdi_endpoint(
     """
     target_email = payload.member_email.lower().strip() if payload.member_email else current_user["email"]
     foco = payload.foco_adicional
-    return _build_pdi_analytics_and_trail(target_email, foco)
+    modo = payload.sanitization_mode or "adaptive"
+    return _build_pdi_analytics_and_trail(target_email, foco, modo)
 
 @app.get(
     "/vpgg/pdis/analytics",

@@ -1594,8 +1594,179 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         res_anon = anon_client.get("/api/members")
         self.assertEqual(res_anon.status_code, 401)
 
+    def test_46_semantic_nlp_classification_and_intent_filtering(self):
+        """Valida camada NLP heurística de classificação semântica (Hard vs Soft Skills) e fator de modulação alpha"""
+        from semantic_nlp import SemanticIntentProcessor
+
+        proc = SemanticIntentProcessor(modo_saneamento="adaptive")
+
+        # 1. Foco em Hard Skills (Comercial/Vendas)
+        res_hard = proc.processar_foco("fechamento de contratos comerciais, margem de lucro e funil de vendas crm")
+        self.assertFalse(res_hard["is_anomalia"])
+        self.assertEqual(res_hard["eixo_predominante"], "hard_skills")
+        self.assertIn("orientacao_resultados", res_hard["competencias_alvo"])
+        self.assertGreaterEqual(res_hard["fator_modulacao_alpha"], 1.20)
+        self.assertLessEqual(res_hard["fator_modulacao_alpha"], 1.80)
+        self.assertTrue(any(t in res_hard["tokens_detectados"] for t in ["vendas", "contrato", "crm", "margem"]))
+
+        # 2. Foco em Soft Skills (Liderança/Comunicação)
+        res_soft = proc.processar_foco("comunicacao assertiva, resolucao de conflitos com a equipe e escuta ativa da lideranca")
+        self.assertFalse(res_soft["is_anomalia"])
+        self.assertEqual(res_soft["eixo_predominante"], "soft_skills")
+        self.assertIn("lideranca", res_soft["competencias_alvo"])
+        self.assertGreaterEqual(res_soft["fator_modulacao_alpha"], 1.20)
+        self.assertLessEqual(res_soft["fator_modulacao_alpha"], 1.80)
+        self.assertTrue(any(t in res_soft["tokens_detectados"] for t in ["comunicacao", "conflito", "lideranca", "equipe"]))
+
+    def test_47_scope_anomaly_filtering_adaptive_vs_restrictive(self):
+        """Valida filtro de desvios de escopo/anomalias com exemplo real ('ser o melhor namorado para a dudinha')"""
+        token = self.tokens["diretor"]
+        target_email = "alice.ney@edvjr.com.br"
+        anomalia_texto = "ser o melhor namorado para a dudinha"
+
+        # 1. Modo Adaptativo (Inteligente): deve retornar 200, saneando a intenção para competências corporativas MEJ
+        res_adapt = self.client.post(
+            "/vpgg/pdis/generate",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "member_email": target_email,
+                "foco_adicional": anomalia_texto,
+                "sanitization_mode": "adaptive"
+            }
+        )
+        self.assertEqual(res_adapt.status_code, 200)
+        data_adapt = res_adapt.json()
+        plano_adapt = data_adapt["plano_estruturado_sugerido"]
+        analise_adapt = plano_adapt["analise_foco_semantico"]
+        
+        self.assertTrue(analise_adapt["is_anomalia"])
+        self.assertEqual(analise_adapt["status"], "adaptado_inteligente")
+        self.assertIn("autoconhecimento", analise_adapt["competencias_alvo"])
+        self.assertIsNotNone(analise_adapt["alerta_governanca"])
+        self.assertTrue(len(analise_adapt["interpretacao_corporativa"]) > 0)
+        # Deve ter gerado micro-blocos válidos
+        self.assertGreaterEqual(len(plano_adapt["micro_blocos_selecionados"]), 4)
+
+        # 2. Modo Restritivo: deve rejeitar a anomalia com HTTP 400 Bad Request
+        res_restrit = self.client.post(
+            "/vpgg/pdis/generate",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "member_email": target_email,
+                "foco_adicional": anomalia_texto,
+                "sanitization_mode": "restrictive"
+            }
+        )
+        self.assertEqual(res_restrit.status_code, 400)
+        detail_msg = res_restrit.json().get("detail", "")
+        self.assertIn("Modo Restritivo", detail_msg)
+        self.assertIn("desvio de escopo", detail_msg.lower())
+
+        # 3. Modo Restritivo com input corporativo legítimo: deve passar com HTTP 200
+        res_legit = self.client.post(
+            "/vpgg/pdis/generate",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "member_email": target_email,
+                "foco_adicional": "otimizar processos de compliance e auditoria estatutaria da brasil junior",
+                "sanitization_mode": "restrictive"
+            }
+        )
+        self.assertEqual(res_legit.status_code, 200)
+
+    def test_48_combinatorial_matrix_urgency_calculation(self):
+        """Valida o cálculo dos Vetores G, H, F e da Matriz Combinatória Ponderada (Uc = (0.55*dG + 0.45*dH) * F)"""
+        from semantic_nlp import calcular_matriz_combinatoria
+
+        # Cenário: Membro com grande gap em Gestão e baixo gap em Autoconhecimento
+        gaps_360 = {
+            "lideranca": 1.2,
+            "gestao": 2.8,
+            "visao_sistemica": 1.0,
+            "orientacao_resultados": 1.5,
+            "autoconhecimento": 0.4
+        }
+        hard_data = {
+            "pontualidade_sla": 0.50, # Defasagem de SLA afeta Gestão e Orientação a Resultados
+            "taxa_conversao_crm": 0.80,
+            "assiduidade_rg": 0.95
+        }
+        analise_foco = {
+            "fator_modulacao_alpha": 1.50,
+            "competencias_alvo": ["gestao"]
+        }
+
+        matriz = calcular_matriz_combinatoria(gaps_360, hard_data, analise_foco)
+        scores = matriz["scores_urgencia"]
+
+        # Todas as 5 competências MEJ devem estar presentes
+        for comp in ["lideranca", "gestao", "visao_sistemica", "orientacao_resultados", "autoconhecimento"]:
+            self.assertIn(comp, scores)
+            self.assertGreater(scores[comp], 0)
+
+        # Gestão deve ter o score de urgência mais crítico devido ao gap alto + modulação alpha de 1.5
+        self.assertEqual(matriz["competencia_mais_critica"], "gestao")
+        self.assertGreater(scores["gestao"], scores["autoconhecimento"])
+        self.assertGreater(scores["gestao"], scores["visao_sistemica"])
+
+        # Verificar se as ordenações estão decrescentes
+        ordenadas = matriz["competencias_ordenadas"]
+        self.assertEqual(ordenadas[0], "gestao")
+        self.assertGreaterEqual(scores[ordenadas[0]], scores[ordenadas[1]])
+
+    def test_49_modular_microblocks_assembly_and_uniqueness(self):
+        """Valida montagem algorítmica de 4 a 6 micro-blocos cirúrgicos e a garantia de singularidade SHA-256"""
+        token = self.tokens["presidente"]
+
+        # Gerar trilha para Presidente (Charles)
+        res_charles = self.client.post(
+            "/vpgg/pdis/generate",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "member_email": "charles.junior@edvjr.com.br",
+                "foco_adicional": "governanca corporativa, articulacao institucional mej e pe 2025"
+            }
+        )
+        self.assertEqual(res_charles.status_code, 200)
+        data_charles = res_charles.json()["plano_estruturado_sugerido"]
+        blocos_charles = data_charles["micro_blocos_selecionados"]
+
+        # Validação da Assembly Line: entre 4 e 6 micro-blocos
+        self.assertGreaterEqual(len(blocos_charles), 4)
+        self.assertLessEqual(len(blocos_charles), 6)
+
+        # Validação da estrutura atômica de cada micro-bloco
+        for b in blocos_charles:
+            self.assertTrue(b["code"].startswith("MB-"))
+            self.assertTrue(bool(b["title"]))
+            self.assertIn(b["eixo"], ["hard_skills", "soft_skills"])
+            self.assertIn("deliverable_format", b)
+            self.assertIn("evaluation_metric", b)
+            self.assertIn("suggested_deadline_days", b)
+            self.assertIn("justificativa_algoritmica", b)
+
+        hash_charles = data_charles["singularidade_hash"]
+        self.assertEqual(len(hash_charles), 64) # SHA-256 em hexadecimal tem 64 caracteres
+
+        # Gerar trilha para Assessor Comercial (Estevão) com foco diferente
+        res_estevao = self.client.post(
+            "/vpgg/pdis/generate",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "member_email": "estevao.coutinho@edvjr.com.br",
+                "foco_adicional": "negociacao consultiva b2b e propostas comerciais"
+            }
+        )
+        self.assertEqual(res_estevao.status_code, 200)
+        data_estevao = res_estevao.json()["plano_estruturado_sugerido"]
+        hash_estevao = data_estevao["singularidade_hash"]
+
+        # Garantia de Singularidade Matemática: hashes devem ser distintos
+        self.assertNotEqual(hash_charles, hash_estevao)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 

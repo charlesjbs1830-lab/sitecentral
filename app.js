@@ -3525,7 +3525,9 @@ async function atualizarStatusPDI(pdiId, novoStatus) {
 async function acionarGeradorTrilha() {
   const memberSelect = document.getElementById('trilha_member_email');
   const focoInput = document.getElementById('trilha_foco');
+  const modeSelect = document.getElementById('trilha_sanitization_mode');
   const email = (memberSelect?.value || '').trim().toLowerCase();
+  const modoSaneamento = modeSelect?.value || 'adaptive';
 
   if (!email) {
     showToast("⚠️ Selecione um colaborador para gerar a trilha.");
@@ -3536,7 +3538,7 @@ async function acionarGeradorTrilha() {
   const btn = document.getElementById('btn-gerar-trilha');
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processando Trilha com IA...';
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processando Trilha Algorítmica...';
   }
 
   try {
@@ -3548,7 +3550,8 @@ async function acionarGeradorTrilha() {
       },
       body: JSON.stringify({
         member_email: email,
-        foco_adicional: (focoInput?.value || '').trim() || null
+        foco_adicional: (focoInput?.value || '').trim() || null,
+        sanitization_mode: modoSaneamento
       })
     });
 
@@ -3556,10 +3559,10 @@ async function acionarGeradorTrilha() {
       const data = await res.json();
       window.ULTIMA_TRILHA_GERADA = data;
       renderResultadoTrilha(data);
-      showToast("🚀 Trilha de desenvolvimento calibrada com sucesso!");
+      showToast("🚀 Trilha de micro-blocos gerada e calibrada com sucesso!");
     } else {
       const err = await res.json().catch(() => ({}));
-      showToast(`❌ Falha na geração da trilha: ${err.detail || 'Erro na requisição'}`);
+      showToast(`⚠️ ${err.detail || 'Falha na validação das diretrizes de governança MEJ.'}`);
     }
   } catch (err) {
     console.error("Falha ao acionar motor de trilhas:", err);
@@ -3578,28 +3581,142 @@ function renderResultadoTrilha(data) {
 
   const membro = data.membro_avaliado || {};
   const plano = data.plano_estruturado_sugerido || {};
+  const analise = plano.analise_foco_semantico || {};
+  const matriz = plano.matriz_combinatoria || {};
+  const microblocos = plano.micro_blocos_selecionados || [];
 
-  const hardSkillsHtml = (plano.hard_skills_prioritarias || []).map(s => `
-    <li class="flex items-start gap-2">
-      <i class="fa-solid fa-check text-emerald-500 mt-0.5 text-xs shrink-0"></i>
-      <span>${escapeHTML(s)}</span>
-    </li>
-  `).join('');
+  // 1. Processamento Semântico Card
+  let semanticoHtml = '';
+  if (analise.foco_original) {
+    const tokensBadges = (analise.tokens_detectados || []).map(t => `
+      <span class="px-2 py-0.5 bg-slate-200/80 text-slate-800 rounded text-[10px] font-mono font-medium">${escapeHTML(t)}</span>
+    `).join(' ');
 
-  const softSkillsHtml = (plano.soft_skills_essenciais || []).map(s => `
-    <li class="flex items-start gap-2">
-      <i class="fa-solid fa-star text-amber-500 mt-0.5 text-xs shrink-0"></i>
-      <span>${escapeHTML(s)}</span>
-    </li>
-  `).join('');
+    const statusBadge = analise.is_anomalia
+      ? `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300"><i class="fa-solid fa-brain"></i> Saneamento Adaptativo Inteligente</span>`
+      : `<span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300"><i class="fa-solid fa-check-circle"></i> Foco Técnico Validado Direto</span>`;
 
-  const acoesHtml = (plano.acoes_praticas_edv || []).map(a => `
-    <li class="flex items-start gap-2">
-      <i class="fa-solid fa-arrow-right text-blue-500 mt-0.5 text-xs shrink-0"></i>
-      <span>${escapeHTML(a)}</span>
-    </li>
-  `).join('');
+    semanticoHtml = `
+      <div class="p-4 bg-slate-50/80 rounded-xl border border-slate-200 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <i class="fa-solid fa-filter-circle-dollar text-purple-600"></i> Análise Semântica de Intenção:
+            </span>
+            ${statusBadge}
+          </div>
+          <span class="px-2.5 py-0.5 rounded text-[11px] font-mono font-bold bg-purple-100 text-purple-800 border border-purple-200">
+            Modulação Prioritária α: ${analise.fator_modulacao_alpha || 1.0}x
+          </span>
+        </div>
 
+        <div class="text-xs text-slate-700 bg-white p-3 rounded-lg border border-slate-200/80 shadow-sm space-y-1.5">
+          <div class="flex items-start gap-2">
+            <span class="font-semibold text-slate-500 shrink-0">Input Original:</span>
+            <span class="italic text-slate-800">"${escapeHTML(analise.foco_original)}"</span>
+          </div>
+          <div class="flex items-start gap-2">
+            <span class="font-semibold text-purple-900 shrink-0">Tradução Corporativa:</span>
+            <span class="font-medium text-slate-900">${escapeHTML(analise.interpretacao_corporativa || '')}</span>
+          </div>
+          ${tokensBadges ? `
+          <div class="flex items-center gap-1.5 pt-1 border-t border-slate-100">
+            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tokens Extraídos:</span>
+            <div class="flex flex-wrap gap-1">${tokensBadges}</div>
+          </div>
+          ` : ''}
+        </div>
+
+        ${analise.alerta_governanca ? `
+        <div class="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-900 flex items-center gap-2">
+          <i class="fa-solid fa-shield-halved text-amber-600 shrink-0"></i>
+          <span><strong>Governança MEJ:</strong> ${escapeHTML(analise.alerta_governanca)}</span>
+        </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  // 2. Matriz Combinatória e Scores de Urgência
+  const scores = matriz.scores_urgencia || {};
+  const compLabels = {
+    'lideranca': 'Liderança',
+    'gestao': 'Gestão',
+    'visao_sistemica': 'Visão Sistêmica',
+    'orientacao_resultados': 'Orientação para Resultados',
+    'autoconhecimento': 'Autoconhecimento'
+  };
+
+  const scoresGridHtml = Object.entries(scores).map(([compKey, scoreVal]) => {
+    const isCritical = compKey === matriz.competencia_mais_critica;
+    const badgeColor = isCritical 
+      ? 'bg-rose-50 border-rose-200 text-rose-900 ring-2 ring-rose-400/40' 
+      : (scoreVal >= 1.5 ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-slate-50 border-slate-200 text-slate-700');
+    return `
+      <div class="p-2.5 rounded-lg border ${badgeColor} flex flex-col justify-between">
+        <div class="flex items-center justify-between text-[11px] font-semibold">
+          <span>${compLabels[compKey] || compKey}</span>
+          ${isCritical ? '<span class="text-[9px] px-1.5 py-0.2 bg-rose-200 text-rose-800 rounded font-bold uppercase tracking-wider">Prioritária</span>' : ''}
+        </div>
+        <div class="mt-1 flex items-baseline justify-between">
+          <span class="text-xs text-slate-400 font-mono">Urgência (Uc):</span>
+          <span class="text-sm font-black font-mono">${scoreVal}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // 3. Micro-Blocos Atômicos Modulares
+  const microblocosHtml = microblocos.map((b, idx) => {
+    const isHard = b.eixo === 'hard_skills';
+    const eixoBadge = isHard
+      ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200"><i class="fa-solid fa-code"></i> Hard Skill</span>'
+      : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200"><i class="fa-solid fa-heart"></i> Soft Skill</span>';
+
+    const stars = '★'.repeat(b.complexity || 1) + '☆'.repeat(Math.max(0, 3 - (b.complexity || 1)));
+
+    return `
+      <div class="p-4 bg-white rounded-xl border border-slate-200/90 shadow-sm hover:shadow-md transition space-y-2.5">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 bg-purple-700 text-white font-mono font-black text-xs rounded shadow-xs">#${escapeHTML(b.code)}</span>
+            <span class="text-xs font-bold text-slate-900">${escapeHTML(b.title)}</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            ${eixoBadge}
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
+              Nív. ${b.complexity} <span class="text-amber-500">${stars}</span>
+            </span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+              D + ${b.suggested_deadline_days || 30} dias
+            </span>
+          </div>
+        </div>
+
+        <p class="text-xs text-slate-700 leading-relaxed">${escapeHTML(b.description)}</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] pt-1">
+          <div class="p-2 bg-slate-50 rounded border border-slate-200/60 text-slate-700">
+            <strong class="text-slate-900"><i class="fa-solid fa-file-invoice text-blue-600 mr-1"></i> Formato de Entrega:</strong>
+            <span class="ml-1 font-medium">${escapeHTML(b.deliverable_format || 'Entregável')}</span>
+          </div>
+          <div class="p-2 bg-slate-50 rounded border border-slate-200/60 text-slate-700">
+            <strong class="text-slate-900"><i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i> Critério de Aceite:</strong>
+            <span class="ml-1 font-medium">${escapeHTML(b.evaluation_metric || 'Avaliação por pares')}</span>
+          </div>
+        </div>
+
+        ${b.justificativa_algoritmica ? `
+        <div class="p-2 bg-purple-50/60 border border-purple-200/60 rounded text-[11px] text-purple-950 flex items-center gap-2">
+          <i class="fa-solid fa-wand-magic-sparkles text-purple-600 shrink-0"></i>
+          <span><strong>Racional da Seleção:</strong> ${escapeHTML(b.justificativa_algoritmica)}</span>
+        </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+
+  // 4. Metas com prazos
   const marcosHtml = (plano.metas_com_prazos || []).map(m => `
     <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
       <span class="font-medium text-slate-800">${escapeHTML(m.marco)}</span>
@@ -3608,9 +3725,10 @@ function renderResultadoTrilha(data) {
   `).join('');
 
   container.innerHTML = `
+    <!-- Cabeçalho do Resultado -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
       <div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-300">
             ${escapeHTML(membro.area || 'VPGG')} • ${escapeHTML(membro.cargo || 'Membro')}
           </span>
@@ -3618,42 +3736,54 @@ function renderResultadoTrilha(data) {
         </div>
         <h4 class="text-lg font-black text-slate-900 mt-1">${escapeHTML(membro.nome)}</h4>
         <p class="text-xs text-slate-600 mt-0.5"><strong>Diretriz Hierárquica:</strong> ${escapeHTML(plano.diretriz_hierarquica || '')}</p>
+        
+        <!-- Badge de Singularidade SHA-256 -->
+        <div class="mt-2.5 inline-flex items-center gap-2 px-3 py-1 bg-slate-900 text-emerald-400 font-mono text-[11px] rounded-lg border border-slate-800 shadow-inner">
+          <i class="fa-solid fa-fingerprint text-emerald-400"></i>
+          <span class="text-slate-400">Assinatura SHA-256:</span>
+          <span class="font-bold tracking-wider">${escapeHTML((plano.singularidade_hash || '').slice(0, 16))}...${escapeHTML((plano.singularidade_hash || '').slice(-8))}</span>
+        </div>
       </div>
-      <button type="button" onclick="transferirTrilhaAtualParaPDI()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition self-start md:self-auto">
+      <button type="button" onclick="transferirTrilhaAtualParaPDI()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition self-start md:self-auto cursor-pointer">
         <i class="fa-solid fa-file-import"></i>
         <span>Transferir para Formulário de PDI</span>
       </button>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div class="p-4 bg-purple-50/50 rounded-xl border border-purple-200 space-y-2">
-        <h5 class="font-bold text-xs text-purple-900 flex items-center gap-2">
-          <i class="fa-solid fa-code text-purple-600"></i> Hard Skills Prioritárias
-        </h5>
-        <ul class="text-xs text-slate-700 space-y-2">
-          ${hardSkillsHtml}
-        </ul>
-      </div>
+    <!-- Análise Semântica (se houver foco personalizado) -->
+    ${semanticoHtml}
 
-      <div class="p-4 bg-amber-50/50 rounded-xl border border-amber-200 space-y-2">
-        <h5 class="font-bold text-xs text-amber-900 flex items-center gap-2">
-          <i class="fa-solid fa-heart text-amber-600"></i> Soft Skills Essenciais
+    <!-- Matriz Combinatória de Urgência -->
+    <div class="p-4 bg-slate-50/70 rounded-xl border border-slate-200 space-y-2.5">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h5 class="font-bold text-xs text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-chart-line text-purple-600"></i> Matriz Combinatória Ponderada (Scores de Urgência Uc)
         </h5>
-        <ul class="text-xs text-slate-700 space-y-2">
-          ${softSkillsHtml}
-        </ul>
+        ${matriz.competencia_mais_critica ? `
+          <span class="text-[11px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded border border-rose-200">
+            Defasagem Crítica: ${compLabels[matriz.competencia_mais_critica] || matriz.competencia_mais_critica}
+          </span>
+        ` : ''}
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+        ${scoresGridHtml}
       </div>
     </div>
 
-    <div class="space-y-2">
-      <h5 class="font-bold text-xs text-slate-800 flex items-center gap-2">
-        <i class="fa-solid fa-list-check text-blue-600"></i> Ações Práticas & Entregáveis EDV Jr.
-      </h5>
-      <ul class="text-xs text-slate-700 space-y-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
-        ${acoesHtml}
-      </ul>
+    <!-- Micro-Blocos Atômicos Modulares -->
+    <div class="space-y-3">
+      <div class="flex items-center justify-between">
+        <h5 class="font-bold text-xs text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-cubes-stacked text-purple-600"></i> Micro-Blocos Atômicos Modulares Selecionados (${microblocos.length})
+        </h5>
+        <span class="text-[11px] text-slate-500 font-medium">Montagem Algorítmica Cirúrgica</span>
+      </div>
+      <div class="space-y-3">
+        ${microblocosHtml}
+      </div>
     </div>
 
+    <!-- Marcos Temporais de Execução -->
     <div class="space-y-2">
       <h5 class="font-bold text-xs text-slate-800 flex items-center gap-2">
         <i class="fa-regular fa-calendar-check text-emerald-600"></i> Marcos Temporais de Execução
@@ -3677,6 +3807,7 @@ function transferirTrilhaAtualParaPDI() {
   const data = window.ULTIMA_TRILHA_GERADA;
   const membro = data.membro_avaliado || {};
   const plano = data.plano_estruturado_sugerido || {};
+  const microblocos = plano.micro_blocos_selecionados || [];
 
   // Alternar para a sub-aba de PDIs
   switchVPGGSubtab('pdis');
@@ -3700,15 +3831,23 @@ function transferirTrilhaAtualParaPDI() {
   }
 
   if (ideasInput) {
-    const acoes = (plano.acoes_praticas_edv || []).map(a => '• ' + a).join('\n');
-    const hards = (plano.hard_skills_prioritarias || []).map(h => '• ' + h).join('\n');
-    ideasInput.value = `AÇÕES PRÁTICAS EDV JR.:\n${acoes}\n\nHARD SKILLS:\n${hards}`;
+    if (microblocos.length > 0) {
+      const blocosTexto = microblocos.map(b => 
+        `[${b.code}] ${b.title}\n   • Formato: ${b.deliverable_format} | Prazo: D+${b.suggested_deadline_days}d\n   • Entrega: ${b.description}\n   • Critério: ${b.evaluation_metric}\n   • Racional: ${b.justificativa_algoritmica || 'Nivelamento de competência'}`
+      ).join('\n\n');
+      ideasInput.value = `TRILHA DE MICRO-BLOCOS ATÔMICOS (EDbrain Assembly Line):\n\n${blocosTexto}\n\nAssinatura de Singularidade SHA-256: ${plano.singularidade_hash || 'N/A'}`;
+    } else {
+      const acoes = (plano.acoes_praticas_edv || []).map(a => '• ' + a).join('\n');
+      const hards = (plano.hard_skills_prioritarias || []).map(h => '• ' + h).join('\n');
+      ideasInput.value = `AÇÕES PRÁTICAS EDV JR.:\n${acoes}\n\nHARD SKILLS:\n${hards}`;
+    }
   }
 
   if (deadlineInput) {
-    // Prazo sugerido: 90 dias a contar de hoje
+    // Prazo sugerido: maior prazo dos blocos selecionados ou 90 dias a contar de hoje
+    const maxDias = microblocos.reduce((acc, b) => Math.max(acc, b.suggested_deadline_days || 30), 90);
     const d = new Date();
-    d.setDate(d.getDate() + 90);
+    d.setDate(d.getDate() + maxDias);
     deadlineInput.value = d.toISOString().split('T')[0];
   }
 

@@ -14,6 +14,11 @@ import json
 from datetime import datetime, timezone
 from typing import Any, Optional, List, Dict, Union, Tuple
 
+try:
+    from learning_blocks_seed import INITIAL_LEARNING_MICROBLOCKS
+except ImportError:
+    from backend.learning_blocks_seed import INITIAL_LEARNING_MICROBLOCKS
+
 DB_PATH = os.path.join(os.path.dirname(__file__), "auth.db")
 
 VALID_ROLES = {"presidente", "diretor", "gerente", "assessor"}
@@ -859,6 +864,42 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_rm_staging_maker ON rm_staging_records(submitted_by);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_rm_staging_code ON rm_staging_records(rm_code);")
 
+    # 18. Tabela de Biblioteca de Micro-Entregáveis (Atomic Learning Blocks)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS learning_microblocks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        code TEXT UNIQUE NOT NULL,
+        title TEXT NOT NULL,
+        competency_mej TEXT NOT NULL CHECK(competency_mej IN ('lideranca', 'gestao', 'visao_sistemica', 'orientacao_resultados', 'autoconhecimento')),
+        eixo TEXT NOT NULL CHECK(eixo IN ('hard_skills', 'soft_skills')),
+        area TEXT NOT NULL DEFAULT 'Cross-Setorial',
+        hierarchical_level TEXT NOT NULL DEFAULT 'todos' CHECK(hierarchical_level IN ('assessor', 'gerente', 'diretor', 'presidente', 'todos')),
+        complexity INTEGER NOT NULL DEFAULT 2 CHECK(complexity IN (1, 2, 3)),
+        description TEXT NOT NULL,
+        deliverable_format TEXT,
+        evaluation_metric TEXT DEFAULT 'Aprovação formal e validação de conformidade técnica pela liderança',
+        estimated_hours INTEGER DEFAULT 10,
+        suggested_deadline_days INTEGER DEFAULT 30,
+        keywords TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_microblocks_code ON learning_microblocks(code);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_microblocks_comp ON learning_microblocks(competency_mej);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_microblocks_eixo ON learning_microblocks(eixo);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_microblocks_area ON learning_microblocks(area);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_microblocks_level ON learning_microblocks(hierarchical_level);")
+
+    # Migração defensiva para coluna evaluation_metric se tabela já existia
+    try:
+        cursor.execute("PRAGMA table_info(learning_microblocks);")
+        mb_cols = [c[1] for c in cursor.fetchall()]
+        if "evaluation_metric" not in mb_cols:
+            cursor.execute("ALTER TABLE learning_microblocks ADD COLUMN evaluation_metric TEXT DEFAULT 'Aprovação formal e validação de conformidade técnica pela liderança';")
+    except Exception:
+        pass
+
     # Índices de alta performance para Radar e CRM
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_followups_area_status ON client_followups(area, status);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_followups_cnpj ON client_followups(cnpj);")
@@ -1209,6 +1250,7 @@ def init_db():
         );
         """)
 
+    ensure_learning_microblocks(conn)
     conn.commit()
     cursor.execute("SELECT COUNT(*) FROM users;")
     total_users = cursor.fetchone()[0]
@@ -1221,6 +1263,32 @@ def init_db():
         ensure_initial_admin()
     except Exception as e_sql:
         print(f"[SQLAlchemy] Aviso ao criar tabelas/seeding: {e_sql}")
+
+def ensure_learning_microblocks(conn=None):
+    """
+    Popula de forma idempotente a Biblioteca de Micro-Entregáveis (Atomic Learning Blocks)
+    com 48 micro-ações estruturadas por competência da Brasil Júnior, área e nível hierárquico.
+    """
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT COUNT(*) FROM learning_microblocks;")
+        if cursor.fetchone()[0] == 0:
+            cursor.executemany("""
+            INSERT INTO learning_microblocks (
+                tenant_id, code, title, competency_mej, eixo, area,
+                hierarchical_level, complexity, description, deliverable_format,
+                estimated_hours, suggested_deadline_days, keywords
+            ) VALUES ('edv_jr', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            """, INITIAL_LEARNING_MICROBLOCKS)
+            conn.commit()
+    except Exception as e:
+        print(f"[Learning Engine] Aviso ao semear micro-blocos: {e}")
+    if should_close:
+        conn.close()
 
 def ensure_initial_admin(db_session=None):
     """
@@ -2905,6 +2973,44 @@ def list_historical_benchmarks(role_target: Optional[str] = None) -> List[dict]:
     rows = [dict(r) for r in cursor.fetchall()]
     conn.close()
     return rows
+
+
+def list_learning_microblocks(
+    competency_mej: Optional[str] = None,
+    area: Optional[str] = None,
+    hierarchical_level: Optional[str] = None,
+    eixo: Optional[str] = None
+) -> List[dict]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    query = "SELECT * FROM learning_microblocks WHERE 1=1"
+    params = []
+    if competency_mej:
+        query += " AND competency_mej = ?"
+        params.append(competency_mej)
+    if area and area != "Cross-Setorial":
+        query += " AND (area = ? OR area = 'Cross-Setorial')"
+        params.append(area)
+    if hierarchical_level and hierarchical_level != "todos":
+        query += " AND (hierarchical_level = ? OR hierarchical_level = 'todos')"
+        params.append(hierarchical_level)
+    if eixo:
+        query += " AND eixo = ?"
+        params.append(eixo)
+    query += " ORDER BY complexity ASC, id ASC;"
+    cursor.execute(query, tuple(params))
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_microblock_by_code(code: str) -> Optional[dict]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM learning_microblocks WHERE code = ?;", (code.strip().upper(),))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 # ==============================================================================
