@@ -48,14 +48,14 @@
 
           <div>
             <div class="flex justify-between items-center mb-1.5">
-              <label for="senhaMembro" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Senha de Segurança (BCrypt)</label>
-              <span class="text-[10px] text-slate-400 font-mono">Padrão: edv2026!</span>
+              <label for="senhaMembro" class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Senha de Segurança</label>
+              <span class="text-[10px] text-slate-400 font-mono">Validação BCrypt</span>
             </div>
             <input 
               type="password" 
               id="senhaMembro" 
-              value="edv2026!"
-              placeholder="••••••••"
+              required
+              placeholder="Digite sua senha corporativa"
               class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent bg-slate-50/50"
             >
           </div>
@@ -64,62 +64,18 @@
 
           <button 
             type="submit" 
-            class="w-full bg-[#0b1d3a] hover:bg-[#162a4d] text-white font-bold py-2.5 px-4 rounded-lg text-sm shadow-md transition duration-150 flex items-center justify-center gap-2"
+            id="btn-login-submit"
+            class="w-full bg-[#0b1d3a] hover:bg-[#162a4d] text-white font-bold py-2.5 px-4 rounded-lg text-sm shadow-md transition duration-150 flex items-center justify-center gap-2 cursor-pointer"
           >
-            <span>Autenticar via JWT & Sincronizar</span>
+            <span>Acessar Sistema Corporativo</span>
             <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
           </button>
         </form>
 
-        <!-- Acesso Rápido Whitelist (23 Membros) -->
-        <div class="mt-6 pt-5 border-t border-slate-100">
-          <span class="text-[11px] font-bold uppercase text-slate-400 tracking-wider block mb-2 text-center">Atalhos de Acesso Rápido por Papel (RBAC)</span>
-          <div class="grid grid-cols-2 gap-2 text-xs">
-            <button type="button" onclick="quickLogin('charles.junior@edvjr.com.br')" class="p-2 text-left bg-slate-50 hover:bg-blue-50 hover:border-blue-300 border border-slate-200 rounded-lg transition">
-              <strong class="text-slate-800 block text-[11px]">Charles</strong>
-              <span class="text-[10px] text-amber-600 font-semibold">Presidência • Presidente</span>
-            </button>
-            <button type="button" onclick="quickLogin('isadora.epichin@edvjr.com.br')" class="p-2 text-left bg-slate-50 hover:bg-blue-50 hover:border-blue-300 border border-slate-200 rounded-lg transition">
-              <strong class="text-slate-800 block text-[11px]">Isadora</strong>
-              <span class="text-[10px] text-indigo-600 font-semibold">Comercial • Diretora</span>
-            </button>
-            <button type="button" onclick="quickLogin('thais.junger@edvjr.com.br')" class="p-2 text-left bg-slate-50 hover:bg-blue-50 hover:border-blue-300 border border-slate-200 rounded-lg transition">
-              <strong class="text-slate-800 block text-[11px]">Thais</strong>
-              <span class="text-[10px] text-blue-600 font-semibold">Projetos • Gerente</span>
-            </button>
-            <button type="button" onclick="quickLogin('samuel.garcia@edvjr.com.br')" class="p-2 text-left bg-slate-50 hover:bg-blue-50 hover:border-blue-300 border border-slate-200 rounded-lg transition">
-              <strong class="text-slate-800 block text-[11px]">Samuel</strong>
-              <span class="text-[10px] text-slate-600 font-semibold">Comercial • Assessor</span>
-            </button>
-          </div>
-
-          <div class="mt-3">
-            <select onchange="if(this.value) quickLogin(this.value)" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white text-slate-600">
-              <option value="">-- Whitelist Completa (23 Membros da Gestão 2026) --</option>
-              <option value="charles.junior@edvjr.com.br">Charles (Presidência • Presidente)</option>
-              <option value="alice.mizuki@edvjr.com.br">Alice Mizuki (Projetos • Assessora)</option>
-              <option value="alice.ney@edvjr.com.br">Alice Ney (VPGG • Diretora)</option>
-              <option value="alicia.athayde@edvjr.com.br">Alicia (Marketing • Assessora)</option>
-              <option value="aline.tartaglia@edvjr.com.br">Aline (Jurídico • Assessora)</option>
-              <option value="amanda.bede@edvjr.com.br">Amanda (Projetos • Assessora)</option>
-              <option value="karolina.krause@edvjr.com.br">Ana Karolina (Jurídico • Assessora)</option>
-              <option value="estevao.coutinho@edvjr.com.br">Estevão (Comercial • Assessor)</option>
-              <option value="evelyn.roldi@edvjr.com.br">Evelyn (Marketing • Diretora)</option>
-              <option value="gabriel.orienrac@edvjr.com.br">Cachorrão / Gabriel (Projetos • Assessor)</option>
-              <option value="giulia.moulin@edvjr.com.br">Giulia (VPGG • Assessora)</option>
-              <option value="guilherme.borges@edvjr.com.br">Guilherme Borges (Comercial • Assessor)</option>
-              <option value="isadora.epichin@edvjr.com.br">Isadora (Comercial • Diretora)</option>
-              <option value="joaop.lecco@edvjr.com.br">Chillibão / João P. (Marketing • Assessor)</option>
-              <option value="marialice.bacelar@edvjr.com.br">Maria Alice (Comercial • Assessora)</option>
-              <option value="mariaeduarda.dias@edvjr.com.br">Maria Eduarda (VPGG • Assessora)</option>
-              <option value="maria.teixeira@edvjr.com.br">Maria Luyza (Jurídico • Assessora)</option>
-              <option value="marina.moretto@edvjr.com.br">Marina (Tesouraria • Diretora)</option>
-              <option value="marllon.oliveira@edvjr.com.br">Marllon (Projetos • Assessor)</option>
-              <option value="pedro.barros@edvjr.com.br">Pedro Barros (Comercial • Assessor)</option>
-              <option value="renato.moura@edvjr.com.br">Renato (Projetos • Assessor)</option>
-              <option value="samuel.garcia@edvjr.com.br">Samuel (Comercial • Assessor)</option>
-              <option value="thais.junger@edvjr.com.br">Thais (Projetos • Gerente)</option>
-            </select>
+        <div class="mt-6 pt-5 border-t border-slate-100 text-center">
+          <div class="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200 rounded-full text-[10px] text-slate-600 font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span>Blindagem Ativa: BCrypt • HttpOnly Cookie • Rate Limiting</span>
           </div>
         </div>
       </div>
@@ -231,11 +187,11 @@
       <div class="p-3 border-t border-slate-800 bg-[#071224]/80 flex items-center justify-between">
         <div onclick="abrirModalPerfil()" title="Clique para ver e editar seu Perfil (RBAC)" class="flex items-center gap-2.5 overflow-hidden cursor-pointer hover:bg-slate-800/60 p-1 rounded-lg transition group">
           <div id="user-session-avatar" class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-xs text-white border border-blue-400 shrink-0 group-hover:ring-2 group-hover:ring-blue-400">
-            CJ
+            --
           </div>
           <div class="truncate">
-            <div id="user-session-name" class="text-xs font-semibold text-slate-200 truncate group-hover:text-blue-300">Charles</div>
-            <div id="user-session-role" class="text-[10px] text-blue-400 font-mono truncate">ADMIN • Presidência</div>
+            <div id="user-session-name" class="text-xs font-semibold text-slate-200 truncate group-hover:text-blue-300">Carregando...</div>
+            <div id="user-session-role" class="text-[10px] text-blue-400 font-mono truncate">Autenticação</div>
           </div>
         </div>
         <div class="flex items-center gap-1">
@@ -4324,7 +4280,7 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
             </div>
             <div>
               <label class="block text-[10px] font-bold text-slate-500 mb-1">Consultor Responsável</label>
-              <input type="text" id="staging_prop_responsavel" placeholder="Ex: Thais Junger" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+              <input type="text" id="staging_prop_responsavel" placeholder="Ex: Consultor Responsável" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
             </div>
             <div>
               <label class="block text-[10px] font-bold text-slate-500 mb-1">Telefone Cliente</label>

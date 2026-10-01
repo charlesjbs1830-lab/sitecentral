@@ -15,33 +15,39 @@ function getChecked(id, defVal) {
  */
 
 // ==============================================================================
-// 1. MATRIZ DE ACESSO RESTRITO (WHITELIST OFICIAL - GESTÃO 2026)
+// 1. GESTÃO DINÂMICA DE MEMBROS (Carregamento via API protegida /api/members)
 // ==============================================================================
-const membrosAutorizados = {
-  "charles.junior@edvjr.com.br": { nome: "Charles", area: "Presidência", setor: "Presidência", cargo: "Presidente Institucional", role: "presidente" },
-  "alice.mizuki@edvjr.com.br": { nome: "Alice Mizuki", area: "Projetos", setor: "Projetos / RMs", cargo: "Assessora de Projetos", role: "assessor" },
-  "alice.ney@edvjr.com.br": { nome: "Alice Ney", area: "VPGG", setor: "VPGG", cargo: "Vice-Presidente de Gestão", role: "diretor" },
-  "alicia.athayde@edvjr.com.br": { nome: "Alicia", area: "Marketing", setor: "Marketing", cargo: "Assessora de Conteúdo", role: "assessor" },
-  "aline.tartaglia@edvjr.com.br": { nome: "Aline", area: "Jurídico", setor: "Jurídico", cargo: "Assessora de Contratos", role: "assessor" },
-  "amanda.bede@edvjr.com.br": { nome: "Amanda", area: "Projetos", setor: "Projetos / RMs", cargo: "Assessora de Projetos", role: "assessor" },
-  "karolina.krause@edvjr.com.br": { nome: "Ana Karolina", area: "Jurídico", setor: "Jurídico", cargo: "Assessora de Compliance", role: "assessor" },
-  "estevao.coutinho@edvjr.com.br": { nome: "Estevão", area: "Comercial", setor: "Comercial", cargo: "Assessor de Vendas", role: "assessor" },
-  "evelyn.roldi@edvjr.com.br": { nome: "Evelyn", area: "Marketing", setor: "Marketing", cargo: "Diretora de Marketing", role: "diretor" },
-  "gabriel.orienrac@edvjr.com.br": { nome: "Cachorrão (Gabriel)", area: "Projetos", setor: "Projetos / RMs", cargo: "Assessor de Projetos", role: "assessor" },
-  "giulia.moulin@edvjr.com.br": { nome: "Giulia", area: "VPGG", setor: "VPGG", cargo: "Assessora de Gente & Gestão", role: "assessor" },
-  "guilherme.borges@edvjr.com.br": { nome: "Guilherme Borges", area: "Comercial", setor: "Comercial", cargo: "Assessor de Vendas", role: "assessor" },
-  "isadora.epichin@edvjr.com.br": { nome: "Isadora", area: "Comercial", setor: "Comercial / Vendas", cargo: "Diretora Comercial", role: "diretor" },
-  "joaop.lecco@edvjr.com.br": { nome: "Chillibão (João P.)", area: "Marketing", setor: "Marketing", cargo: "Assessor de Criação", role: "assessor" },
-  "marialice.bacelar@edvjr.com.br": { nome: "Maria Alice", area: "Comercial", setor: "Comercial", cargo: "Assessora de Negociação", role: "assessor" },
-  "mariaeduarda.dias@edvjr.com.br": { nome: "Maria Eduarda", area: "VPGG", setor: "VPGG", cargo: "Assessora de Gente & Gestão", role: "assessor" },
-  "maria.teixeira@edvjr.com.br": { nome: "Maria Luyza", area: "Jurídico", setor: "Jurídico", cargo: "Assessora de Governança", role: "assessor" },
-  "marina.moretto@edvjr.com.br": { nome: "Marina", area: "Tesouraria", setor: "Tesouraria / CJA", cargo: "Diretora Financeira", role: "diretor" },
-  "marllon.oliveira@edvjr.com.br": { nome: "Marllon", area: "Projetos", setor: "Projetos / RMs", cargo: "Assessor de Projetos", role: "assessor" },
-  "pedro.barros@edvjr.com.br": { nome: "Pedro Barros", area: "Comercial", setor: "Comercial", cargo: "Assessor de Inbound", role: "assessor" },
-  "renato.moura@edvjr.com.br": { nome: "Renato", area: "Projetos", setor: "Projetos / RMs", cargo: "Assessor de Projetos", role: "assessor" },
-  "samuel.garcia@edvjr.com.br": { nome: "Samuel", area: "Comercial", setor: "Comercial / Radar", cargo: "Assessor de Prospecção", role: "assessor" },
-  "thais.junger@edvjr.com.br": { nome: "Thais", area: "Projetos", setor: "Projetos / RMs", cargo: "Gerente de Registro de Marca", role: "gerente" }
-};
+window.MEMBROS_CACHE = [];
+window.MEMBROS_MAP = {};
+
+async function carregarMembrosSistema() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const headers = {};
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(API_BASE_URL + '/api/members', {
+      headers: headers,
+      credentials: 'include'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      window.MEMBROS_CACHE = data || [];
+      window.MEMBROS_MAP = {};
+      window.MEMBROS_CACHE.forEach(m => {
+        if (m.email) {
+          window.MEMBROS_MAP[m.email.toLowerCase()] = m;
+        }
+      });
+      if (typeof popularSelectsVPGG === 'function') {
+        popularSelectsVPGG();
+      }
+      return window.MEMBROS_CACHE;
+    }
+  } catch (err) {
+    console.warn("[Membros] Falha ao carregar lista dinâmica de membros:", err.message);
+  }
+  return [];
+}
 
 const SESSION_STORAGE_KEY = 'edv_user_session';
 const AUTH_TOKEN_KEY = 'edv_auth_token';
@@ -63,12 +69,15 @@ async function initAuth() {
       applyUserSession(userData);
       showAppScreen();
 
-      // Se possuir token JWT, sincronizar dados operacionais protegidos em segundo plano
-      if (token) {
-        carregarDadosOperacionaisProtegidos(token).catch(function() {
-          console.info("[Auth] Servidor local offline. Utilizando cache operacional.");
-        });
-      }
+      // Carregar dinamicamente os membros cadastrados no sistema
+      carregarMembrosSistema().catch(function(e) {
+        console.warn("[Membros] Falha ao sincronizar membros:", e);
+      });
+
+      // Se possuir token JWT ou sessão ativa, sincronizar dados operacionais protegidos em segundo plano
+      carregarDadosOperacionaisProtegidos(token).catch(function() {
+        console.info("[Auth] Servidor local offline. Utilizando cache operacional.");
+      });
       return;
     } catch (e) {
       localStorage.removeItem(SESSION_STORAGE_KEY);
@@ -83,18 +92,23 @@ async function handleLoginSubmit(event) {
   const emailInput = document.getElementById('emailMembro');
   const senhaInput = document.getElementById('senhaMembro');
   const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
-  const senha = senhaInput ? senhaInput.value : 'edv2026!';
+  const senha = senhaInput ? senhaInput.value : '';
 
   if (!email) {
     showLoginError("Por favor, digite seu e-mail corporativo.");
     return;
   }
+  if (!senha) {
+    showLoginError("Por favor, digite sua senha de acesso.");
+    return;
+  }
 
-  // 1. TENTATIVA DE AUTENTICAÇÃO NO BACKEND FASTAPI (BCRYPT + JWT + RBAC)
+  // AUTENTICAÇÃO RIGOROSA NO BACKEND (BCrypt + Session Cookie HttpOnly + JWT + Rate Limiting)
   try {
     const resp = await fetch(API_BASE_URL + '/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Envio e recebimento de Cookies HttpOnly
       body: JSON.stringify({ email: email, password: senha })
     });
 
@@ -103,55 +117,47 @@ async function handleLoginSubmit(event) {
       const token = authData.access_token;
       const user = authData.user;
 
-      localStorage.setItem(AUTH_TOKEN_KEY, token);
+      if (token) {
+        localStorage.setItem(AUTH_TOKEN_KEY, token);
+      }
       localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
       applyUserSession(user);
 
-      // Obter payload protegido de dados operacionais (legacy_data.json)
-      await carregarDadosOperacionaisProtegidos(token);
+      // Carregar dinamicamente membros e dados operacionais protegidos
+      await Promise.all([
+        carregarMembrosSistema(),
+        carregarDadosOperacionaisProtegidos(token)
+      ]);
 
       showAppScreen();
-      showToast(`🔐 Autenticado via JWT com sucesso! (${user.role} • ${user.setor})`);
+      showToast(`🔐 Autenticado com sucesso! (${user.role} • ${user.setor})`);
       return;
     } else {
       const errJson = await resp.json().catch(function() { return {}; });
-      if (resp.status === 401) {
-        showLoginError(`❌ Falha de Acesso: ${errJson.detail || 'Credenciais inválidas.'}`);
+      if (resp.status === 429) {
+        showLoginError(`🛡️ Bloqueio por Segurança (Brute Force): ${errJson.detail || 'Muitas tentativas falhas. Tente novamente mais tarde.'}`);
         return;
       }
+      if (resp.status === 401) {
+        showLoginError(`❌ Falha de Acesso: ${errJson.detail || 'E-mail ou senha incorretos.'}`);
+        return;
+      }
+      showLoginError(`❌ Erro no login (${resp.status}): ${errJson.detail || 'Falha ao autenticar no servidor.'}`);
+      return;
     }
   } catch (netErr) {
-    console.warn("[Auth Backend] Servidor FastAPI offline na porta 8000. Utilizando contingência local (GitHub Pages).");
+    console.error("[Auth Backend] Erro de rede:", netErr);
+    showLoginError("❌ Não foi possível conectar ao servidor de autenticação (EDbrain API). Verifique sua conexão com o servidor.");
   }
-
-  // 2. MODO CONTINGÊNCIA (EXECUÇÃO ESTÁTICA GITHUB PAGES / OFFLINE)
-  const membro = membrosAutorizados[email];
-  if (!membro) {
-    showLoginError("❌ E-mail não autorizado na Whitelist da EDV Jr. Verifique com a Diretoria ou VPGG.");
-    return;
-  }
-
-  const userData = {
-    email: email,
-    nome: membro.nome,
-    area: membro.area || membro.setor,
-    setor: membro.setor,
-    cargo: membro.cargo || 'Consultor(a)',
-    role: membro.role || 'assessor',
-    loginTime: new Date().toISOString(),
-    authMode: 'whitelist_fallback'
-  };
-
-  localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(userData));
-  applyUserSession(userData);
-  showAppScreen();
-  showToast(`👋 Bem-vindo(a), ${userData.nome}! (Modo Whitelist Local)`);
 }
 
 async function carregarDadosOperacionaisProtegidos(token) {
   try {
+    const headers = {};
+    if (token) headers['Authorization'] = 'Bearer ' + token;
     const res = await fetch(API_BASE_URL + '/api/data/operational', {
-      headers: { 'Authorization': 'Bearer ' + token }
+      headers: headers,
+      credentials: 'include'
     });
     if (res.ok) {
       const payload = await res.json();
@@ -165,7 +171,7 @@ async function carregarDadosOperacionaisProtegidos(token) {
       if (typeof initSeloEJDataGrid === 'function') initSeloEJDataGrid();
       if (typeof updateDashboardKPIs === 'function') updateDashboardKPIs();
 
-      console.log(`[Segurança] Dados operacionais carregados com sucesso via token JWT (${payload.rms ? payload.rms.length : 0} RMs, ${payload.crm_leads ? payload.crm_leads.length : 0} Leads).`);
+      console.log(`[Segurança] Dados operacionais carregados com sucesso (${payload.rms ? payload.rms.length : 0} RMs, ${payload.crm_leads ? payload.crm_leads.length : 0} Leads).`);
       return payload;
     }
   } catch (e) {
@@ -174,14 +180,18 @@ async function carregarDadosOperacionaisProtegidos(token) {
 }
 
 function quickLogin(email) {
-  const emailInput = document.getElementById('emailMembro');
-  const senhaInput = document.getElementById('senhaMembro');
-  if (emailInput) emailInput.value = email;
-  if (senhaInput) senhaInput.value = 'edv2026!';
-  handleLoginSubmit(null);
+  console.warn("[Segurança] QuickLogin desativado. Autenticação obrigatória por credenciais criptografadas no banco.");
 }
 
-function logout() {
+async function logout() {
+  try {
+    await fetch(API_BASE_URL + '/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include'
+    });
+  } catch (e) {
+    console.warn("[Auth] Erro ao notificar logout no servidor:", e);
+  }
   localStorage.removeItem(SESSION_STORAGE_KEY);
   localStorage.removeItem(AUTH_TOKEN_KEY);
   currentUserSession = null;
@@ -3232,25 +3242,38 @@ function popularSelectsVPGG() {
   const trilhaSelect = document.getElementById('trilha_member_email');
   const filtroMembroSelect = document.getElementById('filtro-pdi-membro');
 
-  const membros = Object.entries(membrosAutorizados).map(([email, info]) => ({
-    email,
-    nome: info.nome,
-    area: info.area || info.setor || 'Geral',
-    cargo: info.cargo || 'Consultor(a)',
-    role: info.role || 'assessor'
-  })).sort((a, b) => a.nome.localeCompare(b.nome));
+  const membros = (window.MEMBROS_CACHE && window.MEMBROS_CACHE.length > 0)
+    ? window.MEMBROS_CACHE.map(info => ({
+        email: info.email,
+        nome: info.nome,
+        area: info.area || info.setor || 'Geral',
+        cargo: info.cargo || 'Consultor(a)',
+        role: info.role || 'assessor'
+      })).sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
+    : [];
 
-  if (pdiSelect && pdiSelect.options.length <= 1) {
-    pdiSelect.innerHTML = '<option value="">-- Selecione o colaborador (23 colaboradores) --</option>';
+  if (membros.length === 0) {
+    if (!window._carregandoMembros) {
+      window._carregandoMembros = true;
+      carregarMembrosSistema().finally(() => { window._carregandoMembros = false; });
+    }
+    return;
+  }
+
+  if (pdiSelect) {
+    const curVal = pdiSelect.value;
+    pdiSelect.innerHTML = `<option value="">-- Selecione o colaborador (${membros.length} colaboradores) --</option>`;
     membros.forEach(m => {
       const opt = document.createElement('option');
       opt.value = m.email;
       opt.textContent = `${m.nome} (${m.area} • ${m.cargo})`;
       pdiSelect.appendChild(opt);
     });
+    if (curVal) pdiSelect.value = curVal;
   }
 
-  if (trilhaSelect && trilhaSelect.options.length <= 1) {
+  if (trilhaSelect) {
+    const curVal = trilhaSelect.value;
     trilhaSelect.innerHTML = '<option value="">-- Escolha um colaborador para gerar a trilha --</option>';
     membros.forEach(m => {
       const opt = document.createElement('option');
@@ -3258,9 +3281,11 @@ function popularSelectsVPGG() {
       opt.textContent = `${m.nome} - ${m.area} (${m.cargo})`;
       trilhaSelect.appendChild(opt);
     });
+    if (curVal) trilhaSelect.value = curVal;
   }
 
-  if (filtroMembroSelect && filtroMembroSelect.options.length <= 1) {
+  if (filtroMembroSelect) {
+    const curVal = filtroMembroSelect.value;
     filtroMembroSelect.innerHTML = '<option value="">Todos os Colaboradores</option>';
     membros.forEach(m => {
       const opt = document.createElement('option');
@@ -3268,6 +3293,7 @@ function popularSelectsVPGG() {
       opt.textContent = `${m.nome} (${m.area})`;
       filtroMembroSelect.appendChild(opt);
     });
+    if (curVal) filtroMembroSelect.value = curVal;
   }
 }
 
@@ -3277,7 +3303,7 @@ function aoSelecionarMembroPDI() {
   if (!pdiSelect || !areaInput) return;
 
   const email = pdiSelect.value.trim().toLowerCase();
-  const membro = membrosAutorizados[email];
+  const membro = window.MEMBROS_MAP ? window.MEMBROS_MAP[email] : null;
   if (membro) {
     areaInput.value = membro.area || membro.setor || 'VPGG';
   } else {
@@ -3291,7 +3317,8 @@ async function carregarPDIsVPGG() {
 
   try {
     const res = await fetch(API_BASE_URL + '/vpgg/pdis', {
-      headers: { 'Authorization': 'Bearer ' + token }
+      headers: { 'Authorization': 'Bearer ' + token },
+      credentials: 'include'
     });
 
     if (res.ok) {
@@ -3343,7 +3370,7 @@ function renderTabelaPDIs(itens) {
 
   tbody.innerHTML = itens.map(pdi => {
     const stConfig = statusMap[(pdi.status || '').toLowerCase()] || { label: pdi.status, class: 'bg-slate-100 text-slate-700 border-slate-300' };
-    const membroInfo = membrosAutorizados[(pdi.user_email || '').toLowerCase()];
+    const membroInfo = window.MEMBROS_MAP ? window.MEMBROS_MAP[(pdi.user_email || '').toLowerCase()] : null;
     const nomeExibicao = membroInfo ? membroInfo.nome : (pdi.user_email ? pdi.user_email.split('@')[0] : 'Colaborador');
     const emailExibicao = pdi.user_email ? escapeHTML(pdi.user_email) : '-';
     const areaExibicao = pdi.area ? escapeHTML(pdi.area) : (membroInfo?.area || 'VPGG');

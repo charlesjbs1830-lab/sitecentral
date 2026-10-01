@@ -128,7 +128,8 @@ try:
         check_compliance_access,
         verify_compliance_access,
         check_rm_staging_approval_access,
-        verify_rm_staging_approval_access
+        verify_rm_staging_approval_access,
+        login_rate_limiter
     )
 except ImportError:
     from database import (
@@ -216,7 +217,8 @@ except ImportError:
         check_compliance_access,
         verify_compliance_access,
         check_rm_staging_approval_access,
-        verify_rm_staging_approval_access
+        verify_rm_staging_approval_access,
+        login_rate_limiter
     )
 
 # Caminho para o payload operacional oficial
@@ -240,14 +242,32 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Habilitar CORS irrestrito para consumo local e GitHub Pages
+# Origens permitidas explícitas para garantir compatibilidade com cookies HttpOnly (RFC 6454 / Fetch Spec)
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://edbrain.onrender.com",
+    "https://charlesjbs1830-lab.github.io",
+]
+env_origins = os.getenv("CORS_ALLOWED_ORIGINS", "")
+if env_origins:
+    ALLOWED_ORIGINS.extend([o.strip() for o in env_origins.split(",") if o.strip()])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?|https://.*\.github\.io|https://.*\.onrender\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # ==============================================================================
 # SCHEMAS PYDANTIC
@@ -920,26 +940,32 @@ def parse_csv_leads(csv_text: str) -> List[LeadIngestItem]:
 # 1. AUTENTICAÇÃO, PERFIL E BLOQUEIO DE AUTO-PROMOÇÃO (RBAC SHIELD)
 # ==============================================================================
 
-@app.post("/api/auth/login", response_model=LoginResponse, summary="Autenticação com e-mail e senha")
-async def login(credentials: LoginRequest):
+@app.post("/api/auth/login", response_model=LoginResponse, summary="Autenticação estrita com e-mail e senha (BCrypt + Cookie HttpOnly)")
+async def login(credentials: LoginRequest, request: Request, response: Response):
+    client_ip = login_rate_limiter.get_client_ip(request)
+    is_limited, retry_after = login_rate_limiter.is_ip_rate_limited(client_ip)
+    if is_limited:
+        log_audit(client_ip, "RATE_LIMIT_BLOCKED", "/api/auth/login", 429, {"retry_after": retry_after}, ip_address=client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Muitas tentativas de login a partir deste endereço IP. Bloqueio temporário ativo por segurança contra força bruta. Tente novamente em {retry_after} segundos.",
+            headers={"Retry-After": str(retry_after)}
+        )
+
     email = credentials.email.lower().strip()
     user = get_user_by_email(email)
     
-    if not user:
-        log_audit(email, "LOGIN_FAILED", "/api/auth/login", 401, "E-mail não autorizado na Whitelist")
+    if not user or not verify_password(credentials.password, user["hashed_password"]):
+        login_rate_limiter.record_attempt(client_ip, success=False)
+        log_audit(email or client_ip, "LOGIN_FAILED", "/api/auth/login", 401, "Credenciais corporativas inválidas", ip_address=client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="E-mail não autorizado na Whitelist da EDV Jr. Verifique com a VPGG ou Presidência.",
+            detail="Credenciais corporativas inválidas. Verifique seu e-mail e senha de membro.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    if not verify_password(credentials.password, user["hashed_password"]):
-        log_audit(email, "LOGIN_FAILED", "/api/auth/login", 401, "Senha incorreta")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Senha incorreta. A senha padrão inicial de membro é 'edv2026!'.",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    # Login bem-sucedido: zera falhas do IP
+    login_rate_limiter.record_attempt(client_ip, success=True)
     
     # Criar Token JWT com dados essenciais do usuário e papel RBAC
     token_payload = {
@@ -960,14 +986,55 @@ async def login(credentials: LoginRequest):
         setor=user.get("setor"),
         cargo=user.get("cargo")
     )
+
+    # Definir Cookie HttpOnly / Secure
+    is_secure = (
+        request.url.scheme == "https" 
+        or os.getenv("EDV_ENV") == "production" 
+        or request.headers.get("x-forwarded-proto") == "https"
+    )
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=is_secure,
+        samesite="lax",
+        max_age=60 * 60 * 24, # 24 horas
+        path="/"
+    )
     
-    log_audit(email, "LOGIN_SUCCESS", "/api/auth/login", 200, {"role": user["role"], "area": user["area"]})
+    log_audit(email, "LOGIN_SUCCESS", "/api/auth/login", 200, {"role": user["role"], "area": user["area"]}, ip_address=client_ip)
 
     return LoginResponse(
         access_token=access_token,
         token_type="bearer",
         user=user_profile
     )
+
+@app.post("/api/auth/logout", summary="Encerrar sessão e revogar cookie HttpOnly de autenticação")
+async def logout(response: Response, request: Request, current_user: dict = Depends(get_current_user)):
+    response.delete_cookie(key="access_token", path="/")
+    client_ip = login_rate_limiter.get_client_ip(request)
+    log_audit(current_user["email"], "LOGOUT", "/api/auth/logout", 200, "Sessão corporativa encerrada com sucesso", ip_address=client_ip)
+    return {"status": "success", "message": "Sessão encerrada com sucesso."}
+
+@app.get("/api/members", response_model=List[UserProfile], summary="Listar membros ativos da EJ para seletores e módulos operacionais")
+async def list_active_members(current_user: dict = Depends(get_current_user)):
+    """Retorna colaboradores ativos para seleção dinâmica em PDIs, CRM e esteira operacional."""
+    users = get_all_users()
+    return [
+        UserProfile(
+            id=u["id"],
+            email=u["email"],
+            nome=u["nome"],
+            area=u["area"],
+            role=u["role"],
+            setor=u.get("setor"),
+            cargo=u.get("cargo")
+        )
+        for u in users
+    ]
+
 
 @app.get("/api/auth/me", response_model=UserProfile, summary="Verificação de sessão e perfil RBAC")
 async def get_me(current_user: dict = Depends(get_current_user)):

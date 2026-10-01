@@ -4,10 +4,12 @@ EDV Jr. - Módulo de Autenticação, Criptografia Bcrypt, JWT e Controle de Aces
 
 import os
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict, Tuple
+import threading
+import time
 import bcrypt
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 try:
     from database import get_user_by_email, VALID_ROLES
@@ -19,6 +21,89 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas de sessão
 
 security = HTTPBearer(auto_error=False)
+
+# ==============================================================================
+# MOTOR DE RATE LIMITING POR IP (PROTEÇÃO ATIVA CONTRA FORÇA BRUTA)
+# ==============================================================================
+class LoginRateLimiter:
+    """
+    Controlador de taxa de requisições por IP na rota de autenticação.
+    Implementa janela deslizante para mitigação de ataques de força bruta e credential stuffing.
+    - Bloqueia após FAILED_LIMIT tentativas incorretas em WINDOW_SECONDS (5 min).
+    - Limita requisições globais por minuto por IP (BURST_LIMIT).
+    """
+    def __init__(self, max_failed: int = 5, window_seconds: int = 300, max_requests_per_minute: int = 20):
+        self.max_failed = max_failed
+        self.window_seconds = window_seconds
+        self.max_requests_per_minute = max_requests_per_minute
+        self.failed_attempts: Dict[str, List[float]] = {}
+        self.request_timestamps: Dict[str, List[float]] = {}
+        self.lock = threading.Lock()
+
+    def get_client_ip(self, request: Request) -> str:
+        # Verifica cabeçalhos de proxy reverso (Render, Cloudflare, Nginx)
+        x_forwarded_for = request.headers.get("x-forwarded-for")
+        if x_forwarded_for:
+            # Primeiro IP na cadeia é o cliente real
+            ip = x_forwarded_for.split(",")[0].strip()
+            if ip:
+                return ip
+        x_real_ip = request.headers.get("x-real-ip")
+        if x_real_ip:
+            return x_real_ip.strip()
+        if request.client and request.client.host:
+            return request.client.host.strip()
+        return "127.0.0.1"
+
+    def is_ip_rate_limited(self, ip: str) -> Tuple[bool, int]:
+        now = time.time()
+        with self.lock:
+            # 1. Verificar tentativas com falha (Força bruta de senhas)
+            failed = self.failed_attempts.get(ip, [])
+            # Limpar tentativas fora da janela deslizante
+            valid_failed = [t for t in failed if now - t < self.window_seconds]
+            self.failed_attempts[ip] = valid_failed
+
+            if len(valid_failed) >= self.max_failed:
+                oldest_in_window = valid_failed[0]
+                retry_after = max(1, int(oldest_in_window + self.window_seconds - now))
+                return True, retry_after
+
+            # 2. Verificar rajada excessiva de requisições por minuto
+            reqs = self.request_timestamps.get(ip, [])
+            valid_reqs = [t for t in reqs if now - t < 60]
+            self.request_timestamps[ip] = valid_reqs
+
+            if len(valid_reqs) >= self.max_requests_per_minute:
+                oldest_req = valid_reqs[0]
+                retry_after = max(1, int(oldest_req + 60 - now))
+                return True, retry_after
+
+            # Registra requisição atual
+            self.request_timestamps[ip].append(now)
+            return False, 0
+
+    def record_attempt(self, ip: str, success: bool):
+        now = time.time()
+        with self.lock:
+            if success:
+                # Login bem-sucedido zera o contador de falhas para o IP
+                self.failed_attempts.pop(ip, None)
+            else:
+                if ip not in self.failed_attempts:
+                    self.failed_attempts[ip] = []
+                self.failed_attempts[ip].append(now)
+
+    def reset(self, ip: Optional[str] = None):
+        with self.lock:
+            if ip:
+                self.failed_attempts.pop(ip, None)
+                self.request_timestamps.pop(ip, None)
+            else:
+                self.failed_attempts.clear()
+                self.request_timestamps.clear()
+
+login_rate_limiter = LoginRateLimiter()
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
@@ -55,15 +140,24 @@ def decode_access_token(token: str) -> dict:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> dict:
-    if not credentials or not credentials.credentials:
+def get_current_user(
+    request: Request = None,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+) -> dict:
+    token = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    elif request and request.cookies:
+        token = request.cookies.get("access_token") or request.cookies.get("token")
+
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciais de autenticação não fornecidas (Bearer token ausente).",
+            detail="Credenciais de autenticação não fornecidas (Bearer token ou Cookie HttpOnly ausente).",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    payload = decode_access_token(credentials.credentials)
+    payload = decode_access_token(token)
     email: str = payload.get("sub")
     if not email:
         raise HTTPException(
@@ -83,6 +177,7 @@ def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depen
     user_copy = dict(user)
     user_copy.pop("hashed_password", None)
     return user_copy
+
 
 def require_role(allowed_roles: List[str]):
     """

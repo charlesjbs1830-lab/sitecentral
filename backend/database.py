@@ -225,6 +225,19 @@ class RMStagingRecordORM(Base):
     applied_to_main_db = Column(Integer, default=0)
     applied_at = Column(DateTime, nullable=True)
 
+class UserORM(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    nome = Column(String(255), nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    area = Column(String(100), nullable=False)
+    role = Column(String(50), nullable=False)
+    setor = Column(String(100), nullable=True)
+    cargo = Column(String(100), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
@@ -1202,10 +1215,79 @@ def init_db():
     print(f"[SQLite] Base inicializada e sincronizada com {total_users} membros no padrão RBAC estrito.")
     conn.close()
 
+    # Sincronização e migração de tabelas SQLAlchemy (compatível com SQLite e PostgreSQL)
+    try:
+        Base.metadata.create_all(bind=engine)
+        ensure_initial_admin()
+    except Exception as e_sql:
+        print(f"[SQLAlchemy] Aviso ao criar tabelas/seeding: {e_sql}")
+
+def ensure_initial_admin(db_session=None):
+    """
+    Garante de forma resiliente que a conta de Administrador/Presidência (e os membros da liderança)
+    esteja devidamente cadastrada e com hash bcrypt válido tanto em SQLite quanto em PostgreSQL.
+    """
+    should_close = False
+    if db_session is None:
+        db_session = SessionLocal()
+        should_close = True
+    try:
+        default_hash = bcrypt.hashpw(DEFAULT_PASSWORD.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        for m in MEMBROS_WHITELIST:
+            user = db_session.query(UserORM).filter(UserORM.email == m["email"].lower().strip()).first()
+            if not user:
+                new_u = UserORM(
+                    email=m["email"].lower().strip(),
+                    nome=m["nome"],
+                    hashed_password=default_hash,
+                    area=m["area"],
+                    role=m["role"],
+                    setor=m.get("setor"),
+                    cargo=m.get("cargo")
+                )
+                db_session.add(new_u)
+            else:
+                user.nome = m["nome"]
+                user.area = m["area"]
+                user.role = m["role"]
+                user.setor = m.get("setor")
+                user.cargo = m.get("cargo")
+        db_session.commit()
+    except Exception as e:
+        db_session.rollback()
+        print(f"[Database] Aviso ao sincronizar usuários via SQLAlchemy: {e}")
+    finally:
+        if should_close:
+            db_session.close()
+
 def get_user_by_email(email: str):
+    email_clean = email.lower().strip()
+    # 1. Tentar via SQLAlchemy ORM (compatível com PostgreSQL em produção e SQLite)
+    try:
+        db = SessionLocal()
+        user_orm = db.query(UserORM).filter(UserORM.email == email_clean).first()
+        if user_orm:
+            user_dict = {
+                "id": user_orm.id,
+                "email": user_orm.email,
+                "nome": user_orm.nome,
+                "hashed_password": user_orm.hashed_password,
+                "area": user_orm.area,
+                "role": user_orm.role,
+                "setor": user_orm.setor,
+                "cargo": user_orm.cargo,
+                "created_at": user_orm.created_at
+            }
+            db.close()
+            return user_dict
+        db.close()
+    except Exception:
+        pass
+
+    # 2. Fallback via SQLite direto
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = ?;", (email.lower().strip(),))
+    cursor.execute("SELECT * FROM users WHERE email = ?;", (email_clean,))
     row = cursor.fetchone()
     conn.close()
     if row:
@@ -1213,6 +1295,27 @@ def get_user_by_email(email: str):
     return None
 
 def get_user_by_id(user_id: int):
+    try:
+        db = SessionLocal()
+        user_orm = db.query(UserORM).filter(UserORM.id == user_id).first()
+        if user_orm:
+            user_dict = {
+                "id": user_orm.id,
+                "email": user_orm.email,
+                "nome": user_orm.nome,
+                "hashed_password": user_orm.hashed_password,
+                "area": user_orm.area,
+                "role": user_orm.role,
+                "setor": user_orm.setor,
+                "cargo": user_orm.cargo,
+                "created_at": user_orm.created_at
+            }
+            db.close()
+            return user_dict
+        db.close()
+    except Exception:
+        pass
+
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM users WHERE id = ?;", (user_id,))
@@ -1223,12 +1326,34 @@ def get_user_by_id(user_id: int):
     return None
 
 def get_all_users():
+    try:
+        db = SessionLocal()
+        users_orm = db.query(UserORM).order_by(UserORM.id.asc()).all()
+        if users_orm:
+            users_list = [{
+                "id": u.id,
+                "email": u.email,
+                "nome": u.nome,
+                "hashed_password": u.hashed_password,
+                "area": u.area,
+                "role": u.role,
+                "setor": u.setor,
+                "cargo": u.cargo,
+                "created_at": u.created_at
+            } for u in users_orm]
+            db.close()
+            return users_list
+        db.close()
+    except Exception:
+        pass
+
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT id, email, nome, area, role, setor, cargo, created_at FROM users ORDER BY id ASC;")
     rows = cursor.fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
 
 def get_followup_by_id(followup_id: int):
     conn = get_connection()

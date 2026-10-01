@@ -11,10 +11,20 @@ from fastapi.testclient import TestClient
 # Adicionar diretório backend ao sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from main import app
+from main import app, login_rate_limiter
 from database import init_db, get_connection, VALID_ROLES
 
 class TestEDbrainRBACAndFinancial(unittest.TestCase):
+
+    def setUp(self):
+        login_rate_limiter.reset()
+        if hasattr(self, 'client'):
+            self.client.cookies.clear()
+
+    def tearDown(self):
+        login_rate_limiter.reset()
+        if hasattr(self, 'client'):
+            self.client.cookies.clear()
 
     @classmethod
     def setUpClass(cls):
@@ -1498,6 +1508,91 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         self.assertEqual(res_rejected.status_code, 200)
         self.assertEqual(res_rejected.json()["status"], "rejected")
         self.assertEqual(res_rejected.json()["reviewed_by"], "alice.ney@edvjr.com.br")
+
+    def test_42_login_database_only_bcrypt_validation(self):
+        """Valida login estritamente via banco de dados e hash BCrypt sem whitelist de contingência offline"""
+        # 1. Login com credenciais válidas do administrador inicial persistido no banco
+        res_ok = self.client.post("/api/auth/login", json={"email": "charles.junior@edvjr.com.br", "password": "edv2026!"})
+        self.assertEqual(res_ok.status_code, 200)
+        data = res_ok.json()
+        self.assertIn("access_token", data)
+        self.assertEqual(data["user"]["email"], "charles.junior@edvjr.com.br")
+        self.assertEqual(data["user"]["role"], "presidente")
+
+        # 2. Senha incorreta -> 401 Unauthorized
+        res_wrong = self.client.post("/api/auth/login", json={"email": "charles.junior@edvjr.com.br", "password": "wrong_password!"})
+        self.assertEqual(res_wrong.status_code, 401)
+        self.assertIn("Credenciais corporativas inválidas", res_wrong.json()["detail"])
+
+        # 3. Usuário inexistente -> 401 Unauthorized
+        res_none = self.client.post("/api/auth/login", json={"email": "fake.user@edvjr.com.br", "password": "edv2026!"})
+        self.assertEqual(res_none.status_code, 401)
+
+    def test_43_httponly_secure_cookie_and_cookie_auth(self):
+        """Valida emissão de cookie HttpOnly no login e autenticação transparente via cookie de sessão"""
+        # 1. Login emite cookie access_token HttpOnly
+        res_login = self.client.post("/api/auth/login", json={"email": "alice.ney@edvjr.com.br", "password": "edv2026!"})
+        self.assertEqual(res_login.status_code, 200)
+        self.assertIn("access_token", res_login.cookies)
+        
+        # Inspecionar cabeçalho Set-Cookie para confirmar flag HttpOnly
+        set_cookie_header = res_login.headers.get("set-cookie", "")
+        self.assertIn("HttpOnly", set_cookie_header)
+
+        # 2. Acesso a rota protegida enviando EXCLUSIVAMENTE o cookie no cliente (sem header Authorization)
+        token_val = res_login.cookies.get("access_token")
+        cookie_client = TestClient(app, cookies={"access_token": token_val})
+        res_cookie_auth = cookie_client.get("/api/auth/me")
+        self.assertEqual(res_cookie_auth.status_code, 200)
+        me_data = res_cookie_auth.json()
+        self.assertEqual(me_data["email"], "alice.ney@edvjr.com.br")
+
+        # 3. Logout invalida o cookie
+        res_logout = cookie_client.post("/api/auth/logout")
+        self.assertEqual(res_logout.status_code, 200)
+        logout_cookie_header = res_logout.headers.get("set-cookie", "")
+        self.assertTrue("max-age=0" in logout_cookie_header.lower() or "expires=" in logout_cookie_header.lower())
+
+    def test_44_ip_rate_limiting_brute_force_defense(self):
+        """Valida rate limiting por IP na rota de login contra ataques de força bruta (HTTP 429)"""
+        login_rate_limiter.reset()
+
+        # 5 tentativas falhas consecutivas com senha errada
+        for i in range(5):
+            res_fail = self.client.post("/api/auth/login", json={"email": "charles.junior@edvjr.com.br", "password": f"bad_pwd_{i}"})
+            self.assertEqual(res_fail.status_code, 401)
+
+        # Na 6ª tentativa, IP deve estar bloqueado (retornando HTTP 429)
+        res_blocked = self.client.post("/api/auth/login", json={"email": "charles.junior@edvjr.com.br", "password": "edv2026!"})
+        self.assertEqual(res_blocked.status_code, 429)
+        self.assertIn("Bloqueio temporário ativo por segurança", res_blocked.json()["detail"])
+        self.assertIn("Retry-After", res_blocked.headers)
+
+        # Após reset administrativo ou expiração da janela, o acesso é liberado
+        login_rate_limiter.reset()
+        res_restored = self.client.post("/api/auth/login", json={"email": "charles.junior@edvjr.com.br", "password": "edv2026!"})
+        self.assertEqual(res_restored.status_code, 200)
+
+    def test_45_api_members_dynamic_listing(self):
+        """Valida endpoint /api/members para povoamento dinâmico sem expor credenciais nem senhas"""
+        token = self.tokens["presidente"]
+        res = self.client.get("/api/members", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res.status_code, 200)
+        members = res.json()
+        self.assertIsInstance(members, list)
+        self.assertGreaterEqual(len(members), 23)
+
+        # Verificar se nenhum dado sensível (ex: hashed_password) é exposto
+        for m in members:
+            self.assertIn("email", m)
+            self.assertIn("nome", m)
+            self.assertNotIn("hashed_password", m)
+            self.assertNotIn("password", m)
+
+        # Acesso anônimo deve ser rejeitado com 401
+        anon_client = TestClient(app)
+        res_anon = anon_client.get("/api/members")
+        self.assertEqual(res_anon.status_code, 401)
 
 
 if __name__ == "__main__":
