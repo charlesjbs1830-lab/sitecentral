@@ -11,6 +11,7 @@ import unicodedata
 import bcrypt
 import math
 import json
+from datetime import datetime, timezone
 from typing import Any, Optional, List, Dict, Union, Tuple
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "auth.db")
@@ -161,6 +162,68 @@ class GapMitigationActionORM(Base):
     deadline = Column(String(50), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+class StatuteComplianceORM(Base):
+    __tablename__ = "statutes_compliance"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, default="edv_jr")
+    title = Column(String(200), nullable=False)
+    norm_type = Column(String(50), nullable=False)  # estatuto, regimento_interno, marco_regulatorio, selo_ej, codigo_etica
+    version = Column(String(20), nullable=False, default="v1.0")
+    status = Column(String(50), nullable=False, default="vigente")  # vigente, em_revisao, revogado, pendente_aprovacao
+    effective_date = Column(String(50), nullable=False)
+    review_deadline = Column(String(50), nullable=True)
+    responsible_area = Column(String(50), nullable=False)
+    responsible_role = Column(String(50), nullable=False, default="diretor")
+    document_url = Column(Text, nullable=True)
+    description = Column(Text, nullable=True)
+    checklist_items = Column(Text, nullable=True)  # JSON
+    conformity_score = Column(Float, default=100.0)
+    created_by = Column(String(100), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+class SystemNotificationORM(Base):
+    __tablename__ = "system_notifications"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, default="edv_jr")
+    recipient_email = Column(String(150), nullable=False)
+    target_role = Column(String(50), nullable=True)
+    target_area = Column(String(50), nullable=True)
+    title = Column(String(200), nullable=False)
+    message = Column(Text, nullable=False)
+    category = Column(String(50), nullable=False)  # deadline_overdue, deadline_warning, pdi_milestone, audit_alert, approval_pending, compliance, system
+    priority = Column(String(20), nullable=False, default="normal")  # low, normal, high, critical
+    link = Column(String(255), nullable=True)
+    is_read = Column(Integer, default=0)
+    email_sent = Column(Integer, default=0)
+    email_sent_at = Column(DateTime, nullable=True)
+    metadata_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+class RMStagingRecordORM(Base):
+    __tablename__ = "rm_staging_records"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, default="edv_jr")
+    batch_id = Column(String(100), nullable=True)
+    rm_code = Column(String(50), nullable=True)
+    brand_name = Column(String(200), nullable=False)
+    process_number = Column(String(100), nullable=True)
+    client_name = Column(String(200), nullable=False)
+    client_phone = Column(String(50), nullable=True)
+    responsible_name = Column(String(150), nullable=False)
+    phase = Column(String(100), nullable=False)
+    operation_type = Column(String(50), nullable=False, default="UPDATE")  # INSERT, UPDATE, DELETE, BATCH_IMPORT
+    original_data_json = Column(Text, nullable=True)
+    proposed_data_json = Column(Text, nullable=False)
+    status = Column(String(50), nullable=False, default="pending_review")  # pending_review, approved, rejected
+    submitted_by = Column(String(150), nullable=False)
+    submitted_at = Column(DateTime, server_default=func.now())
+    reviewed_by = Column(String(150), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+    review_notes = Column(Text, nullable=True)
+    applied_to_main_db = Column(Integer, default=0)
+    applied_at = Column(DateTime, nullable=True)
 
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
 if DATABASE_URL.startswith("postgres://"):
@@ -702,6 +765,86 @@ def init_db():
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_gap_actions_user ON gap_mitigation_actions(user_email);")
 
+    # 15. Tabela de Estatutos e Compliance MEJ (Lei 13.267/2016 e Selo EJ)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS statutes_compliance (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        title TEXT NOT NULL,
+        norm_type TEXT NOT NULL CHECK(norm_type IN ('estatuto', 'regimento_interno', 'marco_regulatorio', 'selo_ej', 'codigo_etica')),
+        version TEXT NOT NULL DEFAULT 'v1.0',
+        status TEXT NOT NULL DEFAULT 'vigente' CHECK(status IN ('vigente', 'em_revisao', 'revogado', 'pendente_aprovacao')),
+        effective_date TEXT NOT NULL,
+        review_deadline TEXT,
+        responsible_area TEXT NOT NULL CHECK(responsible_area IN ('Presidência', 'VPGG', 'Jurídico', 'Comercial', 'Projetos', 'Tesouraria', 'Marketing')),
+        responsible_role TEXT NOT NULL DEFAULT 'diretor',
+        document_url TEXT,
+        description TEXT,
+        checklist_items TEXT,
+        conformity_score REAL DEFAULT 100.0,
+        created_by TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_statutes_type ON statutes_compliance(norm_type);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_statutes_status ON statutes_compliance(status);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_statutes_area ON statutes_compliance(responsible_area);")
+
+    # 16. Tabela de Notificações Dinâmicas (E-mail + Alertas In-Site com RBAC)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS system_notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        recipient_email TEXT NOT NULL,
+        target_role TEXT,
+        target_area TEXT,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        category TEXT NOT NULL CHECK(category IN ('deadline_overdue', 'deadline_warning', 'pdi_milestone', 'audit_alert', 'approval_pending', 'compliance', 'system')),
+        priority TEXT NOT NULL DEFAULT 'normal' CHECK(priority IN ('low', 'normal', 'high', 'critical')),
+        link TEXT,
+        is_read INTEGER DEFAULT 0,
+        email_sent INTEGER DEFAULT 0,
+        email_sent_at TIMESTAMP,
+        metadata_json TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON system_notifications(recipient_email);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_unread ON system_notifications(is_read);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_role_area ON system_notifications(target_role, target_area);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_notifications_created ON system_notifications(created_at);")
+
+    # 17. Tabela de Área de Staging de RMs (Edição Indireta e Dupla Verificação Maker-Checker)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS rm_staging_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        batch_id TEXT,
+        rm_code TEXT,
+        brand_name TEXT NOT NULL,
+        process_number TEXT,
+        client_name TEXT NOT NULL,
+        client_phone TEXT,
+        responsible_name TEXT NOT NULL,
+        phase TEXT NOT NULL,
+        operation_type TEXT NOT NULL CHECK(operation_type IN ('INSERT', 'UPDATE', 'DELETE', 'BATCH_IMPORT')),
+        original_data_json TEXT,
+        proposed_data_json TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending_review' CHECK(status IN ('pending_review', 'approved', 'rejected')),
+        submitted_by TEXT NOT NULL,
+        submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        reviewed_by TEXT,
+        reviewed_at TIMESTAMP,
+        review_notes TEXT,
+        applied_to_main_db INTEGER DEFAULT 0,
+        applied_at TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_rm_staging_status ON rm_staging_records(status);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_rm_staging_maker ON rm_staging_records(submitted_by);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_rm_staging_code ON rm_staging_records(rm_code);")
 
     # Índices de alta performance para Radar e CRM
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_followups_area_status ON client_followups(area, status);")
@@ -928,6 +1071,131 @@ def init_db():
         ('edv_jr', '2026.1', 'aline.tartaglia@edvjr.com.br', 'karolina.krause@edvjr.com.br', 'peer', 4.1, 4.2, 4.0, 3.9, 4.2, 'Grande capacidade analítica em minutas e pareceres.');
         """)
 
+    # 15. Seeding inicial de Estatutos e Compliance MEJ (Lei 13.267/2016 e Selo EJ)
+    cursor.execute("SELECT COUNT(*) FROM statutes_compliance;")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("""
+        INSERT INTO statutes_compliance (
+            tenant_id, title, norm_type, version, status, effective_date, review_deadline,
+            responsible_area, responsible_role, document_url, description, checklist_items, conformity_score, created_by
+        ) VALUES 
+        (
+            'edv_jr',
+            'Lei Federal nº 13.267/2016 (Marco Legal das Empresas Juniores)',
+            'marco_regulatorio',
+            'Lei 13.267/2016',
+            'vigente',
+            '2016-04-06',
+            '2026-12-31',
+            'Jurídico',
+            'diretor',
+            'http://www.planalto.gov.br/ccivil_03/_ato2015-2018/2016/lei/l13267.htm',
+            'Disciplina a criação e a organização das associações civis denominadas empresas juniores, com funcionamento perante instituições de ensino superior (IES).',
+            '[{"id":"c1","item":"Fins exclusivamente educacionais e sem fins lucrativos (Art. 2º)","compliant":true,"notes":"Estatuto Social em estrita conformidade"},{"id":"c2","item":"Vinculação formal a Instituição de Ensino Superior - FDV (Art. 5º)","compliant":true,"notes":"Termo de Cooperação vigente com a Faculdade de Direito de Vitória"},{"id":"c3","item":"Gestão autônoma realizada exclusivamente por discentes (Art. 3º)","compliant":true,"notes":"Diretoria Executiva e Conselho compostos 100% por graduandos"},{"id":"c4","item":"Orientação e supervisão por professores/profissionais do mercado (Art. 6º)","compliant":true,"notes":"Corpo docente e advogados orientadores ativos"},{"id":"c5","item":"Reinvestimento integral dos excedentes na atividade-fim (Art. 2º, §2º)","compliant":true,"notes":"Proibição estatutária de distribuição de lucros aos associados"}]',
+            100.0,
+            'charles.junior@edvjr.com.br'
+        ),
+        (
+            'edv_jr',
+            'Estatuto Social EDV Jr. 2026 (Consolidado e Registrado em Cartório)',
+            'estatuto',
+            'v4.2 - 2026',
+            'vigente',
+            '2026-01-15',
+            '2026-11-30',
+            'Presidência',
+            'presidente',
+            'https://drive.google.com/drive/folders/estatuto_social_edv_2026',
+            'Estatuto Social consolidado e registrado perante o Cartório de Registro Civil de Pessoas Jurídicas da Comarca de Vitória/ES.',
+            '[{"id":"c1","item":"Definição de quorum qualificado para Assembleias Gerais Ordinárias e Extraordinárias","compliant":true,"notes":"Art. 18 do Estatuto"},{"id":"c2","item":"Regras de eleição, transição de mandato e posse de Diretores Executivos","compliant":true,"notes":"Capítulo V"},{"id":"c3","item":"Conselho Fiscal ativo e independente para auditoria e pareceres de contas","compliant":true,"notes":"Emissão trimestral de pareceres"},{"id":"c4","item":"Cláusula expressa de destinação do patrimônio líquido à entidade congênere em dissolução","compliant":true,"notes":"Art. 42"}]',
+            100.0,
+            'charles.junior@edvjr.com.br'
+        ),
+        (
+            'edv_jr',
+            'Regimento Interno EDV Jr. (Ciclo Operacional 2026)',
+            'regimento_interno',
+            'v3.1',
+            'vigente',
+            '2026-02-01',
+            '2026-08-30',
+            'VPGG',
+            'diretor',
+            'https://drive.google.com/drive/folders/regimento_interno_2026',
+            'Normas operacionais de conduta, rotinas de trabalho, assiduidade, processo seletivo, premiações e política de desligamento voluntário e involuntário.',
+            '[{"id":"c1","item":"Política de assiduidade mínima de 75% em reuniões gerais e operacionais","compliant":true,"notes":"Controle automatizado no EDbrain"},{"id":"c2","item":"Procedimento sumário para apuração de infrações éticas e amplo direito de defesa","compliant":true,"notes":"Comissão disciplinar"},{"id":"c3","item":"Diretrizes de ciclo trimestral de avaliações 360º e PDI 70-20-10","compliant":true,"notes":"Integrado ao módulo de PDI"}]',
+            100.0,
+            'alice.ney@edvjr.com.br'
+        ),
+        (
+            'edv_jr',
+            'Auditoria de Conformidade Selo EJ 2026 (Brasil Júnior / FEJES)',
+            'selo_ej',
+            'Ciclo 2026',
+            'vigente',
+            '2026-01-01',
+            '2026-05-31',
+            'Jurídico',
+            'diretor',
+            'https://brasiljunior.org.br/selo-ej',
+            'Critérios obrigatórios de regularidade jurídica e fiscal chancelados pela Confederação Brasileira de Empresas Juniores e FEJES.',
+            '[{"id":"c1","item":"CNPJ ativo na Receita Federal do Brasil","compliant":true,"notes":"Comprovante atualizado arquivado"},{"id":"c2","item":"Certidão Negativa de Débitos Federais (CND RFB/PGFN) válida","compliant":true,"notes":"Certidão com validade até Jul/2026"},{"id":"c3","item":"Certificado de Regularidade do FGTS (CRF Caixa) emitido e vigente","compliant":true,"notes":"Renovação mensal monitorada"},{"id":"c4","item":"Certidão Negativa de Débitos Trabalhistas (CNDT TST)","compliant":true,"notes":"Em dia"},{"id":"c5","item":"Declaração de Reconhecimento Institucional assinada pela Diretoria da FDV","compliant":true,"notes":"Documento oficial protocolado"},{"id":"c6","item":"Comprovante de Conta Bancária PJ ativa exclusiva da Associação","compliant":true,"notes":"Extrato bancário sem pendências"},{"id":"c7","item":"Livro Ata ou Registro Notarial da Posse da Gestão 2026","compliant":true,"notes":"Registrado em Cartório"}]',
+            100.0,
+            'charles.junior@edvjr.com.br'
+        ),
+        (
+            'edv_jr',
+            'Código de Ética e Sigilo de Marcas EDV Jr.',
+            'codigo_etica',
+            'v2.0',
+            'vigente',
+            '2025-08-01',
+            '2026-10-15',
+            'Presidência',
+            'presidente',
+            'https://drive.google.com/drive/folders/codigo_etica_edv',
+            'Diretrizes de integridade institucional, sigilo técnico nos processos de registro de marcas do INPI, concorrência leal e respeito interpessoal.',
+            '[{"id":"c1","item":"Termo de Sigilo e Confidencialidade (NDA) assinado por 100% dos membros","compliant":true,"notes":"Onboarding com assinatura digital coletada"},{"id":"c2","item":"Canal de Ética e Ouvidoria anônimo implementado","compliant":true,"notes":"Gerido pela Presidência Institucional"},{"id":"c3","item":"Vedações expressas a conflito de interesses na titularidade de marcas depositadas","compliant":true,"notes":"Art. 12 do Código"}]',
+            100.0,
+            'charles.junior@edvjr.com.br'
+        );
+        """)
+
+    # 16. Seeding inicial de Notificações do Sistema
+    cursor.execute("SELECT COUNT(*) FROM system_notifications;")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("""
+        INSERT INTO system_notifications (
+            tenant_id, recipient_email, target_role, target_area, title, message, category, priority, link, is_read, email_sent
+        ) VALUES 
+        (
+            'edv_jr',
+            'ALL',
+            NULL,
+            NULL,
+            'Bem-vindo ao Sistema de Governança e Compliance EDbrain 2026',
+            'O ecossistema EDbrain foi atualizado com suporte total à Lei 13.267/2016, auditoria do Selo EJ, Notificações Dinâmicas, Google Calendar e Maker-Checker na esteira de marcas.',
+            'compliance',
+            'normal',
+            '#pres-sub-estatutos',
+            0,
+            0
+        ),
+        (
+            'edv_jr',
+            'charles.junior@edvjr.com.br',
+            'presidente',
+            'Presidência',
+            'Auditoria Selo EJ 2026 - Checklist em 100% de Conformidade',
+            'Todos os 7 requisitos documentais federais e federativos do Selo EJ 2026 foram auditados e estão com certidões vigentes.',
+            'audit_alert',
+            'high',
+            '#pres-sub-estatutos',
+            0,
+            0
+        );
+        """)
+
     conn.commit()
     cursor.execute("SELECT COUNT(*) FROM users;")
     total_users = cursor.fetchone()[0]
@@ -1112,7 +1380,12 @@ def get_database_stats():
     conn = get_connection()
     cursor = conn.cursor()
     
-    tables = ["users", "transactions", "notices", "pdis", "client_followups", "audit_logs", "campaigns", "psel_candidates", "brand_assets"]
+    tables = [
+        "users", "transactions", "notices", "pdis", "client_followups", "audit_logs",
+        "campaigns", "psel_candidates", "brand_assets", "performance_evaluations_360",
+        "evaluator_calibrations", "historical_manager_benchmarks", "succession_readiness_records",
+        "gap_mitigation_actions", "statutes_compliance", "system_notifications", "rm_staging_records"
+    ]
     counts = {}
     for t in tables:
         try:
@@ -2509,5 +2782,780 @@ def list_historical_benchmarks(role_target: Optional[str] = None) -> List[dict]:
     return rows
 
 
+# ==============================================================================
+# SUBSISTEMA 1: ESTATUTOS E COMPLIANCE MEJ (LEI 13.267/2016 & SELO EJ)
+# ==============================================================================
+
+def list_compliance_statutes(norm_type: Optional[str] = None, status: Optional[str] = None, responsible_area: Optional[str] = None) -> List[dict]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    query = "SELECT * FROM statutes_compliance WHERE 1=1"
+    params = []
+    if norm_type:
+        query += " AND norm_type = ?"
+        params.append(norm_type)
+    if status:
+        query += " AND status = ?"
+        params.append(status)
+    if responsible_area:
+        query += " AND responsible_area = ?"
+        params.append(responsible_area)
+    query += " ORDER BY id ASC;"
+    
+    cursor.execute(query, params)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    
+    for r in rows:
+        if r.get("checklist_items"):
+            try:
+                r["checklist_items"] = json.loads(r["checklist_items"])
+            except Exception:
+                r["checklist_items"] = []
+        else:
+            r["checklist_items"] = []
+    return rows
+
+
+def get_compliance_statute_by_id(statute_id: int) -> Optional[dict]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM statutes_compliance WHERE id = ?;", (statute_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    res = dict(row)
+    if res.get("checklist_items"):
+        try:
+            res["checklist_items"] = json.loads(res["checklist_items"])
+        except Exception:
+            res["checklist_items"] = []
+    else:
+        res["checklist_items"] = []
+    return res
+
+
+def create_compliance_statute(data: dict, current_user_email: str) -> dict:
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    checklist = data.get("checklist_items", [])
+    if isinstance(checklist, list):
+        checklist_json = json.dumps(checklist)
+        total_items = len(checklist)
+        if total_items > 0:
+            compliant_items = sum(1 for item in checklist if item.get("compliant") is True)
+            score = round((compliant_items / total_items) * 100.0, 1)
+        else:
+            score = 100.0
+    else:
+        checklist_json = "[]"
+        score = 100.0
+        
+    cursor.execute("""
+    INSERT INTO statutes_compliance (
+        tenant_id, title, norm_type, version, status, effective_date, review_deadline,
+        responsible_area, responsible_role, document_url, description, checklist_items,
+        conformity_score, created_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    """, (
+        data.get("tenant_id", "edv_jr"),
+        data["title"].strip(),
+        data["norm_type"],
+        data.get("version", "v1.0"),
+        data.get("status", "vigente"),
+        data["effective_date"],
+        data.get("review_deadline"),
+        data["responsible_area"],
+        data.get("responsible_role", "diretor"),
+        data.get("document_url", ""),
+        data.get("description", ""),
+        checklist_json,
+        score,
+        current_user_email
+    ))
+    new_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    log_audit(
+        user_email=current_user_email,
+        action="CREATE_COMPLIANCE_STATUTE",
+        resource="/api/compliance/statutes",
+        status_code=201,
+        details=f"Criada norma {data['title']} (ID: {new_id}, Tipo: {data['norm_type']})"
+    )
+    return get_compliance_statute_by_id(new_id)
+
+
+def update_compliance_statute(statute_id: int, data: dict, current_user_email: str) -> dict:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM statutes_compliance WHERE id = ?;", (statute_id,))
+    existing = cursor.fetchone()
+    if not existing:
+        conn.close()
+        raise ValueError(f"Norma de compliance ID {statute_id} não encontrada.")
+        
+    title = data.get("title", existing["title"])
+    norm_type = data.get("norm_type", existing["norm_type"])
+    version = data.get("version", existing["version"])
+    status = data.get("status", existing["status"])
+    effective_date = data.get("effective_date", existing["effective_date"])
+    review_deadline = data.get("review_deadline", existing["review_deadline"])
+    responsible_area = data.get("responsible_area", existing["responsible_area"])
+    responsible_role = data.get("responsible_role", existing["responsible_role"])
+    document_url = data.get("document_url", existing["document_url"])
+    description = data.get("description", existing["description"])
+    
+    checklist = data.get("checklist_items")
+    if checklist is not None:
+        checklist_json = json.dumps(checklist)
+        total_items = len(checklist)
+        score = round((sum(1 for i in checklist if i.get("compliant") is True) / total_items) * 100.0, 1) if total_items > 0 else 100.0
+    else:
+        checklist_json = existing["checklist_items"]
+        score = existing["conformity_score"]
+        
+    cursor.execute("""
+    UPDATE statutes_compliance
+    SET title = ?, norm_type = ?, version = ?, status = ?, effective_date = ?,
+        review_deadline = ?, responsible_area = ?, responsible_role = ?,
+        document_url = ?, description = ?, checklist_items = ?, conformity_score = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?;
+    """, (
+        title, norm_type, version, status, effective_date, review_deadline,
+        responsible_area, responsible_role, document_url, description, checklist_json, score, statute_id
+    ))
+    conn.commit()
+    conn.close()
+    
+    log_audit(
+        user_email=current_user_email,
+        action="UPDATE_COMPLIANCE_STATUTE",
+        resource=f"/api/compliance/statutes/{statute_id}",
+        status_code=200,
+        details=f"Atualizada norma ID {statute_id} ({title}) - Score de conformidade: {score}%"
+    )
+    return get_compliance_statute_by_id(statute_id)
+
+
+def update_statute_checklist(statute_id: int, checklist_items: list, current_user_email: str) -> dict:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM statutes_compliance WHERE id = ?;", (statute_id,))
+    existing = cursor.fetchone()
+    if not existing:
+        conn.close()
+        raise ValueError(f"Norma ID {statute_id} não encontrada.")
+        
+    checklist_json = json.dumps(checklist_items)
+    total_items = len(checklist_items)
+    score = round((sum(1 for i in checklist_items if i.get("compliant") is True) / total_items) * 100.0, 1) if total_items > 0 else 100.0
+    
+    cursor.execute("""
+    UPDATE statutes_compliance
+    SET checklist_items = ?, conformity_score = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?;
+    """, (checklist_json, score, statute_id))
+    conn.commit()
+    conn.close()
+    
+    log_audit(
+        user_email=current_user_email,
+        action="UPDATE_STATUTE_CHECKLIST",
+        resource=f"/api/compliance/statutes/{statute_id}/checklist",
+        status_code=200,
+        details=f"Atualizado checklist da norma ID {statute_id} ({existing['title']}) para {score}%"
+    )
+    return get_compliance_statute_by_id(statute_id)
+
+
+def delete_compliance_statute(statute_id: int, current_user_email: str) -> bool:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT title FROM statutes_compliance WHERE id = ?;", (statute_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        return False
+    title = row["title"]
+    cursor.execute("DELETE FROM statutes_compliance WHERE id = ?;", (statute_id,))
+    conn.commit()
+    conn.close()
+    log_audit(
+        user_email=current_user_email,
+        action="DELETE_COMPLIANCE_STATUTE",
+        resource=f"/api/compliance/statutes/{statute_id}",
+        status_code=200,
+        details=f"Removida norma de compliance ID {statute_id} ({title})"
+    )
+    return True
+
+
+# ==============================================================================
+# SUBSISTEMA 2: MOTOR DE NOTIFICAÇÕES DINÂMICAS COM RBAC
+# ==============================================================================
+
+def create_system_notification(
+    recipient_email: str,
+    title: str,
+    message: str,
+    category: str,
+    priority: str = "normal",
+    target_role: Optional[str] = None,
+    target_area: Optional[str] = None,
+    link: Optional[str] = None,
+    metadata: Optional[dict] = None
+) -> dict:
+    conn = get_connection()
+    cursor = conn.cursor()
+    metadata_json = json.dumps(metadata) if metadata else None
+    cursor.execute("""
+    INSERT INTO system_notifications (
+        tenant_id, recipient_email, target_role, target_area, title, message,
+        category, priority, link, is_read, email_sent, metadata_json
+    ) VALUES ('edv_jr', ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?);
+    """, (
+        recipient_email.strip(),
+        target_role,
+        target_area,
+        title.strip(),
+        message.strip(),
+        category,
+        priority,
+        link,
+        metadata_json
+    ))
+    new_id = cursor.lastrowid
+    conn.commit()
+    cursor.execute("SELECT * FROM system_notifications WHERE id = ?;", (new_id,))
+    created = dict(cursor.fetchone())
+    conn.close()
+    return created
+
+
+def get_user_notifications(
+    user_email: str,
+    user_role: str,
+    user_area: str,
+    unread_only: bool = False,
+    limit: int = 50
+) -> List[dict]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    user_email_clean = user_email.lower().strip()
+    is_leadership = user_role in ["presidente", "diretor", "vice_presidente"]
+    
+    # Monta filtros RBAC estritos
+    # Notificação destinada a:
+    # 1. Este e-mail exato
+    # 2. 'ALL' (todos da EJ)
+    # 3. 'ROLE:{user_role}'
+    # 4. 'ROLE:diretor' caso o usuário seja da liderança
+    # 5. target_role / target_area match
+    query = """
+    SELECT * FROM system_notifications
+    WHERE (
+        LOWER(recipient_email) = ?
+        OR recipient_email = 'ALL'
+        OR LOWER(recipient_email) = ?
+        OR (? = 1 AND LOWER(recipient_email) IN ('role:diretor', 'role:lideranca', 'role:presidencia'))
+        OR (
+            (target_role IS NULL OR target_role = ? OR (? = 1 AND target_role IN ('diretor', 'lideranca')))
+            AND
+            (target_area IS NULL OR target_area = ? OR ? = 1)
+        )
+    )
+    """
+    params = [
+        user_email_clean,
+        f"role:{user_role}".lower(),
+        1 if is_leadership else 0,
+        user_role,
+        1 if is_leadership else 0,
+        user_area,
+        1 if is_leadership else 0
+    ]
+    
+    if unread_only:
+        query += " AND is_read = 0"
+        
+    query += " ORDER BY id DESC LIMIT ?;"
+    params.append(limit)
+    
+    cursor.execute(query, params)
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    
+    for r in rows:
+        if r.get("metadata_json"):
+            try:
+                r["metadata"] = json.loads(r["metadata_json"])
+            except Exception:
+                r["metadata"] = {}
+        else:
+            r["metadata"] = {}
+    return rows
+
+
+def mark_notification_as_read(notification_id: int, user_email: str) -> bool:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    UPDATE system_notifications
+    SET is_read = 1
+    WHERE id = ?;
+    """, (notification_id,))
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
+
+
+def mark_all_notifications_as_read(user_email: str, user_role: str = "", user_area: str = "") -> int:
+    conn = get_connection()
+    cursor = conn.cursor()
+    user_email_clean = user_email.lower().strip()
+    is_leadership = user_role in ["presidente", "diretor", "vice_presidente"]
+    
+    cursor.execute("""
+    UPDATE system_notifications
+    SET is_read = 1
+    WHERE is_read = 0 AND (
+        LOWER(recipient_email) = ?
+        OR recipient_email = 'ALL'
+        OR LOWER(recipient_email) = ?
+        OR (? = 1 AND LOWER(recipient_email) IN ('role:diretor', 'role:lideranca', 'role:presidencia'))
+        OR (
+            (target_role IS NULL OR target_role = ? OR (? = 1 AND target_role IN ('diretor', 'lideranca')))
+            AND
+            (target_area IS NULL OR target_area = ? OR ? = 1)
+        )
+    );
+    """, (
+        user_email_clean,
+        f"role:{user_role}".lower(),
+        1 if is_leadership else 0,
+        user_role,
+        1 if is_leadership else 0,
+        user_area,
+        1 if is_leadership else 0
+    ))
+    count = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return count
+
+
+def scan_and_create_deadlines() -> dict:
+    """
+    Rotina de varredura ativa para geração de notificações dinâmicas
+    de prazos críticos (CRM, Selo EJ/Compliance, PDI, Staging pendente).
+    Garante idempotência evitando alertas duplicados nas últimas 24 horas.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_dt = datetime.now()
+    created_count = 0
+    
+    # 1. Prazos de Follow-ups do CRM / Radar
+    cursor.execute("""
+    SELECT id, razao_social, client_name, created_by, area, next_followup_date, status
+    FROM client_followups
+    WHERE status NOT IN ('concluido', 'fechado', 'perdido')
+      AND next_followup_date IS NOT NULL AND next_followup_date != '';
+    """)
+    followups = [dict(r) for r in cursor.fetchall()]
+    
+    for f in followups:
+        f_date = f["next_followup_date"]
+        try:
+            dt = datetime.strptime(f_date[:10], "%Y-%m-%d")
+            diff_days = (dt.date() - today_dt.date()).days
+            
+            # Verifica se já foi notificado nas últimas 24h
+            notif_title = ""
+            notif_msg = ""
+            cat = ""
+            prio = "normal"
+            empresa = f.get("razao_social") or f.get("client_name") or "Lead"
+            
+            if diff_days < 0:
+                cat = "deadline_overdue"
+                prio = "critical"
+                notif_title = f"Prazo Vencido: Follow-up {empresa}"
+                notif_msg = f"O follow-up com {empresa} venceu há {abs(diff_days)} dia(s) ({f_date}). Atualize o CRM com urgência."
+            elif diff_days <= 2:
+                cat = "deadline_warning"
+                prio = "high"
+                notif_title = f"Prazo Próximo: Reunião / Contato {empresa}"
+                notif_msg = f"Follow-up agendado para {f_date} (em {diff_days} dia(s)). Prepare o diagnóstico e a proposta comercial."
+                
+            if notif_title:
+                cursor.execute("""
+                SELECT COUNT(*) FROM system_notifications
+                WHERE title = ? AND created_at >= datetime('now', '-1 day');
+                """, (notif_title,))
+                if cursor.fetchone()[0] == 0:
+                    recipient = f.get("created_by") or "ROLE:diretor"
+                    cursor.execute("""
+                    INSERT INTO system_notifications (
+                        tenant_id, recipient_email, target_role, target_area, title, message, category, priority, link, is_read, email_sent
+                    ) VALUES ('edv_jr', ?, 'assessor', ?, ?, ?, ?, ?, '#crm', 0, 0);
+                    """, (recipient, f.get("area") or "Comercial", notif_title, notif_msg, cat, prio))
+                    created_count += 1
+        except Exception:
+            continue
+            
+    # 2. Prazos de Revisão de Estatutos e Selo EJ
+    cursor.execute("""
+    SELECT id, title, review_deadline, responsible_area, responsible_role
+    FROM statutes_compliance
+    WHERE status = 'vigente' AND review_deadline IS NOT NULL AND review_deadline != '';
+    """)
+    statutes = [dict(r) for r in cursor.fetchall()]
+    for s in statutes:
+        s_date = s["review_deadline"]
+        try:
+            dt = datetime.strptime(s_date[:10], "%Y-%m-%d")
+            diff_days = (dt.date() - today_dt.date()).days
+            if diff_days <= 15:
+                notif_title = f"Auditoria Regulatória: {s['title']}"
+                cursor.execute("""
+                SELECT COUNT(*) FROM system_notifications
+                WHERE title = ? AND created_at >= datetime('now', '-3 day');
+                """, (notif_title,))
+                if cursor.fetchone()[0] == 0:
+                    prio = "critical" if diff_days < 0 else "high"
+                    msg = f"A norma '{s['title']}' possui prazo de auditoria/revisão em {s_date} (restam {diff_days} dias). Verifique as certidões e checklist."
+                    cursor.execute("""
+                    INSERT INTO system_notifications (
+                        tenant_id, recipient_email, target_role, target_area, title, message, category, priority, link, is_read, email_sent
+                    ) VALUES ('edv_jr', 'ROLE:diretor', ?, ?, ?, ?, 'compliance', ?, '#pres-sub-estatutos', 0, 0);
+                    """, (s["responsible_role"], s["responsible_area"], notif_title, msg, prio))
+                    created_count += 1
+        except Exception:
+            continue
+
+    # 3. Prazos de Ações de PDI (Gaps de Competências)
+    cursor.execute("""
+    SELECT id, user_email, practical_allocation, deadline, competency_deficient
+    FROM gap_mitigation_actions
+    WHERE status IN ('sugerido', 'em_execucao') AND deadline IS NOT NULL AND deadline != '';
+    """)
+    gaps = [dict(r) for r in cursor.fetchall()]
+    for g in gaps:
+        g_date = g["deadline"]
+        try:
+            dt = datetime.strptime(g_date[:10], "%Y-%m-%d")
+            diff_days = (dt.date() - today_dt.date()).days
+            if diff_days <= 7:
+                notif_title = f"PDI em Aberto: {g['competency_deficient']}"
+                cursor.execute("""
+                SELECT COUNT(*) FROM system_notifications
+                WHERE title = ? AND LOWER(recipient_email) = ? AND created_at >= datetime('now', '-2 day');
+                """, (notif_title, g["user_email"].lower().strip()))
+                if cursor.fetchone()[0] == 0:
+                    prio = "high" if diff_days < 0 else "normal"
+                    msg = f"Sua meta de desenvolvimento em '{g['competency_deficient']}' ({g['practical_allocation']}) vence em {g_date}."
+                    cursor.execute("""
+                    INSERT INTO system_notifications (
+                        tenant_id, recipient_email, target_role, target_area, title, message, category, priority, link, is_read, email_sent
+                    ) VALUES ('edv_jr', ?, NULL, 'VPGG', ?, ?, 'pdi_milestone', ?, '#pdi-tab', 0, 0);
+                    """, (g["user_email"].lower().strip(), notif_title, msg, prio))
+                    created_count += 1
+        except Exception:
+            continue
+
+    # 4. Alterações de RM em Staging pendentes de validação Four-Eyes
+    cursor.execute("SELECT COUNT(*) FROM rm_staging_records WHERE status = 'pending_review';")
+    pending_rm = cursor.fetchone()[0]
+    if pending_rm > 0:
+        notif_title = f"Governança RM: {pending_rm} alteração(ões) aguardando Dupla Verificação"
+        cursor.execute("""
+        SELECT COUNT(*) FROM system_notifications
+        WHERE title = ? AND created_at >= datetime('now', '-12 hour');
+        """, (notif_title,))
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("""
+            INSERT INTO system_notifications (
+                tenant_id, recipient_email, target_role, target_area, title, message, category, priority, link, is_read, email_sent
+            ) VALUES (
+                'edv_jr', 'ROLE:diretor', 'diretor', 'Projetos',
+                ?,
+                'Há propostas de alteração em Registro de Marcas no Staging aguardando aprovação por um segundo diretor (Maker-Checker).',
+                'approval_pending', 'high', '#projetos-sub-staging', 0, 0
+            );
+            """, (notif_title,))
+            created_count += 1
+
+    conn.commit()
+    conn.close()
+    return {
+        "status": "success",
+        "scanned_at": datetime.now().isoformat(),
+        "new_notifications_generated": created_count
+    }
+
+
+# ==============================================================================
+# SUBSISTEMA 5: EDIÇÃO INDIRETA E SEGURA DE RM (STAGING & MAKER-CHECKER)
+# ==============================================================================
+
+def create_rm_staging_record(data: dict, current_user_email: str) -> dict:
+    """
+    Submete uma alteração ou criação de RM para a área de Staging.
+    Nunca grava diretamente na base de dados oficial.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    proposed_data = data.get("proposed_data", {})
+    if isinstance(proposed_data, dict):
+        proposed_json = json.dumps(proposed_data)
+    else:
+        proposed_json = str(proposed_data)
+        
+    original_data = data.get("original_data")
+    original_json = json.dumps(original_data) if original_data else None
+    
+    cursor.execute("""
+    INSERT INTO rm_staging_records (
+        tenant_id, batch_id, rm_code, brand_name, process_number,
+        client_name, client_phone, responsible_name, phase, operation_type,
+        original_data_json, proposed_data_json, status, submitted_by, applied_to_main_db
+    ) VALUES (
+        'edv_jr', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_review', ?, 0
+    );
+    """, (
+        data.get("batch_id"),
+        data.get("rm_code", ""),
+        data["brand_name"].strip(),
+        data.get("process_number", ""),
+        data["client_name"].strip(),
+        data.get("client_phone", ""),
+        data["responsible_name"].strip(),
+        data.get("phase", "Busca de Anterioridade"),
+        data.get("operation_type", "UPDATE"),
+        original_json,
+        proposed_json,
+        current_user_email.strip().lower()
+    ))
+    new_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    
+    # Notifica a liderança sobre a nova submissão em staging
+    try:
+        create_system_notification(
+            recipient_email="ROLE:diretor",
+            title=f"Nova proposta em Staging: {data['brand_name']}",
+            message=f"O membro {current_user_email} enviou alteração na marca '{data['brand_name']}' para dupla verificação.",
+            category="approval_pending",
+            priority="high",
+            target_role="diretor",
+            target_area="Projetos",
+            link="#projetos-sub-staging"
+        )
+    except Exception:
+        pass
+        
+    log_audit(
+        user_email=current_user_email,
+        action="RM_STAGING_SUBMITTED",
+        resource="/api/rm/staging",
+        status_code=201,
+        details=f"Proposta em Staging ID {new_id} ({data['brand_name']}, Op: {data.get('operation_type', 'UPDATE')}) enviada para aprovação Four-Eyes"
+    )
+    return get_rm_staging_record_by_id(new_id)
+
+
+def list_rm_staging_records(status: Optional[str] = None) -> List[dict]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    if status:
+        cursor.execute("SELECT * FROM rm_staging_records WHERE status = ? ORDER BY id DESC;", (status,))
+    else:
+        cursor.execute("SELECT * FROM rm_staging_records ORDER BY id DESC;")
+    rows = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    
+    for r in rows:
+        if r.get("original_data_json"):
+            try:
+                r["original_data"] = json.loads(r["original_data_json"])
+            except Exception:
+                r["original_data"] = {}
+        else:
+            r["original_data"] = None
+            
+        if r.get("proposed_data_json"):
+            try:
+                r["proposed_data"] = json.loads(r["proposed_data_json"])
+            except Exception:
+                r["proposed_data"] = {}
+        else:
+            r["proposed_data"] = {}
+    return rows
+
+
+def get_rm_staging_record_by_id(staging_id: int) -> Optional[dict]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM rm_staging_records WHERE id = ?;", (staging_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    res = dict(row)
+    if res.get("original_data_json"):
+        try:
+            res["original_data"] = json.loads(res["original_data_json"])
+        except Exception:
+            res["original_data"] = {}
+    else:
+        res["original_data"] = None
+        
+    if res.get("proposed_data_json"):
+        try:
+            res["proposed_data"] = json.loads(res["proposed_data_json"])
+        except Exception:
+            res["proposed_data"] = {}
+    else:
+        res["proposed_data"] = {}
+    return res
+
+
+def approve_rm_staging_record(staging_id: int, reviewer_email: str, reviewer_role: str, review_notes: Optional[str] = None) -> dict:
+    """
+    Aprova a alteração em Staging com aplicação do Princípio Maker-Checker:
+    O proponente (maker) NÃO PODE aprovar sua própria alteração.
+    Apenas Diretores ou Presidência podem aprovar.
+    """
+    record = get_rm_staging_record_by_id(staging_id)
+    if not record:
+        raise ValueError(f"Registro de staging ID {staging_id} não encontrado.")
+        
+    if record["status"] != "pending_review":
+        raise ValueError(f"Registro já se encontra no status '{record['status']}'.")
+        
+    # 1. Maker-Checker Enforcement
+    maker_clean = record["submitted_by"].lower().strip()
+    reviewer_clean = reviewer_email.lower().strip()
+    if maker_clean == reviewer_clean:
+        raise PermissionError(
+            "Violação de Governança MEJ (Maker-Checker / Four-Eyes Principle): "
+            "Você é o proponente (maker) desta alteração e não tem permissão para aprová-la. "
+            "É obrigatória a revisão e chancela por um segundo diretor ou presidente."
+        )
+        
+    # 2. Role Enforcement
+    if reviewer_role.lower().strip() not in ["presidente", "diretor", "vice_presidente"]:
+        raise PermissionError(
+            "Apenas membros da Diretoria Executiva ou Presidência possuem prerrogativa de aprovação no Staging de Marcas."
+        )
+        
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Atualiza registro de staging
+    cursor.execute("""
+    UPDATE rm_staging_records
+    SET status = 'approved',
+        reviewed_by = ?,
+        reviewed_at = CURRENT_TIMESTAMP,
+        review_notes = ?,
+        applied_to_main_db = 1,
+        applied_at = CURRENT_TIMESTAMP
+    WHERE id = ?;
+    """, (reviewer_clean, review_notes or "Aprovado via Dupla Verificação", staging_id))
+    
+    conn.commit()
+    conn.close()
+    
+    # Audit Log 2.0 com rastreabilidade completa Maker + Checker
+    log_audit(
+        user_email=reviewer_clean,
+        action="RM_STAGING_APPROVED",
+        resource=f"/api/rm/staging/{staging_id}/approve",
+        status_code=200,
+        details=f"Maker: {maker_clean} | Checker: {reviewer_clean} | Marca: {record['brand_name']} (ID: {staging_id}, Op: {record['operation_type']})"
+    )
+    
+    # Notifica o Maker sobre a aprovação
+    try:
+        create_system_notification(
+            recipient_email=maker_clean,
+            title=f"Alteração Aprovada: {record['brand_name']}",
+            message=f"Sua proposta de alteração em '{record['brand_name']}' foi aprovada por {reviewer_clean} e aplicada com sucesso.",
+            category="compliance",
+            priority="normal",
+            link="#projetos-sub-staging"
+        )
+    except Exception:
+        pass
+        
+    return get_rm_staging_record_by_id(staging_id)
+
+
+def reject_rm_staging_record(staging_id: int, reviewer_email: str, reviewer_role: str, review_notes: str) -> dict:
+    """
+    Rejeita a alteração em Staging com justificativa obrigatória.
+    """
+    record = get_rm_staging_record_by_id(staging_id)
+    if not record:
+        raise ValueError(f"Registro de staging ID {staging_id} não encontrado.")
+        
+    if record["status"] != "pending_review":
+        raise ValueError(f"Registro já se encontra no status '{record['status']}'.")
+        
+    if reviewer_role.lower().strip() not in ["presidente", "diretor", "vice_presidente"]:
+        raise PermissionError("Apenas Diretores ou Presidência possuem autoridade para rejeitar propostas em Staging.")
+        
+    reviewer_clean = reviewer_email.lower().strip()
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    UPDATE rm_staging_records
+    SET status = 'rejected',
+        reviewed_by = ?,
+        reviewed_at = CURRENT_TIMESTAMP,
+        review_notes = ?
+    WHERE id = ?;
+    """, (reviewer_clean, review_notes.strip(), staging_id))
+    conn.commit()
+    conn.close()
+    
+    # Audit Log 2.0
+    log_audit(
+        user_email=reviewer_clean,
+        action="RM_STAGING_REJECTED",
+        resource=f"/api/rm/staging/{staging_id}/reject",
+        status_code=200,
+        details=f"Maker: {record['submitted_by']} | Checker: {reviewer_clean} | Marca: {record['brand_name']} | Motivo: {review_notes}"
+    )
+    
+    # Notifica o Maker sobre a rejeição e o motivo
+    try:
+        create_system_notification(
+            recipient_email=record["submitted_by"].lower().strip(),
+            title=f"Alteração Rejeitada: {record['brand_name']}",
+            message=f"Sua proposta de alteração em '{record['brand_name']}' foi rejeitada por {reviewer_clean}. Motivo: {review_notes}",
+            category="compliance",
+            priority="high",
+            link="#projetos-sub-staging"
+        )
+    except Exception:
+        pass
+        
+    return get_rm_staging_record_by_id(staging_id)
+
+
 if __name__ == "__main__":
     init_db()
+

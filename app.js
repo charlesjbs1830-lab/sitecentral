@@ -244,6 +244,10 @@ function applyUserSession(user) {
       carregarPDIsVPGG();
       carregarAnalyticsVPGG();
     }
+    carregarNotificacoesUsuario();
+    carregarEstatutosCompliance();
+    carregarStagingRMs();
+    iniciarPollingNotificacoes();
   }
 }
 
@@ -525,6 +529,15 @@ function switchTab(tabId) {
     }
   } else if (tabId === 'marketing') {
     carregarModuloMarketing();
+  } else if (tabId === 'presidencia') {
+    carregarEstatutosCompliance();
+  } else if (tabId === 'projetos') {
+    carregarStagingRMs();
+  }
+
+  // Fechar sidebar mobile automaticamente ao alternar abas
+  if (typeof toggleMobileSidebar === 'function') {
+    toggleMobileSidebar(false);
   }
 }
 
@@ -6571,6 +6584,1082 @@ function renderizarAnalyticsMarketing() {
 }
 
 // ==============================================================================
+// 7. SUBSISTEMAS ESTRATÉGICOS: COMPLIANCE, NOTIFICAÇÕES, CALENDÁRIO, MOBILE & STAGING
+// ==============================================================================
+
+// ------------------------------------------------------------------------------
+// SUBSISTEMA 4: RESPONSIVIDADE MOBILE & OFF-CANVAS DRAWER
+// ------------------------------------------------------------------------------
+function toggleMobileSidebar(open) {
+  const sidebar = document.getElementById('main-sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  if (!sidebar) return;
+
+  const shouldOpen = (open !== undefined) 
+    ? Boolean(open) 
+    : !sidebar.classList.contains('mobile-open');
+
+  if (shouldOpen) {
+    sidebar.classList.add('mobile-open');
+    if (backdrop) backdrop.classList.add('active');
+  } else {
+    sidebar.classList.remove('mobile-open');
+    if (backdrop) backdrop.classList.remove('active');
+  }
+}
+
+// Sub-abas de Presidência
+function switchPresidenciaSubtab(subtab) {
+  const viewSelo = document.getElementById('pres-sub-seloej');
+  const viewEstatutos = document.getElementById('pres-sub-estatutos');
+  const btnSelo = document.getElementById('subtab-pres-seloej');
+  const btnEstatutos = document.getElementById('subtab-pres-estatutos');
+
+  if (subtab === 'estatutos') {
+    if (viewSelo) viewSelo.classList.add('hidden');
+    if (viewEstatutos) viewEstatutos.classList.remove('hidden');
+    if (btnSelo) { btnSelo.classList.remove('subtab-active'); btnSelo.classList.add('subtab-inactive'); }
+    if (btnEstatutos) { btnEstatutos.classList.remove('subtab-inactive'); btnEstatutos.classList.add('subtab-active'); }
+    carregarEstatutosCompliance();
+  } else {
+    if (viewEstatutos) viewEstatutos.classList.add('hidden');
+    if (viewSelo) viewSelo.classList.remove('hidden');
+    if (btnEstatutos) { btnEstatutos.classList.remove('subtab-active'); btnEstatutos.classList.add('subtab-inactive'); }
+    if (btnSelo) { btnSelo.classList.remove('subtab-inactive'); btnSelo.classList.add('subtab-active'); }
+    if (typeof initSeloEJDataGrid === 'function') initSeloEJDataGrid();
+  }
+}
+
+// Sub-abas de Projetos (Esteira Oficial vs Staging)
+function switchProjetosSubtab(subtab) {
+  const viewEsteira = document.getElementById('projetos-sub-esteira');
+  const viewStaging = document.getElementById('projetos-sub-staging');
+  const btnEsteira = document.getElementById('subtab-proj-esteira');
+  const btnStaging = document.getElementById('subtab-proj-staging');
+
+  if (subtab === 'staging') {
+    if (viewEsteira) viewEsteira.classList.add('hidden');
+    if (viewStaging) viewStaging.classList.remove('hidden');
+    if (btnEsteira) { btnEsteira.classList.remove('subtab-active'); btnEsteira.classList.add('subtab-inactive'); }
+    if (btnStaging) { btnStaging.classList.remove('subtab-inactive'); btnStaging.classList.add('subtab-active'); }
+    carregarStagingRMs();
+  } else {
+    if (viewStaging) viewStaging.classList.add('hidden');
+    if (viewEsteira) viewEsteira.classList.remove('hidden');
+    if (btnStaging) { btnStaging.classList.remove('subtab-active'); btnStaging.classList.add('subtab-inactive'); }
+    if (btnEsteira) { btnEsteira.classList.remove('subtab-inactive'); btnEsteira.classList.add('subtab-active'); }
+    if (typeof initRMsDataGrid === 'function') initRMsDataGrid();
+  }
+}
+
+// ------------------------------------------------------------------------------
+// SUBSISTEMA 2: MOTOR DE NOTIFICAÇÕES DINÂMICAS & ALERTAS RBAC
+// ------------------------------------------------------------------------------
+let notificacoesCache = [];
+let pollingNotificacoesId = null;
+
+function toggleNotificationDropdown(open) {
+  const dropdown = document.getElementById('notification-dropdown');
+  if (!dropdown) return;
+  if (open === undefined) {
+    dropdown.classList.toggle('hidden');
+  } else if (open) {
+    dropdown.classList.remove('hidden');
+  } else {
+    dropdown.classList.add('hidden');
+  }
+}
+
+// Fechar dropdown de notificações ao clicar fora
+document.addEventListener('click', function(evt) {
+  const notifCenter = document.getElementById('notification-center');
+  const dropdown = document.getElementById('notification-dropdown');
+  if (dropdown && !dropdown.classList.contains('hidden')) {
+    if (notifCenter && !notifCenter.contains(evt.target)) {
+      dropdown.classList.add('hidden');
+    }
+  }
+});
+
+async function carregarNotificacoesUsuario() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + '/api/notifications', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      notificacoesCache = data.notifications || [];
+      const unreadCount = data.unread_count || 0;
+
+      // Atualizar badge no header
+      const badge = document.getElementById('notification-badge');
+      const countText = document.getElementById('notif-count-text');
+      if (badge) {
+        if (unreadCount > 0) {
+          badge.innerText = unreadCount > 99 ? '99+' : unreadCount;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+      }
+      if (countText) {
+        countText.innerText = `${unreadCount} nova${unreadCount === 1 ? '' : 's'}`;
+      }
+
+      renderizarListaNotificacoes(notificacoesCache);
+    }
+  } catch (err) {
+    console.warn('[Notificações] Falha ao carregar notificações:', err.message);
+  }
+}
+
+function renderizarListaNotificacoes(notifs) {
+  const container = document.getElementById('notification-list');
+  if (!container) return;
+
+  if (!notifs || notifs.length === 0) {
+    container.innerHTML = `
+      <div class="p-6 text-center text-slate-400">
+        <i class="fa-regular fa-bell-slash text-xl mb-1 text-slate-300 block"></i>
+        <span>Nenhum alerta ou prazo pendente no momento.</span>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = notifs.map(n => {
+    const isUnread = !n.read;
+    const prioridadeClass = {
+      'critica': 'badge-priority-critica',
+      'alta': 'badge-priority-alta',
+      'media': 'badge-priority-media',
+      'baixa': 'badge-priority-baixa'
+    }[n.priority] || 'badge-priority-baixa';
+
+    const categoriaIcon = {
+      'estatuto': 'fa-solid fa-scale-balanced text-blue-600',
+      'crm': 'fa-solid fa-clock text-amber-600',
+      'pdi': 'fa-solid fa-graduation-cap text-purple-600',
+      'rm_staging': 'fa-solid fa-shield-halved text-emerald-600',
+      'geral': 'fa-solid fa-bell text-slate-600'
+    }[n.category] || 'fa-solid fa-info-circle text-blue-600';
+
+    const dataFormatada = n.created_at ? new Date(n.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '';
+
+    return `
+      <div class="p-3 hover:bg-slate-50 transition flex items-start gap-2.5 ${isUnread ? 'bg-blue-50/30' : ''}">
+        <div class="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 mt-0.5">
+          <i class="${categoriaIcon} text-xs"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between gap-1 mb-0.5">
+            <span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded ${prioridadeClass}">${n.priority}</span>
+            <span class="text-[10px] text-slate-400 font-mono">${dataFormatada}</span>
+          </div>
+          <h4 class="font-bold text-xs text-slate-800 leading-snug">${escapeHtml(n.title)}</h4>
+          <p class="text-[11px] text-slate-600 mt-0.5 leading-relaxed">${escapeHtml(n.message)}</p>
+          ${isUnread ? `
+            <div class="mt-1.5 flex justify-end">
+              <button onclick="marcarNotificacaoLida(${n.id})" class="text-[10px] font-semibold text-blue-600 hover:text-blue-800 transition cursor-pointer">
+                Marcar como lida ✓
+              </button>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function marcarNotificacaoLida(id) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + `/api/notifications/${id}/read`, {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (res.ok) {
+      carregarNotificacoesUsuario();
+    }
+  } catch (err) {
+    console.error('[Notificações] Falha ao marcar lida:', err);
+  }
+}
+
+async function marcarTodasNotificacoesLidas() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + '/api/notifications/read-all', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (res.ok) {
+      showToast('Todas as notificações foram marcadas como lidas.');
+      carregarNotificacoesUsuario();
+    }
+  } catch (err) {
+    console.error('[Notificações] Falha ao limpar notificações:', err);
+  }
+}
+
+async function scanDeadlinesNow() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) {
+    showToast('Autentique-se para escanear prazos.');
+    return;
+  }
+
+  showToast('🔍 Escaneando prazos regulatórios, CRM, estatutos e PDI...');
+
+  try {
+    const res = await fetch(API_BASE_URL + '/api/notifications/scan', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      showToast(`✅ Escaneamento concluído: ${data.notifications_created || 0} novos alertas identificados.`);
+      carregarNotificacoesUsuario();
+      if (document.getElementById('modal-google-calendar') && !document.getElementById('modal-google-calendar').classList.contains('hidden')) {
+        carregarEventosCalendario();
+      }
+    } else {
+      showToast('Não foi possível concluir o escaneamento.');
+    }
+  } catch (err) {
+    console.warn('[Notificações] Erro ao disparar scan de prazos:', err.message);
+  }
+}
+
+function iniciarPollingNotificacoes() {
+  if (pollingNotificacoesId) clearInterval(pollingNotificacoesId);
+  pollingNotificacoesId = setInterval(() => {
+    if (currentUserSession && localStorage.getItem(AUTH_TOKEN_KEY)) {
+      carregarNotificacoesUsuario();
+    }
+  }, 60000);
+}
+
+// ------------------------------------------------------------------------------
+// SUBSISTEMA 1: ESTATUTOS E COMPLIANCE MEJ (LEI 13.267 / SELO EJ)
+// ------------------------------------------------------------------------------
+let estatutosCache = [];
+let currentChecklistStatute = null;
+
+async function carregarEstatutosCompliance() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const container = document.getElementById('datagrid-compliance-statutes');
+
+  try {
+    const res = await fetch(API_BASE_URL + '/api/compliance/statutes', {
+      headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    });
+
+    if (res.ok) {
+      estatutosCache = await res.json();
+      const badgeCount = document.getElementById('badge-compliance-count');
+      if (badgeCount) badgeCount.innerText = estatutosCache.length;
+      renderizarEstatutosDataGrid(estatutosCache);
+    } else {
+      if (container) container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-slate-400">Nenhum estatuto encontrado.</td></tr>';
+    }
+  } catch (err) {
+    console.warn('[Compliance] Falha ao carregar estatutos:', err.message);
+    if (container) container.innerHTML = '<tr><td colspan="7" class="p-6 text-center text-rose-500 font-medium">Erro de conexão ao carregar estatutos.</td></tr>';
+  }
+}
+
+function renderizarEstatutosDataGrid(lista) {
+  const container = document.getElementById('datagrid-compliance-statutes');
+  const contador = document.getElementById('info-contador-estatutos');
+  if (!container) return;
+
+  if (contador) contador.innerText = `${lista.length} marco${lista.length === 1 ? '' : 's'} regulatório${lista.length === 1 ? '' : 's'}`;
+
+  if (!lista || lista.length === 0) {
+    container.innerHTML = `
+      <tr>
+        <td colspan="7" class="p-8 text-center text-slate-400">
+          <i class="fa-solid fa-scale-unbalanced text-2xl text-slate-300 mb-2 block"></i>
+          Nenhum marco regulatório ou estatuto cadastrado. Clique em "+ Novo Marco / Estatuto" para cadastrar.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  container.innerHTML = lista.map(item => {
+    const tipoFormatado = {
+      'estatuto': 'Estatuto Social',
+      'regimento': 'Regimento Interno',
+      'federal': 'Legislação Federal',
+      'selo_ej': 'Diretriz Selo EJ',
+      'codigo_etica': 'Código de Ética',
+      'outro': 'Regulamento'
+    }[item.statute_type] || item.statute_type;
+
+    const statusBadge = {
+      'vigente': '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">Vigente</span>',
+      'em_revisao': '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Em Revisão</span>',
+      'revogado': '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">Revogado</span>'
+    }[item.status] || `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800">${item.status}</span>`;
+
+    // Cálculo do checklist
+    const checklist = item.compliance_checklist || [];
+    const totalReqs = checklist.length;
+    const cumpridos = checklist.filter(r => r.checked).length;
+    const perc = totalReqs > 0 ? Math.round((cumpridos / totalReqs) * 100) : 100;
+    const progressColor = perc === 100 ? 'bg-emerald-500' : (perc >= 50 ? 'bg-amber-500' : 'bg-rose-500');
+
+    const vigencia = item.effective_date ? new Date(item.effective_date + 'T00:00:00').toLocaleDateString('pt-BR') : 'Indefinido';
+    const revisao = item.review_deadline ? new Date(item.review_deadline + 'T00:00:00').toLocaleDateString('pt-BR') : 'Sem prazo';
+
+    return `
+      <tr class="hover:bg-slate-50/80 transition">
+        <td class="px-4 py-3 font-semibold text-slate-800" data-label="Marco / Norma">
+          <div>
+            <span class="text-xs font-bold text-slate-900 block">${escapeHtml(item.title)}</span>
+            ${item.document_url ? `<a href="${escapeHtml(item.document_url)}" target="_blank" class="text-[10px] text-blue-600 hover:underline inline-flex items-center gap-1 mt-0.5"><i class="fa-solid fa-arrow-up-right-from-square"></i> Acessar Documento Oficial</a>` : ''}
+          </div>
+        </td>
+        <td class="px-4 py-3" data-label="Tipo & Versão">
+          <span class="text-xs font-medium text-slate-700 block">${tipoFormatado}</span>
+          <span class="text-[10px] text-slate-400 font-mono">v${escapeHtml(item.version || '1.0')}</span>
+        </td>
+        <td class="px-4 py-3 font-medium text-slate-700" data-label="Diretoria Resp.">
+          ${escapeHtml(item.responsible_directorate || 'Presidência')}
+        </td>
+        <td class="px-4 py-3 font-mono text-[11px]" data-label="Vigência / Revisão">
+          <div><span class="text-slate-400 text-[10px]">Início:</span> ${vigencia}</div>
+          <div><span class="text-slate-400 text-[10px]">Revisão:</span> <strong class="text-indigo-700">${revisao}</strong></div>
+        </td>
+        <td class="px-4 py-3" data-label="Status">
+          ${statusBadge}
+        </td>
+        <td class="px-4 py-3" data-label="Checklist MEJ">
+          <div class="w-36">
+            <div class="flex items-center justify-between text-[10px] mb-1 font-mono">
+              <span class="font-bold text-slate-700">${cumpridos}/${totalReqs}</span>
+              <span class="text-slate-500 font-bold">${perc}%</span>
+            </div>
+            <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+              <div class="${progressColor} h-1.5 rounded-full" style="width: ${perc}%"></div>
+            </div>
+            <button onclick="abrirModalChecklist(${item.id})" class="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 mt-1 cursor-pointer block">
+              <i class="fa-solid fa-list-check"></i> Abrir Checklist
+            </button>
+          </div>
+        </td>
+        <td class="px-4 py-3 text-right" data-label="Ações">
+          <div class="flex items-center justify-end gap-1.5">
+            <button onclick="abrirModalEditarEstatuto(${item.id})" class="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded transition cursor-pointer" title="Editar Marco">
+              <i class="fa-solid fa-pen-to-square text-xs"></i>
+            </button>
+            <button onclick="excluirEstatuto(${item.id})" class="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer" title="Excluir Marco">
+              <i class="fa-solid fa-trash text-xs"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function filtrarEstatutosDataGrid() {
+  const busca = (document.getElementById('filtro-estatuto-busca')?.value || '').toLowerCase();
+  const tipo = document.getElementById('filtro-estatuto-tipo')?.value || '';
+  const status = document.getElementById('filtro-estatuto-status')?.value || '';
+
+  const filtrados = estatutosCache.filter(item => {
+    const matchBusca = !busca || 
+      item.title.toLowerCase().includes(busca) || 
+      (item.description && item.description.toLowerCase().includes(busca)) ||
+      (item.responsible_directorate && item.responsible_directorate.toLowerCase().includes(busca));
+    const matchTipo = !tipo || item.statute_type === tipo;
+    const matchStatus = !status || item.status === status;
+    return matchBusca && matchTipo && matchStatus;
+  });
+
+  renderizarEstatutosDataGrid(filtrados);
+}
+
+function abrirModalNovoEstatuto() {
+  document.getElementById('statute_id').value = '';
+  document.getElementById('form-statute').reset();
+  document.getElementById('statute_effective_date').value = new Date().toISOString().substring(0, 10);
+  document.getElementById('modal-statute-title-text').innerText = 'Novo Marco Regulatório / Estatuto';
+  document.getElementById('modal-statute').classList.remove('hidden');
+}
+
+function abrirModalEditarEstatuto(id) {
+  const item = estatutosCache.find(s => s.id === id);
+  if (!item) return;
+
+  document.getElementById('statute_id').value = item.id;
+  document.getElementById('statute_title').value = item.title || '';
+  document.getElementById('statute_type').value = item.statute_type || 'estatuto';
+  document.getElementById('statute_responsible_directorate').value = item.responsible_directorate || 'Presidência';
+  document.getElementById('statute_version').value = item.version || '2026.1';
+  document.getElementById('statute_effective_date').value = item.effective_date || '';
+  document.getElementById('statute_review_deadline').value = item.review_deadline || '';
+  document.getElementById('statute_status').value = item.status || 'vigente';
+  document.getElementById('statute_document_url').value = item.document_url || '';
+  document.getElementById('statute_description').value = item.description || '';
+
+  document.getElementById('modal-statute-title-text').innerText = 'Editar Marco Regulatório / Estatuto';
+  document.getElementById('modal-statute').classList.remove('hidden');
+}
+
+function fecharModalStatute() {
+  document.getElementById('modal-statute').classList.add('hidden');
+}
+
+async function salvarEstatuto(event) {
+  if (event) event.preventDefault();
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) {
+    showToast('Você precisa estar autenticado para salvar estatutos.');
+    return;
+  }
+
+  const id = document.getElementById('statute_id').value;
+  const payload = {
+    title: document.getElementById('statute_title').value.trim(),
+    statute_type: document.getElementById('statute_type').value,
+    responsible_directorate: document.getElementById('statute_responsible_directorate').value,
+    version: document.getElementById('statute_version').value.trim(),
+    effective_date: document.getElementById('statute_effective_date').value || null,
+    review_deadline: document.getElementById('statute_review_deadline').value || null,
+    status: document.getElementById('statute_status').value,
+    document_url: document.getElementById('statute_document_url').value.trim() || null,
+    description: document.getElementById('statute_description').value.trim() || null
+  };
+
+  try {
+    const isEdit = Boolean(id);
+    const url = isEdit ? `${API_BASE_URL}/api/compliance/statutes/${id}` : `${API_BASE_URL}/api/compliance/statutes`;
+    const method = isEdit ? 'PUT' : 'POST';
+
+    const res = await fetch(url, {
+      method: method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      showToast(isEdit ? 'Estatuto atualizado com sucesso!' : 'Novo marco regulatório cadastrado!');
+      fecharModalStatute();
+      carregarEstatutosCompliance();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`Erro ao salvar: ${err.detail || 'Falha na requisição.'}`);
+    }
+  } catch (err) {
+    showToast(`Erro de conexão: ${err.message}`);
+  }
+}
+
+async function excluirEstatuto(id) {
+  if (!confirm('Deseja realmente excluir este marco regulatório do sistema?')) return;
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + `/api/compliance/statutes/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+
+    if (res.ok) {
+      showToast('Marco regulatório excluído com sucesso.');
+      carregarEstatutosCompliance();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`Erro ao excluir: ${err.detail || 'Acesso negado.'}`);
+    }
+  } catch (err) {
+    showToast(`Erro: ${err.message}`);
+  }
+}
+
+// Checklist Interativo
+function abrirModalChecklist(id) {
+  const item = estatutosCache.find(s => s.id === id);
+  if (!item) return;
+
+  currentChecklistStatute = item;
+  document.getElementById('modal-checklist-title').innerText = item.title;
+  document.getElementById('modal-checklist-subtitle').innerText = `${item.responsible_directorate} • Versão ${item.version || '1.0'}`;
+  
+  renderizarChecklistModal();
+  document.getElementById('modal-statute-checklist').classList.remove('hidden');
+}
+
+function fecharModalChecklist() {
+  document.getElementById('modal-statute-checklist').classList.add('hidden');
+  currentChecklistStatute = null;
+}
+
+function renderizarChecklistModal() {
+  if (!currentChecklistStatute) return;
+  const checklist = currentChecklistStatute.compliance_checklist || [];
+  const container = document.getElementById('modal-checklist-items-container');
+  const progText = document.getElementById('modal-checklist-progress-text');
+  const progBar = document.getElementById('modal-checklist-progress-bar');
+
+  const total = checklist.length;
+  const cumpridos = checklist.filter(r => r.checked).length;
+  const perc = total > 0 ? Math.round((cumpridos / total) * 100) : 100;
+
+  if (progText) progText.innerText = `${cumpridos} de ${total} cumpridos (${perc}%)`;
+  if (progBar) progBar.style.width = `${perc}%`;
+
+  if (total === 0) {
+    container.innerHTML = '<div class="p-4 text-center text-slate-400">Nenhum requisito cadastrado ainda. Use o campo abaixo para adicionar.</div>';
+    return;
+  }
+
+  container.innerHTML = checklist.map(req => {
+    const isChecked = Boolean(req.checked);
+    return `
+      <label class="flex items-start gap-3 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition ${isChecked ? 'bg-emerald-50/40 border-emerald-200' : 'bg-white'}">
+        <input type="checkbox" onchange="toggleChecklistItem('${req.id}', this.checked)" ${isChecked ? 'checked' : ''} class="mt-0.5 rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer">
+        <div class="flex-1 min-w-0">
+          <span class="text-xs text-slate-800 font-medium ${isChecked ? 'line-through text-slate-400' : ''}">${escapeHtml(req.item)}</span>
+          ${req.mandatory ? '<span class="inline-block ml-1 text-[9px] font-bold text-rose-600 uppercase">Obrigatório</span>' : ''}
+        </div>
+      </label>
+    `;
+  }).join('');
+}
+
+async function toggleChecklistItem(itemId, isChecked) {
+  if (!currentChecklistStatute) return;
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  const checklist = currentChecklistStatute.compliance_checklist || [];
+  const target = checklist.find(r => r.id === itemId);
+  if (target) {
+    target.checked = isChecked;
+  }
+
+  try {
+    const res = await fetch(API_BASE_URL + `/api/compliance/statutes/${currentChecklistStatute.id}/checklist`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({ checklist: checklist })
+    });
+
+    if (res.ok) {
+      renderizarChecklistModal();
+      carregarEstatutosCompliance();
+    }
+  } catch (err) {
+    console.error('[Checklist] Erro ao sincronizar item:', err);
+  }
+}
+
+async function adicionarItemChecklist() {
+  if (!currentChecklistStatute) return;
+  const input = document.getElementById('novo-requisito-input');
+  const texto = input ? input.value.trim() : '';
+  if (!texto) return;
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  const checklist = currentChecklistStatute.compliance_checklist || [];
+  checklist.push({
+    id: 'req_' + Date.now(),
+    item: texto,
+    checked: false,
+    mandatory: true
+  });
+
+  try {
+    const res = await fetch(API_BASE_URL + `/api/compliance/statutes/${currentChecklistStatute.id}/checklist`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({ checklist: checklist })
+    });
+
+    if (res.ok) {
+      input.value = '';
+      renderizarChecklistModal();
+      carregarEstatutosCompliance();
+    }
+  } catch (err) {
+    console.error('[Checklist] Erro ao adicionar item:', err);
+  }
+}
+
+// ------------------------------------------------------------------------------
+// SUBSISTEMA 5: STAGING & DUPLA VERIFICAÇÃO MAKER-CHECKER (FOUR-EYES)
+// ------------------------------------------------------------------------------
+let stagingCache = [];
+let currentStagingRecord = null;
+
+async function carregarStagingRMs() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const container = document.getElementById('datagrid-staging-records');
+
+  try {
+    const res = await fetch(API_BASE_URL + '/api/rm/staging', {
+      headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    });
+
+    if (res.ok) {
+      stagingCache = await res.json();
+      
+      // Atualizar badge de pendentes
+      const pendingCount = stagingCache.filter(r => r.status === 'pending').length;
+      const badgePending = document.getElementById('badge-staging-pending');
+      if (badgePending) {
+        if (pendingCount > 0) {
+          badgePending.innerText = pendingCount;
+          badgePending.classList.remove('hidden');
+        } else {
+          badgePending.classList.add('hidden');
+        }
+      }
+
+      renderizarStagingDataGrid(stagingCache);
+    } else {
+      if (container) container.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">Nenhum registro de staging encontrado.</td></tr>';
+    }
+  } catch (err) {
+    console.warn('[Staging] Falha ao carregar registros:', err.message);
+    if (container) container.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-rose-500 font-medium">Erro de conexão ao carregar staging.</td></tr>';
+  }
+}
+
+function renderizarStagingDataGrid(lista) {
+  const container = document.getElementById('datagrid-staging-records');
+  const contador = document.getElementById('info-contador-staging');
+  if (!container) return;
+
+  if (contador) contador.innerText = `${lista.length} proposta${lista.length === 1 ? '' : 's'} em staging`;
+
+  if (!lista || lista.length === 0) {
+    container.innerHTML = `
+      <tr>
+        <td colspan="8" class="p-8 text-center text-slate-400">
+          <i class="fa-solid fa-user-check text-2xl text-slate-300 mb-2 block"></i>
+          Nenhuma proposta em staging. Clique em "+ Propor Alteração em Staging" para iniciar uma solicitação.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  container.innerHTML = lista.map(item => {
+    const statusBadge = {
+      'pending': '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">Pendente de Revisão</span>',
+      'approved': '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">Homologado</span>',
+      'rejected': '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">Rejeitado</span>'
+    }[item.status] || `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800">${item.status}</span>`;
+
+    const dataProposta = item.created_at ? new Date(item.created_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-';
+    const revisor = item.reviewer_email ? escapeHtml(item.reviewer_email.split('@')[0]) : '<span class="text-slate-400 italic">Aguardando 2º par</span>';
+
+    const acaoColor = {
+      'UPDATE': 'text-blue-600 bg-blue-50 border-blue-200',
+      'CREATE': 'text-emerald-600 bg-emerald-50 border-emerald-200',
+      'DELETE': 'text-rose-600 bg-rose-50 border-rose-200'
+    }[item.action] || 'text-slate-600 bg-slate-50 border-slate-200';
+
+    return `
+      <tr class="hover:bg-slate-50/80 transition">
+        <td class="px-4 py-3 font-mono font-bold text-slate-800" data-label="ID / Protocolo">
+          #STG-${item.id}
+        </td>
+        <td class="px-4 py-3" data-label="Tabela / Item">
+          <span class="text-xs font-bold text-slate-900 block">${escapeHtml(item.item_id || 'Novo')}</span>
+          <span class="text-[10px] text-slate-400 font-mono">${escapeHtml(item.target_table)}</span>
+        </td>
+        <td class="px-4 py-3" data-label="Operação">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${acaoColor}">${item.action}</span>
+        </td>
+        <td class="px-4 py-3 text-xs text-slate-700" data-label="Solicitante (Maker)">
+          <strong>${escapeHtml(item.maker_email ? item.maker_email.split('@')[0] : 'Desconhecido')}</strong>
+        </td>
+        <td class="px-4 py-3" data-label="Status">
+          ${statusBadge}
+        </td>
+        <td class="px-4 py-3 font-mono text-[11px] text-slate-600" data-label="Data Proposta">
+          ${dataProposta}
+        </td>
+        <td class="px-4 py-3 text-xs text-slate-700" data-label="Revisor (Checker)">
+          ${revisor}
+        </td>
+        <td class="px-4 py-3 text-right" data-label="Ações">
+          <button onclick="abrirModalDiffStaging(${item.id})" class="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs transition inline-flex items-center gap-1.5 cursor-pointer">
+            <i class="fa-solid fa-magnifying-glass"></i> Comparar Diff
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function filtrarStagingDataGrid() {
+  const busca = (document.getElementById('filtro-staging-busca')?.value || '').toLowerCase();
+  const status = document.getElementById('filtro-staging-status')?.value || '';
+
+  const filtrados = stagingCache.filter(item => {
+    const matchBusca = !busca || 
+      (item.item_id && item.item_id.toLowerCase().includes(busca)) || 
+      (item.maker_email && item.maker_email.toLowerCase().includes(busca)) ||
+      (item.justification && item.justification.toLowerCase().includes(busca));
+    const matchStatus = !status || item.status === status;
+    return matchBusca && matchStatus;
+  });
+
+  renderizarStagingDataGrid(filtrados);
+}
+
+function abrirModalNovoStaging() {
+  document.getElementById('form-staging-create').reset();
+  document.getElementById('modal-staging-create').classList.remove('hidden');
+}
+
+function fecharModalStagingCreate() {
+  document.getElementById('modal-staging-create').classList.add('hidden');
+}
+
+async function submeterStaging(event) {
+  if (event) event.preventDefault();
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) {
+    showToast('Você precisa estar autenticado para propor alterações.');
+    return;
+  }
+
+  const payload = {
+    target_table: document.getElementById('staging_target_table').value,
+    item_id: document.getElementById('staging_item_id').value.trim() || 'RM-NEW',
+    action: document.getElementById('staging_action').value,
+    justification: document.getElementById('staging_justification').value.trim(),
+    original_data: {},
+    proposed_data: {
+      marca: document.getElementById('staging_prop_marca').value.trim(),
+      processo: document.getElementById('staging_prop_processo').value.trim(),
+      fase: document.getElementById('staging_prop_fase').value,
+      responsavel: document.getElementById('staging_prop_responsavel').value.trim(),
+      telefone: document.getElementById('staging_prop_telefone').value.trim()
+    }
+  };
+
+  try {
+    const res = await fetch(API_BASE_URL + '/api/rm/staging', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      showToast('Proposta submetida com sucesso para a fila de Staging!');
+      fecharModalStagingCreate();
+      carregarStagingRMs();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`Erro ao submeter: ${err.detail || 'Falha na requisição.'}`);
+    }
+  } catch (err) {
+    showToast(`Erro de conexão: ${err.message}`);
+  }
+}
+
+function abrirModalDiffStaging(id) {
+  const record = stagingCache.find(r => r.id === id);
+  if (!record) return;
+
+  currentStagingRecord = record;
+
+  document.getElementById('diff-modal-protocolo').innerText = `Protocolo: #STG-${record.id}`;
+  document.getElementById('diff-maker-email').innerText = record.maker_email || '-';
+  document.getElementById('diff-created-at').innerText = record.created_at ? new Date(record.created_at).toLocaleString('pt-BR') : '-';
+  document.getElementById('diff-table-action').innerText = `${record.action} • ${record.target_table}`;
+  document.getElementById('diff-justification-text').innerText = record.justification || 'Nenhuma justificativa detalhada.';
+
+  // Status Badge
+  const statusEl = document.getElementById('diff-status-badge');
+  if (statusEl) {
+    statusEl.innerText = record.status.toUpperCase();
+    statusEl.className = record.status === 'approved' 
+      ? 'inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800'
+      : (record.status === 'rejected' 
+        ? 'inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800'
+        : 'inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800');
+  }
+
+  // Renderizar Colunas de Diff
+  renderizarDiffLadoALado(record.original_data || {}, record.proposed_data || {});
+
+  // Regra Maker-Checker Four-Eyes (Maker != Checker)
+  const userEmail = (currentUserSession?.email || '').toLowerCase().trim();
+  const makerEmail = (record.maker_email || '').toLowerCase().trim();
+  const isMaker = userEmail === makerEmail;
+  const isPending = record.status === 'pending';
+
+  const warningEl = document.getElementById('diff-maker-warning');
+  const actionBtns = document.getElementById('diff-action-buttons');
+  const rejContainer = document.getElementById('container-rejeicao-staging');
+  if (rejContainer) rejContainer.classList.add('hidden');
+
+  if (isPending) {
+    if (isMaker) {
+      if (warningEl) warningEl.classList.remove('hidden');
+      if (actionBtns) actionBtns.classList.add('hidden');
+    } else {
+      if (warningEl) warningEl.classList.add('hidden');
+      if (actionBtns) actionBtns.classList.remove('hidden');
+    }
+  } else {
+    if (warningEl) warningEl.classList.add('hidden');
+    if (actionBtns) actionBtns.classList.add('hidden');
+  }
+
+  document.getElementById('modal-diff-staging').classList.remove('hidden');
+}
+
+function fecharModalDiffStaging() {
+  document.getElementById('modal-diff-staging').classList.add('hidden');
+  currentStagingRecord = null;
+}
+
+function renderizarDiffLadoALado(orig, prop) {
+  const colOrig = document.getElementById('diff-col-original');
+  const colProp = document.getElementById('diff-col-proposed');
+  if (!colOrig || !colProp) return;
+
+  const allKeys = Array.from(new Set([...Object.keys(orig), ...Object.keys(prop)]));
+
+  if (allKeys.length === 0) {
+    colOrig.innerHTML = '<div class="text-slate-400 italic">Sem dados originais.</div>';
+    colProp.innerHTML = '<div class="text-slate-400 italic">Sem dados propostos.</div>';
+    return;
+  }
+
+  let origHtml = '';
+  let propHtml = '';
+
+  allKeys.forEach(k => {
+    const valO = orig[k];
+    const valP = prop[k];
+    const isDifferent = JSON.stringify(valO) !== JSON.stringify(valP);
+
+    if (isDifferent) {
+      origHtml += `<div><strong class="text-slate-600">${escapeHtml(k)}:</strong> <span class="diff-del">${valO !== undefined ? escapeHtml(String(valO)) : '(vazio)'}</span></div>`;
+      propHtml += `<div><strong class="text-slate-600">${escapeHtml(k)}:</strong> <span class="diff-add">${valP !== undefined ? escapeHtml(String(valP)) : '(removido)'}</span></div>`;
+    } else {
+      origHtml += `<div><strong class="text-slate-600">${escapeHtml(k)}:</strong> <span class="diff-same">${escapeHtml(String(valO))}</span></div>`;
+      propHtml += `<div><strong class="text-slate-600">${escapeHtml(k)}:</strong> <span class="diff-same">${escapeHtml(String(valP))}</span></div>`;
+    }
+  });
+
+  colOrig.innerHTML = origHtml;
+  colProp.innerHTML = propHtml;
+}
+
+async function aprovarStagingRegistro() {
+  if (!currentStagingRecord) return;
+  if (!confirm(`Confirmar a aprovação da proposta #STG-${currentStagingRecord.id}? Os dados serão aplicados e um Audit Log 2.0 será registrado.`)) return;
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + `/api/rm/staging/${currentStagingRecord.id}/approve`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      }
+    });
+
+    if (res.ok) {
+      showToast('✅ Proposta homologada com sucesso pelo 2º par de olhos (Maker-Checker)!');
+      fecharModalDiffStaging();
+      carregarStagingRMs();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert(`⚠️ Não foi possível aprovar: ${err.detail || 'Violação de permissão ou de regra Maker-Checker.'}`);
+    }
+  } catch (err) {
+    showToast(`Erro de conexão: ${err.message}`);
+  }
+}
+
+function iniciarRejeicaoStaging() {
+  const container = document.getElementById('container-rejeicao-staging');
+  if (container) container.classList.remove('hidden');
+}
+
+function cancelarRejeicaoStaging() {
+  const container = document.getElementById('container-rejeicao-staging');
+  if (container) container.classList.add('hidden');
+}
+
+async function confirmarRejeicaoStaging() {
+  if (!currentStagingRecord) return;
+  const notes = (document.getElementById('diff-rejection-notes')?.value || '').trim();
+  if (!notes) {
+    alert('Por favor, informe a justificativa da rejeição.');
+    return;
+  }
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+
+  try {
+    const res = await fetch(API_BASE_URL + `/api/rm/staging/${currentStagingRecord.id}/reject`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: JSON.stringify({ review_notes: notes })
+    });
+
+    if (res.ok) {
+      showToast('Proposta rejeitada e registrada em auditoria.');
+      fecharModalDiffStaging();
+      carregarStagingRMs();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert(`Erro ao rejeitar: ${err.detail || 'Falha na requisição.'}`);
+    }
+  } catch (err) {
+    showToast(`Erro: ${err.message}`);
+  }
+}
+
+// ------------------------------------------------------------------------------
+// SUBSISTEMA 3: GOOGLE CALENDAR & FEED UNIVERSAL RFC 5545
+// ------------------------------------------------------------------------------
+let calendarEventsCache = [];
+
+function abrirModalGoogleCalendar() {
+  const feedBtn = document.getElementById('btn-feed-ics-download');
+  if (feedBtn) {
+    feedBtn.href = `${API_BASE_URL}/api/calendar/feed.ics`;
+  }
+
+  carregarEventosCalendario();
+  document.getElementById('modal-google-calendar').classList.remove('hidden');
+}
+
+function fecharModalGoogleCalendar() {
+  document.getElementById('modal-google-calendar').classList.add('hidden');
+}
+
+async function carregarEventosCalendario() {
+  const container = document.getElementById('calendar-events-list');
+  const countEl = document.getElementById('calendar-events-count');
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  try {
+    const res = await fetch(API_BASE_URL + '/api/calendar/events', {
+      headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    });
+
+    if (res.ok) {
+      calendarEventsCache = await res.json();
+      if (countEl) countEl.innerText = `${calendarEventsCache.length} evento${calendarEventsCache.length === 1 ? '' : 's'}`;
+      renderizarEventosCalendario(calendarEventsCache);
+    } else {
+      if (container) container.innerHTML = '<div class="p-6 text-center text-slate-400">Nenhum evento encontrado no calendário.</div>';
+    }
+  } catch (err) {
+    console.warn('[Calendar] Falha ao consultar eventos:', err.message);
+    if (container) container.innerHTML = '<div class="p-6 text-center text-rose-500 font-medium">Erro ao carregar calendário.</div>';
+  }
+}
+
+function renderizarEventosCalendario(eventos) {
+  const container = document.getElementById('calendar-events-list');
+  if (!container) return;
+
+  if (!eventos || eventos.length === 0) {
+    container.innerHTML = `
+      <div class="p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+        <i class="fa-regular fa-calendar-xmark text-2xl text-slate-300 mb-1 block"></i>
+        Nenhum prazo ou compromisso futuro identificado. Clique em "Escanear" para sincronizar prazos.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = eventos.map(ev => {
+    const startIso = ev.start_datetime ? ev.start_datetime.replace(/[-:]/g, '').replace('.000', '') : '';
+    const endIso = ev.end_datetime ? ev.end_datetime.replace(/[-:]/g, '').replace('.000', '') : startIso;
+    const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(ev.title)}&dates=${encodeURIComponent(startIso)}/${encodeURIComponent(endIso)}&details=${encodeURIComponent(ev.description || '')}&location=${encodeURIComponent(ev.location || 'EDV Jr.')}`;
+
+    const catBadge = {
+      'estatuto': '<span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-blue-100 text-blue-800">Estatutos</span>',
+      'crm': '<span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-amber-100 text-amber-800">CRM Follow-up</span>',
+      'pdi': '<span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-purple-100 text-purple-800">PDI 70-20-10</span>',
+      'rm_staging': '<span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800">INPI / Marca</span>'
+    }[ev.category] || '<span class="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-slate-100 text-slate-800">Geral</span>';
+
+    const dataFormatada = ev.start_datetime ? new Date(ev.start_datetime).toLocaleDateString('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }) : 'Sem data';
+
+    return `
+      <div class="p-3 bg-white border border-slate-200 rounded-xl hover:shadow-xs transition flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-1.5 mb-1">
+            ${catBadge}
+            <span class="text-[10px] text-slate-400 font-mono"><i class="fa-regular fa-clock mr-0.5"></i>${dataFormatada}</span>
+          </div>
+          <h4 class="font-bold text-xs text-slate-800 leading-tight">${escapeHtml(ev.title)}</h4>
+          <p class="text-[11px] text-slate-500 mt-0.5 line-clamp-1">${escapeHtml(ev.description || '')}</p>
+        </div>
+        <div class="shrink-0 flex items-center gap-2">
+          <a href="${gcalUrl}" target="_blank" rel="noopener noreferrer" class="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 font-bold rounded-lg text-xs transition flex items-center gap-1 cursor-pointer">
+            <i class="fa-brands fa-google text-blue-600"></i> + Google Agenda
+          </a>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Utilitário para escapar HTML com segurança
+function escapeHtml(text) {
+  if (text === null || text === undefined) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// ==============================================================================
 // 6. INICIALIZAÇÃO DEFINITIVA DO ECOSSISTEMA
 // ==============================================================================
 function initApp() {
@@ -6591,6 +7680,10 @@ function initApp() {
   popularSelectsVPGG();
   carregarMetasPE();
   carregarModuloMarketing();
+  carregarNotificacoesUsuario();
+  carregarEstatutosCompliance();
+  carregarStagingRMs();
+  iniciarPollingNotificacoes();
 }
 
 document.addEventListener('DOMContentLoaded', initApp);

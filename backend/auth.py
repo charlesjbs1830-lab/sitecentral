@@ -241,3 +241,63 @@ def verify_psel_access(current_user: dict = Depends(get_current_user)) -> dict:
         )
     return current_user
 
+
+def check_compliance_access(user: dict) -> bool:
+    """
+    Retorna True se o usuário tiver permissão para gerenciar Estatutos, Selo EJ e Compliance:
+    Presidência, Diretoria Executiva ou membros do Jurídico.
+    """
+    if not user:
+        return False
+    role = (user.get("role") or "").lower().strip()
+    if role in {"presidente", "diretor", "vice_presidente"}:
+        return True
+    area = (user.get("area") or user.get("setor") or "").lower().strip()
+    return "jurídico" in area or "juridico" in area or "presid" in area
+
+
+def verify_compliance_access(current_user: dict = Depends(get_current_user)) -> dict:
+    """
+    Validação de Acesso a Estatutos e Compliance MEJ (RBAC).
+    Restrito à Presidência, Diretoria Executiva e setor Jurídico.
+    """
+    if not current_user or not check_compliance_access(current_user):
+        role = current_user.get("role", "desconhecido") if current_user else "anônimo"
+        area = current_user.get("area", current_user.get("setor", "indefinida")) if current_user else "indefinida"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Acesso negado: Perfil '{role}' da área '{area}' não possui permissão para gerenciar o Módulo de Estatutos e Compliance MEJ. "
+                f"Acesso restrito à Presidência, Diretoria Executiva e setor Jurídico."
+            )
+        )
+    return current_user
+
+
+def check_rm_staging_approval_access(user: dict) -> bool:
+    """
+    Retorna True se o usuário puder atuar como revisor/aprovador (Checker) em RM Staging:
+    Exclusivo para Presidente ou Diretores Executivos.
+    """
+    if not user:
+        return False
+    role = (user.get("role") or "").lower().strip()
+    return role in {"presidente", "diretor", "vice_presidente"}
+
+
+def verify_rm_staging_approval_access(current_user: dict = Depends(get_current_user)) -> dict:
+    """
+    Validação de Permissão para Aprovação Maker-Checker no Staging de Marcas.
+    """
+    if not current_user or not check_rm_staging_approval_access(current_user):
+        role = current_user.get("role", "desconhecido") if current_user else "anônimo"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"Acesso negado: Perfil '{role}' não possui autoridade executiva para aprovar ou rejeitar alterações no Staging de RM. "
+                f"Prerrogativa exclusiva de Diretores e Presidência."
+            )
+        )
+    return current_user
+
+

@@ -1278,6 +1278,229 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
             self.assertEqual(b["federation_audit_score"], 100.0)
             self.assertIn(b["role_target"], ["diretoria", "presidencia"])
 
+    def test_37_statutes_compliance_crud_and_checklist(self):
+        """Valida CRUD de estatutos, Selo EJ (Brasil Júnior) e atualização dinâmica de checklist com recálculo de conformidade"""
+        token_pres = self.tokens["presidente"]
+        token_proj = self.tokens["assessor_projetos"]
+
+        # 1. Consulta inicial de normas semeadas
+        res = self.client.get("/api/compliance/statutes", headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res.status_code, 200)
+        statutes = res.json()
+        self.assertGreaterEqual(len(statutes), 5)
+        titles = [s["title"] for s in statutes]
+        self.assertTrue(any("Lei Federal nº 13.267" in t for t in titles))
+        self.assertTrue(any("Selo EJ 2026" in t for t in titles))
+
+        # 2. Assessor sem permissão tenta criar norma -> 403 Forbidden
+        new_statute = {
+            "title": "Regulamento Interno de Estágio e Horas Complementares",
+            "norm_type": "regimento_interno",
+            "version": "v1.0",
+            "status": "vigente",
+            "effective_date": "2026-03-01",
+            "review_deadline": "2026-12-31",
+            "responsible_area": "VPGG",
+            "responsible_role": "diretor",
+            "description": "Regras de computo de horas para a FDV",
+            "checklist_items": [
+                {"id": "c1", "item": "Validação pela Coordenação de Estágio da FDV", "compliant": True, "notes": "Aprovado em colegiado"},
+                {"id": "c2", "item": "Termo de compromisso arquivado", "compliant": False, "notes": "Pendente de assinatura"}
+            ]
+        }
+        res_denied = self.client.post("/api/compliance/statutes", json=new_statute, headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res_denied.status_code, 403)
+
+        # 3. Presidência cadastra a norma com sucesso -> 201 Created
+        res_created = self.client.post("/api/compliance/statutes", json=new_statute, headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_created.status_code, 201)
+        created_statute = res_created.json()
+        statute_id = created_statute["id"]
+        # Score inicial: 1 de 2 compliant = 50.0%
+        self.assertEqual(created_statute["conformity_score"], 50.0)
+
+        # 4. Atualizar checklist marcando segundo item como compliant -> recálculo para 100%
+        updated_checklist = [
+            {"id": "c1", "item": "Validação pela Coordenação de Estágio da FDV", "compliant": True, "notes": "Aprovado em colegiado"},
+            {"id": "c2", "item": "Termo de compromisso arquivado", "compliant": True, "notes": "Assinado digitalmente"}
+        ]
+        res_patch = self.client.patch(
+            f"/api/compliance/statutes/{statute_id}/checklist",
+            json={"checklist_items": updated_checklist},
+            headers={"Authorization": f"Bearer {token_pres}"}
+        )
+        self.assertEqual(res_patch.status_code, 200)
+        self.assertEqual(res_patch.json()["conformity_score"], 100.0)
+
+        # 5. Excluir norma criada -> 200 OK
+        res_del = self.client.delete(f"/api/compliance/statutes/{statute_id}", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_del.status_code, 200)
+
+    def test_38_dynamic_notifications_and_rbac_filtering(self):
+        """Valida o motor de notificações dinâmicas com RBAC, varredura ativa de prazos e marcação de leitura"""
+        token_com = self.tokens["assessor_comercial"]
+        token_pres = self.tokens["presidente"]
+
+        # 1. Dispara varredura ativa de prazos (Deadlines Scanner)
+        res_scan = self.client.post("/api/notifications/scan", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_scan.status_code, 200)
+        scan_data = res_scan.json()
+        self.assertEqual(scan_data["status"], "success")
+
+        # 2. Assessor busca suas notificações -> vê apenas notificações pertinentes
+        res_notifs = self.client.get("/api/notifications", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_notifs.status_code, 200)
+        notifs = res_notifs.json()
+        self.assertIsInstance(notifs, list)
+        self.assertTrue(len(notifs) > 0)
+        # Notificação global 'ALL' deve ser visível para todos
+        self.assertTrue(any(n["recipient_email"] == "ALL" for n in notifs))
+
+        # 3. Marcação individual como lida
+        first_notif_id = notifs[0]["id"]
+        res_read = self.client.patch(f"/api/notifications/{first_notif_id}/read", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_read.status_code, 200)
+        self.assertEqual(res_read.json()["is_read"], 1)
+
+        # 4. Marcar todas como lidas
+        res_all_read = self.client.post("/api/notifications/read-all", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_all_read.status_code, 200)
+        self.assertIn("marked_read_count", res_all_read.json())
+
+    def test_39_google_calendar_events_and_rfc5545_ics_export(self):
+        """Valida agregação de prazos críticos para o Google Calendar e exportação no padrão RFC 5545 (.ics)"""
+        token_pres = self.tokens["presidente"]
+
+        # 1. Consulta eventos do calendário
+        res_events = self.client.get("/api/calendar/events", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_events.status_code, 200)
+        events = res_events.json()
+        self.assertGreaterEqual(len(events), 1)
+
+        # Cada evento deve conter URL direta de inclusão no Google Calendar
+        first_event = events[0]
+        self.assertIn("google_calendar_url", first_event)
+        self.assertIn("calendar.google.com/calendar/render?action=TEMPLATE", first_event["google_calendar_url"])
+
+        # 2. Exportação do feed universal RFC 5545 (.ics)
+        res_ics = self.client.get("/api/calendar/export.ics")
+        self.assertEqual(res_ics.status_code, 200)
+        self.assertIn("text/calendar", res_ics.headers.get("content-type", ""))
+        ics_text = res_ics.text
+        self.assertIn("BEGIN:VCALENDAR", ics_text)
+        self.assertIn("BEGIN:VEVENT", ics_text)
+        self.assertIn("SUMMARY:", ics_text)
+        self.assertIn("END:VCALENDAR", ics_text)
+
+        # 3. Disparo de sincronização
+        res_sync = self.client.post("/api/calendar/sync-google", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_sync.status_code, 200)
+        self.assertEqual(res_sync.json()["status"], "success")
+
+    def test_40_rm_staging_maker_checker_four_eyes_enforcement(self):
+        """Valida esteira de Staging de Marcas, edição indireta e Princípio Maker-Checker (o autor não pode aprovar)"""
+        token_maker = self.tokens["assessor_projetos"]
+        token_pres_checker = self.tokens["presidente"]
+
+        # 1. Maker submete proposta de alteração de RM para Staging (sem alterar banco oficial diretamente)
+        staging_payload = {
+            "brand_name": "Cervejaria Artesanal Capixaba",
+            "process_number": "938210492",
+            "client_name": "Lucas Alvarenga",
+            "client_phone": "27999887766",
+            "responsible_name": "Alice Mizuki",
+            "phase": "Exame Substantivo",
+            "operation_type": "UPDATE",
+            "original_data": {"phase": "Publicação de Pedido", "brand_name": "Cervejaria Artesanal Capixaba"},
+            "proposed_data": {"phase": "Exame Substantivo", "brand_name": "Cervejaria Artesanal Capixaba", "gru_paga": True}
+        }
+        res_sub = self.client.post("/api/rm/staging", json=staging_payload, headers={"Authorization": f"Bearer {token_maker}"})
+        self.assertEqual(res_sub.status_code, 201)
+        staged = res_sub.json()
+        staging_id = staged["id"]
+        self.assertEqual(staged["status"], "pending_review")
+        self.assertEqual(staged["applied_to_main_db"], 0)
+        self.assertEqual(staged["submitted_by"], "alice.mizuki@edvjr.com.br")
+
+        # 2. O próprio Maker tenta aprovar a própria proposta -> Violação Four-Eyes -> 403 Forbidden
+        res_self_approve = self.client.post(
+            f"/api/rm/staging/{staging_id}/approve",
+            json={"review_notes": "Tentativa indevida de auto-aprovação"},
+            headers={"Authorization": f"Bearer {token_maker}"}
+        )
+        self.assertEqual(res_self_approve.status_code, 403)
+
+        # 3. Assessor comercial tentando aprovar -> 403 Forbidden (não é diretor nem presidente)
+        token_com = self.tokens["assessor_comercial"]
+        res_assessor_approve = self.client.post(
+            f"/api/rm/staging/{staging_id}/approve",
+            json={"review_notes": "Aprovação por outro assessor"},
+            headers={"Authorization": f"Bearer {token_com}"}
+        )
+        self.assertEqual(res_assessor_approve.status_code, 403)
+
+        # 4. Checker legítimo (Presidente != Maker) aprova a alteração -> 200 OK
+        res_approved = self.client.post(
+            f"/api/rm/staging/{staging_id}/approve",
+            json={"review_notes": "Aprovado após conferência do protocolo RPI no INPI"},
+            headers={"Authorization": f"Bearer {token_pres_checker}"}
+        )
+        self.assertEqual(res_approved.status_code, 200)
+        data_approved = res_approved.json()
+        self.assertEqual(data_approved["status"], "approved")
+        self.assertEqual(data_approved["applied_to_main_db"], 1)
+        self.assertEqual(data_approved["reviewed_by"], "charles.junior@edvjr.com.br")
+
+        # 5. Validação de Audit Log 2.0 com rastreabilidade Maker-Checker
+        conn = get_connection()
+        audit_row = conn.execute(
+            "SELECT * FROM audit_logs WHERE action = 'RM_STAGING_APPROVED' AND details LIKE ? ORDER BY id DESC LIMIT 1;",
+            (f"%ID: {staging_id}%",)
+        ).fetchone()
+        self.assertIsNotNone(audit_row)
+        self.assertIn("Maker: alice.mizuki@edvjr.com.br", audit_row["details"])
+        self.assertIn("Checker: charles.junior@edvjr.com.br", audit_row["details"])
+        conn.close()
+
+    def test_41_rm_staging_rejection_with_justification(self):
+        """Valida rejeição de alteração em Staging com obrigatoriedade de justificativa formal"""
+        token_maker = self.tokens["assessor_comercial"]
+        token_dir = self.tokens["diretor"]
+
+        # 1. Maker submete proposta de RM
+        payload = {
+            "brand_name": "Café Conilon Prime",
+            "process_number": "912345678",
+            "client_name": "Fazenda Boa Vista ME",
+            "responsible_name": "Estevão Coutinho",
+            "phase": "Arquivamento",
+            "operation_type": "UPDATE",
+            "proposed_data": {"phase": "Arquivamento"}
+        }
+        res_sub = self.client.post("/api/rm/staging", json=payload, headers={"Authorization": f"Bearer {token_maker}"})
+        self.assertEqual(res_sub.status_code, 201)
+        staging_id = res_sub.json()["id"]
+
+        # 2. Rejeitar sem justificativa -> 400 Bad Request
+        res_no_just = self.client.post(
+            f"/api/rm/staging/{staging_id}/reject",
+            json={"review_notes": ""},
+            headers={"Authorization": f"Bearer {token_dir}"}
+        )
+        self.assertEqual(res_no_just.status_code, 400)
+
+        # 3. Rejeitar com justificativa fundamentada -> 200 OK
+        res_rejected = self.client.post(
+            f"/api/rm/staging/{staging_id}/reject",
+            json={"review_notes": "Recurso contra arquivamento ainda está dentro do prazo legal de 60 dias (Art. 212 LPI). Manter ativo."},
+            headers={"Authorization": f"Bearer {token_dir}"}
+        )
+        self.assertEqual(res_rejected.status_code, 200)
+        self.assertEqual(res_rejected.json()["status"], "rejected")
+        self.assertEqual(res_rejected.json()["reviewed_by"], "alice.ney@edvjr.com.br")
+
+
 if __name__ == "__main__":
     unittest.main()
+
 

@@ -133,9 +133,9 @@
   <!-- ==================== 2. LAYOUT PRINCIPAL DO APLICATIVO ==================== -->
   <div id="app-main-layout" class="hidden flex h-screen overflow-hidden">
 
-    <!-- SIDEBAR -->
-    <aside class="w-64 bg-[#0b1d3a] text-white flex flex-col z-20 shadow-2xl border-r border-slate-800 shrink-0">
-      <div class="p-5 border-b border-slate-800/80 bg-[#071224]/60">
+    <!-- SIDEBAR (RESPONSIVO COM OFF-CANVAS DRAWER) -->
+    <aside id="main-sidebar" class="w-64 bg-[#0b1d3a] text-white flex flex-col z-50 shadow-2xl border-r border-slate-800 shrink-0">
+      <div class="p-5 border-b border-slate-800/80 bg-[#071224]/60 flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white shadow-lg text-lg">
             ⚖️
@@ -145,21 +145,25 @@
             <span class="text-[9px] uppercase tracking-widest text-[#7ba4d1] font-semibold block">Serviços Jurídicos</span>
           </div>
         </div>
-        <div class="mt-3 flex items-center justify-between text-[11px] bg-slate-800/60 py-1 px-2.5 rounded border border-slate-700/60">
-          <span class="text-slate-400 font-medium">SO Unificado</span>
-          <span class="bg-blue-500/20 text-blue-300 font-mono text-[10px] px-1.5 py-0.5 rounded border border-blue-400/30">v2.0 Full</span>
-        </div>
+        <!-- Botão Fechar Mobile Drawer -->
+        <button onclick="toggleMobileSidebar(false)" class="lg:hidden p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 focus:outline-none" title="Fechar Menu">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <div class="px-5 py-2 border-b border-slate-800/40 bg-[#071224]/40 flex items-center justify-between text-[11px]">
+        <span class="text-slate-400 font-medium">SO Unificado</span>
+        <span class="bg-blue-500/20 text-blue-300 font-mono text-[10px] px-1.5 py-0.5 rounded border border-blue-400/30">v2.0 Full</span>
       </div>
 
       <nav class="flex-1 py-3 space-y-0.5 overflow-y-auto px-2">
         <div class="px-3 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Estratégico</div>
         
-        <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-active">
+        <button onclick="switchTab('dashboard'); toggleMobileSidebar(false);" id="nav-dashboard" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-active">
           <i class="fa-solid fa-chart-pie w-4 text-center text-blue-400"></i>
           <span class="text-xs">Painel Geral</span>
         </button>
 
-        <button onclick="switchTab('presidencia')" id="nav-presidencia" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+        <button onclick="switchTab('presidencia'); toggleMobileSidebar(false);" id="nav-presidencia" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
           <i class="fa-solid fa-landmark w-4 text-center text-blue-400"></i>
           <span class="text-xs">Presidência & Selo EJ</span>
           <span class="ml-auto text-[9px] bg-emerald-900/60 text-emerald-300 px-1 py-0.5 rounded font-mono">100% OK</span>
@@ -167,32 +171,32 @@
 
         <div class="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Comercial & Marketing</div>
 
-        <button onclick="switchTab('comercial')" id="nav-comercial" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+        <button onclick="switchTab('comercial'); toggleMobileSidebar(false);" id="nav-comercial" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
           <i class="fa-solid fa-satellite-dish w-4 text-center text-blue-400"></i>
           <span class="text-xs font-semibold text-sky-300">Radar & CRM (Leads)</span>
           <span id="nav-badge-leads" class="ml-auto text-[10px] bg-blue-900 text-blue-200 px-1.5 py-0.5 rounded-full font-mono">693</span>
         </button>
 
-        <button onclick="switchTab('copys')" id="nav-copys" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+        <button onclick="switchTab('copys'); toggleMobileSidebar(false);" id="nav-copys" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
           <i class="fa-solid fa-comments w-4 text-center text-blue-400"></i>
           <span class="text-xs font-semibold text-amber-300">Playbook de Mensagens</span>
           <span class="ml-auto text-[9px] bg-amber-900/60 text-amber-200 px-1 py-0.5 rounded font-mono">Copys ⚡</span>
         </button>
 
-        <button onclick="switchTab('marketing')" id="nav-marketing" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+        <button onclick="switchTab('marketing'); toggleMobileSidebar(false);" id="nav-marketing" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
           <i class="fa-solid fa-bullhorn w-4 text-center text-blue-400"></i>
           <span class="text-xs">Marketing & Campanhas</span>
         </button>
 
         <div class="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Operação & Finanças</div>
 
-        <button onclick="switchTab('projetos')" id="nav-projetos" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+        <button onclick="switchTab('projetos'); toggleMobileSidebar(false);" id="nav-projetos" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
           <i class="fa-solid fa-shield-halved w-4 text-center text-blue-400"></i>
           <span class="text-xs">Processos RM (INPI)</span>
           <span id="nav-badge-rms" class="ml-auto text-[9px] bg-indigo-900/70 text-indigo-200 px-1.5 py-0.5 rounded-full font-mono">85</span>
         </button>
 
-        <button onclick="switchTab('financeiro')" id="nav-financeiro" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+        <button onclick="switchTab('financeiro'); toggleMobileSidebar(false);" id="nav-financeiro" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
           <i class="fa-solid fa-sack-dollar w-4 text-center text-blue-400"></i>
           <span class="text-xs">Tesouraria (CJA / Cora)</span>
           <span id="nav-badge-fluxo" class="ml-auto text-[9px] bg-emerald-900/60 text-emerald-200 px-1 py-0.5 rounded-full font-mono">78</span>
@@ -200,24 +204,24 @@
 
         <div class="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Pessoas & Conhecimento</div>
 
-        <button onclick="switchTab('vpgg')" id="nav-vpgg" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+        <button onclick="switchTab('vpgg'); toggleMobileSidebar(false);" id="nav-vpgg" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
           <i class="fa-solid fa-users w-4 text-center text-blue-400"></i>
           <span class="text-xs">Gente & Gestão (VPGG)</span>
           <span class="ml-auto text-[9px] bg-purple-900/60 text-purple-200 px-1 py-0.5 rounded-full font-mono">23</span>
         </button>
 
-        <button onclick="switchTab('tutoriais')" id="nav-tutoriais" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+        <button onclick="switchTab('tutoriais'); toggleMobileSidebar(false);" id="nav-tutoriais" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
           <i class="fa-solid fa-book-bookmark w-4 text-center text-blue-400"></i>
           <span class="text-xs font-semibold text-emerald-300">Base de Tutoriais</span>
           <span class="ml-auto text-[9px] bg-emerald-900/60 text-emerald-200 px-1 py-0.5 rounded font-mono">Docs</span>
         </button>
 
-        <button onclick="switchTab('planilhas')" id="nav-planilhas" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+        <button onclick="switchTab('planilhas'); toggleMobileSidebar(false);" id="nav-planilhas" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
           <i class="fa-solid fa-folder-tree w-4 text-center text-blue-400"></i>
           <span class="text-xs font-semibold text-sky-300">Central de Planilhas & Drive</span>
         </button>
 
-        <button onclick="switchTab('auditoria')" id="nav-auditoria" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+        <button onclick="switchTab('auditoria'); toggleMobileSidebar(false);" id="nav-auditoria" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
           <i class="fa-solid fa-user-shield w-4 text-center text-blue-400"></i>
           <span class="text-xs">Auditoria & RBAC</span>
         </button>
@@ -245,43 +249,76 @@
       </div>
     </aside>
 
+    <!-- BACKDROP MOBILE DRAWER -->
+    <div id="sidebar-backdrop" onclick="toggleMobileSidebar(false)" class="hidden fixed inset-0 bg-slate-900/60 z-40 backdrop-blur-xs transition-opacity duration-300"></div>
+
     <!-- ÁREA PRINCIPAL -->
     <div class="dashboard-wrapper">
       <main class="flex-1 flex flex-col h-full overflow-hidden">
       
       <!-- Top Bar -->
-      <header class="bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between shrink-0 shadow-sm">
-        <div class="flex items-center gap-3">
-          <h2 id="view-title" class="text-lg font-bold text-slate-800">Painel Executivo Integrado</h2>
-          <span class="text-xs text-slate-400">|</span>
-          <span id="view-subtitle" class="text-xs text-slate-500 font-medium">Visão global dos eixos estratégicos da EDV Jr.</span>
+      <header class="bg-white border-b border-slate-200 px-4 sm:px-6 py-3 flex items-center justify-between shrink-0 shadow-sm gap-2">
+        <div class="flex items-center gap-2 sm:gap-3">
+          <!-- Botão Mobile Menu (Drawer) -->
+          <button id="btn-mobile-menu" onclick="toggleMobileSidebar(true)" class="lg:hidden p-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 focus:outline-none transition cursor-pointer" title="Abrir Menu Lateral">
+            <i class="fa-solid fa-bars text-lg"></i>
+          </button>
+          <div>
+            <h2 id="view-title" class="text-base sm:text-lg font-bold text-slate-800 leading-tight">Painel Executivo Integrado</h2>
+            <div class="flex items-center gap-1.5 mt-0.5">
+              <span id="view-subtitle" class="text-[11px] sm:text-xs text-slate-500 font-medium truncate max-w-[200px] sm:max-w-none">Visão global dos eixos estratégicos da EDV Jr.</span>
+            </div>
+          </div>
         </div>
 
-        <div class="flex items-center gap-2.5">
+        <div class="flex items-center gap-1.5 sm:gap-2.5">
+          <!-- Sincronização Google Calendar (Subsistema 3) -->
+          <button id="btn-sync-calendar" onclick="abrirModalGoogleCalendar()" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold rounded-lg text-xs shadow-xs transition cursor-pointer" title="Sincronização Google Calendar (RFC 5545 & 1-Click)">
+            <i class="fa-regular fa-calendar-days text-indigo-600"></i>
+            <span class="hidden md:inline">Google Calendar</span>
+          </button>
+
           <!-- Botão Sincronizar Google Drive -->
-          <button id="btn-sync-drive" onclick="sincronizarGoogleDrive()" class="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-lg text-xs shadow-xs transition cursor-pointer" title="Sincronizar todo o sistema com as planilhas e arquivos do Google Drive">
+          <button id="btn-sync-drive" onclick="sincronizarGoogleDrive()" class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-lg text-xs shadow-xs transition cursor-pointer" title="Sincronizar todo o sistema com as planilhas e arquivos do Google Drive">
             <i class="fa-brands fa-google-drive text-amber-300"></i>
             <span id="btn-sync-drive-text">Sincronizar Drive</span>
           </button>
 
           <!-- Status do Drive -->
-          <div id="badge-drive-status" class="hidden lg:flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-[11px] text-emerald-700 font-medium">
+          <div id="badge-drive-status" class="hidden 2xl:flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-full text-[11px] text-emerald-700 font-medium">
             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span id="drive-status-text">Drive: <strong>Conectado (Ao Vivo)</strong></span>
+            <span id="drive-status-text">Drive: <strong>Conectado</strong></span>
           </div>
 
-          <button onclick="toggleTutorialModal(true)" class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg text-xs text-amber-800 font-bold shadow-xs transition">
-            <span>💡 Como Usar</span>
+          <!-- Central de Notificações Dinâmicas RBAC (Subsistema 2) -->
+          <div id="notification-center" class="relative">
+            <button id="btn-notifications" onclick="toggleNotificationDropdown()" class="relative p-2 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition focus:outline-none cursor-pointer" title="Notificações & Prazos Dinâmicos">
+              <i class="fa-solid fa-bell text-base"></i>
+              <span id="notification-badge" class="hidden absolute top-0.5 right-0.5 bg-rose-500 text-white font-mono text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold">0</span>
+            </button>
+            <div id="notification-dropdown" class="hidden absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 overflow-hidden">
+              <div class="p-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-xs text-slate-800">Alertas & Prazos MEJ</span>
+                  <span id="notif-count-text" class="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-bold">0 novas</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button onclick="scanDeadlinesNow()" title="Escanear prazos agora" class="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold px-1.5 py-0.5 rounded hover:bg-indigo-50 transition"><i class="fa-solid fa-arrows-rotate mr-0.5"></i>Escanear</button>
+                  <button onclick="marcarTodasNotificacoesLidas()" title="Marcar todas como lidas" class="text-[10px] text-slate-500 hover:text-slate-800 font-bold px-1.5 py-0.5 rounded hover:bg-slate-200 transition">Marcar Lidas</button>
+                </div>
+              </div>
+              <div id="notification-list" class="max-h-80 overflow-y-auto divide-y divide-slate-100 text-xs">
+                <div class="p-4 text-center text-slate-400">Nenhuma notificação pendente.</div>
+              </div>
+            </div>
+          </div>
+
+          <button onclick="toggleTutorialModal(true)" class="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg text-xs text-amber-800 font-bold shadow-xs transition">
+            <span>💡 Ajuda</span>
           </button>
 
-          <!-- Alerta RPI INPI -->
-          <div class="hidden xl:flex items-center gap-1.5 px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-full text-[11px] text-blue-700 font-medium">
-            <span class="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-            <span>RPI INPI: <strong>Terça-feira</strong></span>
-          </div>
-
           <!-- Seletor RBAC Sandbox -->
-          <div class="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
+          <div class="hidden sm:flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs">
             <button onclick="setRBACTest('presidente')" id="role-presidente" class="px-2 py-1 rounded bg-white text-slate-800 font-semibold shadow-xs">Presidente</button>
             <button onclick="setRBACTest('diretor')" id="role-diretor" class="px-2 py-1 rounded text-slate-600 hover:text-slate-900">Diretor</button>
             <button onclick="setRBACTest('gerente')" id="role-gerente" class="px-2 py-1 rounded text-slate-600 hover:text-slate-900">Gerente</button>
@@ -547,38 +584,130 @@
           </div>
         </section>
 
-        <!-- 2. PRESIDÊNCIA & SELO EJ -->
+        <!-- 2. PRESIDÊNCIA & SELO EJ & COMPLIANCE MEJ -->
         <section id="view-presidencia" class="hidden space-y-6">
-          <div class="glass-card rounded-xl p-5 border-t-4 border-blue-700">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h3 class="text-base font-bold text-slate-800">🏛️ Governança Jurídica, Selo EJ 2026 e Cluster 4.0</h3>
-                <p class="text-xs text-slate-500 mt-0.5">Critérios estatutários, certidões negativas e conformidade federada da EDV Jr.</p>
+          
+          <!-- Sub-Abas do Módulo Presidência -->
+          <div class="flex border-b border-slate-200 gap-4 text-xs font-bold overflow-x-auto">
+            <button onclick="switchPresidenciaSubtab('seloej')" id="subtab-pres-seloej" class="pb-3 subtab-active flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-award text-amber-500"></i> Selo EJ Brasil Júnior (Oficial)
+            </button>
+            <button onclick="switchPresidenciaSubtab('estatutos')" id="subtab-pres-estatutos" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-scale-balanced text-blue-600"></i> Estatutos & Compliance MEJ (Lei 13.267)
+              <span id="badge-compliance-count" class="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-full font-mono">5</span>
+            </button>
+          </div>
+
+          <!-- SUB-ABA 1: SELO EJ (OFICIAL) -->
+          <div id="pres-sub-seloej" class="space-y-6">
+            <div class="glass-card rounded-xl p-5 border-t-4 border-blue-700">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 class="text-base font-bold text-slate-800">🏛️ Governança Jurídica, Selo EJ 2026 e Cluster 4.0</h3>
+                  <p class="text-xs text-slate-500 mt-0.5">Critérios estatutários, certidões negativas e conformidade federada da EDV Jr.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-bold">Selo EJ: 100% Conforme</span>
+                </div>
               </div>
-              <div class="flex items-center gap-2">
-                <span class="text-xs bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full font-bold">Selo EJ: 100% Conforme</span>
+            </div>
+
+            <div class="glass-card rounded-xl overflow-hidden shadow-xs">
+              <div class="px-5 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
+                <span class="font-bold text-sm text-slate-800">DataGrid de Conformidade do Selo EJ (Critérios Oficiais)</span>
+                <span class="text-xs text-slate-500 font-medium">Controle de Validade e Auditoria</span>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-xs text-left datagrid-table responsive-card-table">
+                  <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                    <tr>
+                      <th class="px-4 py-3">Critério Estatutário / Legal</th>
+                      <th class="px-4 py-3">Setor Responsável</th>
+                      <th class="px-4 py-3">Status de Homologação</th>
+                      <th class="px-4 py-3">Vigência / Prazo</th>
+                      <th class="px-4 py-3">Fase do Edital</th>
+                    </tr>
+                  </thead>
+                  <tbody id="datagrid-selo-ej" class="divide-y divide-slate-100"></tbody>
+                </table>
               </div>
             </div>
           </div>
 
-          <div class="glass-card rounded-xl overflow-hidden">
-            <div class="px-5 py-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
-              <span class="font-bold text-sm text-slate-800">DataGrid de Conformidade do Selo EJ (Critérios Oficiais)</span>
-              <span class="text-xs text-slate-500 font-medium">Controle de Validade e Auditoria</span>
+          <!-- SUB-ABA 2: ESTATUTOS & COMPLIANCE MEJ (SUBSISTEMA 1) -->
+          <div id="pres-sub-estatutos" class="hidden space-y-6">
+            <div class="glass-card rounded-xl p-5 border-t-4 border-indigo-700 bg-gradient-to-r from-blue-50/40 to-white">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Compliance Federado</span>
+                    <span class="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">Lei 13.267/2016</span>
+                  </div>
+                  <h3 class="text-base font-bold text-slate-800 mt-1">Estatutos Sociais, Regimentos Internos & Marcos Regulatórios MEJ</h3>
+                  <p class="text-xs text-slate-500 mt-0.5">Gestão de vigência, revisões bienais, conformidade estatutária e checklist de requisitos regulatórios obrigatórios.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="carregarEstatutosCompliance()" class="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer" title="Recarregar estatutos">
+                    <i class="fa-solid fa-arrows-rotate"></i> Atualizar
+                  </button>
+                  <button onclick="abrirModalNovoEstatuto()" id="btn-novo-estatuto" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-plus"></i> Novo Marco / Estatuto
+                  </button>
+                </div>
+              </div>
             </div>
-            <div class="overflow-x-auto">
-              <table class="w-full text-xs text-left datagrid-table">
-                <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
-                  <tr>
-                    <th class="px-4 py-3">Critério Estatutário / Legal</th>
-                    <th class="px-4 py-3">Setor Responsável</th>
-                    <th class="px-4 py-3">Status de Homologação</th>
-                    <th class="px-4 py-3">Vigência / Prazo</th>
-                    <th class="px-4 py-3">Fase do Edital</th>
-                  </tr>
-                </thead>
-                <tbody id="datagrid-selo-ej" class="divide-y divide-slate-100"></tbody>
-              </table>
+
+            <!-- Filtros do DataGrid de Estatutos -->
+            <div class="glass-card rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="flex flex-1 items-center gap-2">
+                <div class="relative flex-1 max-w-sm">
+                  <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                  <input type="text" id="filtro-estatuto-busca" oninput="filtrarEstatutosDataGrid()" placeholder="Buscar por norma, resumo ou diretoria..." class="w-full pl-8 pr-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <select id="filtro-estatuto-tipo" onchange="filtrarEstatutosDataGrid()" class="text-xs border border-slate-300 rounded-lg px-2.5 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Todos os Tipos</option>
+                  <option value="estatuto">Estatuto Social</option>
+                  <option value="regimento">Regimento Interno</option>
+                  <option value="federal">Legislação Federal</option>
+                  <option value="selo_ej">Diretriz Selo EJ</option>
+                  <option value="codigo_etica">Código de Ética</option>
+                  <option value="outro">Outros</option>
+                </select>
+                <select id="filtro-estatuto-status" onchange="filtrarEstatutosDataGrid()" class="text-xs border border-slate-300 rounded-lg px-2.5 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Todos os Status</option>
+                  <option value="vigente">Vigente</option>
+                  <option value="em_revisao">Em Revisão</option>
+                  <option value="revogado">Revogado</option>
+                </select>
+              </div>
+              <div class="text-[11px] text-slate-500 font-mono flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span id="info-contador-estatutos">Carregando marcos regulatórios...</span>
+              </div>
+            </div>
+
+            <!-- Tabela DataGrid de Estatutos e Compliance -->
+            <div class="glass-card rounded-xl overflow-hidden shadow-xs">
+              <div class="overflow-x-auto">
+                <table class="w-full text-xs text-left datagrid-table responsive-card-table">
+                  <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                    <tr>
+                      <th class="px-4 py-3">Marco Regulatório / Norma</th>
+                      <th class="px-4 py-3">Tipo & Versão</th>
+                      <th class="px-4 py-3">Diretoria Resp.</th>
+                      <th class="px-4 py-3">Vigência / Revisão</th>
+                      <th class="px-4 py-3">Status</th>
+                      <th class="px-4 py-3">Checklist MEJ</th>
+                      <th class="px-4 py-3 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="datagrid-compliance-statutes" class="divide-y divide-slate-100">
+                    <tr>
+                      <td colspan="7" class="p-6 text-center text-slate-400">Carregando marcos regulatórios e estatutos...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </section>
@@ -1729,50 +1858,134 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
 
         </section>
 
-        <!-- 6. PROJETOS (RMs / INPI) DATAGRID COMPLETO -->
+        <!-- 6. PROJETOS (RMs / INPI) & STAGING MAKER-CHECKER -->
         <section id="view-projetos" class="hidden space-y-6">
-          <div class="glass-card rounded-xl p-5 border-t-4 border-indigo-600">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h3 class="text-base font-bold text-slate-800">🛡️ Esteira Operacional de Registro de Marca (DataGrid Oficial)</h3>
-                <p class="text-xs text-slate-500 mt-0.5">85 Processos mapeados da planilha oficial do Drive. Gestão de prazos de 60 dias e despachos RPI.</p>
+          
+          <!-- Sub-Abas do Módulo Projetos -->
+          <div class="flex border-b border-slate-200 gap-4 text-xs font-bold overflow-x-auto">
+            <button onclick="switchProjetosSubtab('esteira')" id="subtab-proj-esteira" class="pb-3 subtab-active flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-table-list text-indigo-600"></i> Esteira Oficial (85 RMs - INPI)
+            </button>
+            <button onclick="switchProjetosSubtab('staging')" id="subtab-proj-staging" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-user-check text-amber-500"></i> Staging & Dupla Verificação (Maker-Checker)
+              <span id="badge-staging-pending" class="hidden text-[10px] bg-amber-500 text-white px-1.5 py-0.5 rounded-full font-mono">0</span>
+            </button>
+          </div>
+
+          <!-- SUB-ABA 1: ESTEIRA OFICIAL -->
+          <div id="projetos-sub-esteira" class="space-y-6">
+            <div class="glass-card rounded-xl p-5 border-t-4 border-indigo-600">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 class="text-base font-bold text-slate-800">🛡️ Esteira Operacional de Registro de Marca (DataGrid Oficial)</h3>
+                  <p class="text-xs text-slate-500 mt-0.5">85 Processos mapeados da planilha oficial do Drive. Gestão de prazos de 60 dias e despachos RPI.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input type="text" id="filtro-rms-busca" oninput="filtrarRMsDataGrid()" placeholder="Buscar marca, processo ou consultor..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-64 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  <select id="filtro-rms-fase" onchange="filtrarRMsDataGrid()" class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="">Todas as Fases</option>
+                    <option value="CONCEDIDO">Concedido</option>
+                    <option value="INDEFERIDO">Indeferido</option>
+                    <option value="EXAME">Exame de Mérito</option>
+                    <option value="PUBLICADO">Publicação</option>
+                  </select>
+                </div>
               </div>
-              <div class="flex items-center gap-2">
-                <input type="text" id="filtro-rms-busca" oninput="filtrarRMsDataGrid()" placeholder="Buscar marca, processo ou consultor..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-64 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                <select id="filtro-rms-fase" onchange="filtrarRMsDataGrid()" class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                  <option value="">Todas as Fases</option>
-                  <option value="CONCEDIDO">Concedido</option>
-                  <option value="INDEFERIDO">Indeferido</option>
-                  <option value="EXAME">Exame de Mérito</option>
-                  <option value="PUBLICADO">Publicação</option>
-                </select>
+            </div>
+
+            <div class="glass-card rounded-xl overflow-hidden shadow-sm">
+              <div class="overflow-x-auto max-h-[550px]">
+                <table class="w-full text-xs text-left datagrid-table responsive-card-table">
+                  <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                    <tr>
+                      <th class="px-4 py-3">Código</th>
+                      <th class="px-4 py-3">Marca / Pedido</th>
+                      <th class="px-4 py-3">Participantes (Equipe)</th>
+                      <th class="px-4 py-3">Fase do Processo (INPI)</th>
+                      <th class="px-4 py-3">Responsável</th>
+                      <th class="px-4 py-3">Última Conferência</th>
+                      <th class="px-4 py-3">Último Contato Cliente</th>
+                      <th class="px-4 py-3">Telefone</th>
+                    </tr>
+                  </thead>
+                  <tbody id="datagrid-projetos-rms" class="divide-y divide-slate-100"></tbody>
+                </table>
+              </div>
+              <div class="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                <span id="info-paginacao-rms">Carregando processos...</span>
+                <div class="flex gap-2">
+                  <button onclick="mudarPaginaRMs(-1)" class="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 cursor-pointer">Anterior</button>
+                  <button onclick="mudarPaginaRMs(1)" class="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 cursor-pointer">Próxima</button>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="glass-card rounded-xl overflow-hidden shadow-sm">
-            <div class="overflow-x-auto max-h-[550px]">
-              <table class="w-full text-xs text-left datagrid-table">
-                <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
-                  <tr>
-                    <th class="px-4 py-3">Código</th>
-                    <th class="px-4 py-3">Marca / Pedido</th>
-                    <th class="px-4 py-3">Participantes (Equipe)</th>
-                    <th class="px-4 py-3">Fase do Processo (INPI)</th>
-                    <th class="px-4 py-3">Responsável</th>
-                    <th class="px-4 py-3">Última Conferência</th>
-                    <th class="px-4 py-3">Último Contato Cliente</th>
-                    <th class="px-4 py-3">Telefone</th>
-                  </tr>
-                </thead>
-                <tbody id="datagrid-projetos-rms" class="divide-y divide-slate-100"></tbody>
-              </table>
+          <!-- SUB-ABA 2: STAGING & DUPLA VERIFICAÇÃO (SUBSISTEMA 5) -->
+          <div id="projetos-sub-staging" class="hidden space-y-6">
+            <div class="glass-card rounded-xl p-5 border-t-4 border-amber-500 bg-gradient-to-r from-amber-50/40 to-white">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 px-2 py-0.5 rounded">Maker-Checker Architecture</span>
+                    <span class="text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 px-2 py-0.5 rounded">Audit Log 2.0</span>
+                  </div>
+                  <h3 class="text-base font-bold text-slate-800 mt-1">Edição Indireta de Planilhas & Dupla Verificação (Four-Eyes Principle)</h3>
+                  <p class="text-xs text-slate-500 mt-0.5">Nenhuma alteração é gravada diretamente na base oficial. Modificações entram em staging e exigem homologação de um 2º usuário da Presidência/Diretoria.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button onclick="carregarStagingRMs()" class="px-3 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-lg shadow-xs transition flex items-center gap-1.5 cursor-pointer" title="Recarregar staging">
+                    <i class="fa-solid fa-arrows-rotate"></i> Atualizar
+                  </button>
+                  <button onclick="abrirModalNovoStaging()" class="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-plus"></i> Propor Alteração em Staging
+                  </button>
+                </div>
+              </div>
             </div>
-            <div class="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-              <span id="info-paginacao-rms">Carregando processos...</span>
-              <div class="flex gap-2">
-                <button onclick="mudarPaginaRMs(-1)" class="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100">Anterior</button>
-                <button onclick="mudarPaginaRMs(1)" class="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100">Próxima</button>
+
+            <!-- Filtros Staging -->
+            <div class="glass-card rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="flex flex-1 items-center gap-2">
+                <div class="relative flex-1 max-w-sm">
+                  <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                  <input type="text" id="filtro-staging-busca" oninput="filtrarStagingDataGrid()" placeholder="Buscar por código, marca ou solicitante..." class="w-full pl-8 pr-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                </div>
+                <select id="filtro-staging-status" onchange="filtrarStagingDataGrid()" class="text-xs border border-slate-300 rounded-lg px-2.5 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                  <option value="">Todos os Status</option>
+                  <option value="pending">Pendentes de Revisão</option>
+                  <option value="approved">Aprovados</option>
+                  <option value="rejected">Rejeitados</option>
+                </select>
+              </div>
+              <div class="text-[11px] text-slate-500 font-mono flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                <span id="info-contador-staging">Carregando staging...</span>
+              </div>
+            </div>
+
+            <!-- DataGrid Staging -->
+            <div class="glass-card rounded-xl overflow-hidden shadow-xs">
+              <div class="overflow-x-auto">
+                <table class="w-full text-xs text-left datagrid-table responsive-card-table">
+                  <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                    <tr>
+                      <th class="px-4 py-3">ID / Protocolo</th>
+                      <th class="px-4 py-3">Tabela Alvo / Item</th>
+                      <th class="px-4 py-3">Operação</th>
+                      <th class="px-4 py-3">Solicitante (Maker)</th>
+                      <th class="px-4 py-3">Status</th>
+                      <th class="px-4 py-3">Data Proposta</th>
+                      <th class="px-4 py-3">Revisor (Checker)</th>
+                      <th class="px-4 py-3 text-right">Ações (Diff & Verificação)</th>
+                    </tr>
+                  </thead>
+                  <tbody id="datagrid-staging-records" class="divide-y divide-slate-100">
+                    <tr>
+                      <td colspan="8" class="p-6 text-center text-slate-400">Carregando registros da fila de staging...</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -3883,6 +4096,426 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
       <div class="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end">
         <button type="button" onclick="fecharModalMitigacaoGaps()" class="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg shadow-sm text-xs transition">
           Entendido / Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================================== -->
+  <!-- NOVOS MODAIS ESTRATÉGICOS (SUBSISTEMAS 1, 2, 3 E 5)                            -->
+  <!-- ============================================================================== -->
+
+  <!-- MODAL 1: ESTATUTO / MARCO REGULATÓRIO (SUBSISTEMA 1) -->
+  <div id="modal-statute" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-gradient-to-r from-[#071224] to-[#162a4d] text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-md text-base">
+            ⚖️
+          </div>
+          <div>
+            <h3 id="modal-statute-title-text" class="font-bold text-sm text-white">Novo Marco Regulatório / Estatuto</h3>
+            <span class="text-[10px] text-blue-300 font-mono">Governança & Compliance MEJ (Lei 13.267/2016)</span>
+          </div>
+        </div>
+        <button onclick="fecharModalStatute()" class="text-slate-400 hover:text-white text-lg font-bold p-1 cursor-pointer">✕</button>
+      </div>
+
+      <form id="form-statute" onsubmit="salvarEstatuto(event)" class="p-6 overflow-y-auto space-y-4 text-xs">
+        <input type="hidden" id="statute_id" value="">
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Título da Norma / Marco Legal *</label>
+          <input type="text" id="statute_title" required placeholder="Ex: Estatuto Social da EDV Jr. 2026" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium">
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Tipo de Documento *</label>
+            <select id="statute_type" required class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium">
+              <option value="estatuto">Estatuto Social</option>
+              <option value="regimento">Regimento Interno</option>
+              <option value="federal">Legislação Federal (Lei 13.267)</option>
+              <option value="selo_ej">Diretriz Selo EJ</option>
+              <option value="codigo_etica">Código de Ética</option>
+              <option value="outro">Outro Regulamento</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Diretoria Responsável *</label>
+            <select id="statute_responsible_directorate" required class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium">
+              <option value="Presidência">Presidência</option>
+              <option value="Diretoria Executiva">Diretoria Executiva</option>
+              <option value="Jurídico">Jurídico</option>
+              <option value="VPGG">Gente & Gestão (VPGG)</option>
+              <option value="Comercial">Comercial</option>
+              <option value="Marketing">Marketing</option>
+              <option value="Tesouraria">Tesouraria / Finanças</option>
+              <option value="Projetos">Projetos / RMs</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Versão / Ano</label>
+            <input type="text" id="statute_version" placeholder="2026.1" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Início da Vigência</label>
+            <input type="date" id="statute_effective_date" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Prazo de Revisão</label>
+            <input type="date" id="statute_review_deadline" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Status de Vigência *</label>
+            <select id="statute_status" required class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium">
+              <option value="vigente">Vigente (Ativo)</option>
+              <option value="em_revisao">Em Revisão</option>
+              <option value="revogado">Revogado / Histórico</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Link do Documento (Drive / PDF)</label>
+            <input type="url" id="statute_document_url" placeholder="https://drive.google.com/..." class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Descrição / Objeto do Marco</label>
+          <textarea id="statute_description" rows="2" placeholder="Resumo dos principais pontos, impacto na operação e disposições gerais..." class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+          <button type="button" onclick="fecharModalStatute()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition cursor-pointer">Cancelar</button>
+          <button type="submit" id="btn-salvar-statute" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+            <i class="fa-solid fa-floppy-disk"></i> Salvar Marco Regulatório
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: CHECKLIST INTERATIVO DE COMPLIANCE (SUBSISTEMA 1) -->
+  <div id="modal-statute-checklist" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-md text-base">
+            ✅
+          </div>
+          <div>
+            <h3 id="modal-checklist-title" class="font-bold text-sm text-white">Checklist de Conformidade MEJ</h3>
+            <span id="modal-checklist-subtitle" class="text-[10px] text-blue-200 font-mono">Requisitos Obrigatórios Federados</span>
+          </div>
+        </div>
+        <button onclick="fecharModalChecklist()" class="text-slate-400 hover:text-white text-lg font-bold p-1 cursor-pointer">✕</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4 text-xs">
+        <div class="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between">
+          <div>
+            <span class="text-[10px] uppercase font-bold text-blue-700 block">Progresso do Marco:</span>
+            <strong id="modal-checklist-progress-text" class="text-xs text-blue-950 font-bold">0 de 0 cumpridos (0%)</strong>
+          </div>
+          <div class="w-32 bg-slate-200 rounded-full h-2.5 overflow-hidden">
+            <div id="modal-checklist-progress-bar" class="bg-emerald-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div id="modal-checklist-items-container" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+          <!-- Injetado dinamicamente -->
+        </div>
+
+        <!-- Adicionar Novo Requisito -->
+        <div class="pt-3 border-t border-slate-200">
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Adicionar Novo Requisito ao Checklist</label>
+          <div class="flex gap-2">
+            <input type="text" id="novo-requisito-input" placeholder="Ex: Protocolo de alteração estatutária em Cartório de RCPJ..." class="flex-1 text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <button type="button" onclick="adicionarItemChecklist()" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition cursor-pointer">
+              <i class="fa-solid fa-plus"></i> Adicionar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end">
+        <button type="button" onclick="fecharModalChecklist()" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg shadow-sm text-xs transition cursor-pointer">
+          Concluir / Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 3: PROPOR ALTERAÇÃO EM STAGING (SUBSISTEMA 5) -->
+  <div id="modal-staging-create" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-gradient-to-r from-amber-700 to-amber-900 text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center font-bold text-white shadow-md text-base">
+            🛡️
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Propor Alteração em Staging (Fila Maker-Checker)</h3>
+            <span class="text-[10px] text-amber-200 font-mono">Edição Indireta & Segura de Planilhas</span>
+          </div>
+        </div>
+        <button onclick="fecharModalStagingCreate()" class="text-slate-400 hover:text-white text-lg font-bold p-1 cursor-pointer">✕</button>
+      </div>
+
+      <form id="form-staging-create" onsubmit="submeterStaging(event)" class="p-6 overflow-y-auto space-y-4 text-xs">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Tabela Alvo *</label>
+            <select id="staging_target_table" required class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium">
+              <option value="processos_rm">Processos RM (INPI)</option>
+              <option value="crm_leads">Leads / CRM Comercial</option>
+              <option value="statutes_compliance">Estatutos & Compliance</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Código / Referência</label>
+            <input type="text" id="staging_item_id" placeholder="Ex: RM-042 ou Novo" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Tipo de Ação *</label>
+            <select id="staging_action" required class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium">
+              <option value="UPDATE">UPDATE (Modificar Registro)</option>
+              <option value="CREATE">CREATE (Inserir Novo)</option>
+              <option value="DELETE">DELETE (Excluir Registro)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Justificativa Operacional *</label>
+          <textarea id="staging_justification" required rows="2" placeholder="Explique o motivo da alteração, despacho do INPI, deferimento ou atualização de dados do cliente..." class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"></textarea>
+        </div>
+
+        <!-- Campos Rápidos para RM -->
+        <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-600 block">Dados Propostos da Operação:</span>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 mb-1">Nome da Marca / Pedido *</label>
+              <input type="text" id="staging_prop_marca" required placeholder="Ex: Acqua Clean Tech" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 mb-1">Número do Processo INPI</label>
+              <input type="text" id="staging_prop_processo" placeholder="Ex: 928374821" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-500">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 mb-1">Fase INPI *</label>
+              <select id="staging_prop_fase" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+                <option value="CONCEDIDO">Concedido</option>
+                <option value="EXAME">Exame de Mérito</option>
+                <option value="PUBLICADO">Publicação</option>
+                <option value="INDEFERIDO">Indeferido</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 mb-1">Consultor Responsável</label>
+              <input type="text" id="staging_prop_responsavel" placeholder="Ex: Thais Junger" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 mb-1">Telefone Cliente</label>
+              <input type="text" id="staging_prop_telefone" placeholder="(27) 99999-9999" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500">
+            </div>
+          </div>
+        </div>
+
+        <div class="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-[11px] text-amber-900 flex items-center gap-2">
+          <i class="fa-solid fa-shield-halved text-amber-600 text-sm"></i>
+          <span>A proposta será gravada na fila de staging. Somente outro membro com papel de Diretoria/Presidência poderá homologá-la.</span>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+          <button type="button" onclick="fecharModalStagingCreate()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition cursor-pointer">Cancelar</button>
+          <button type="submit" id="btn-submit-staging" class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+            <i class="fa-solid fa-paper-plane"></i> Submeter para Staging
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 4: DIFF VISUAL & HOMOLOGAÇÃO MAKER-CHECKER (SUBSISTEMA 5) -->
+  <div id="modal-diff-staging" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-3xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-white shadow-md text-base">
+            🔍
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Inspeção Four-Eyes: Comparativo de Alteração (Diff)</h3>
+            <span id="diff-modal-protocolo" class="text-[10px] text-indigo-300 font-mono">Protocolo: #000</span>
+          </div>
+        </div>
+        <button onclick="fecharModalDiffStaging()" class="text-slate-400 hover:text-white text-lg font-bold p-1 cursor-pointer">✕</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4 text-xs">
+        
+        <!-- Metadados da Solicitação -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl">
+          <div>
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Solicitante (Maker)</span>
+            <strong id="diff-maker-email" class="text-xs text-slate-800 truncate block">-</strong>
+          </div>
+          <div>
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Data de Criação</span>
+            <span id="diff-created-at" class="text-xs text-slate-700 font-mono block">-</span>
+          </div>
+          <div>
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Tabela & Ação</span>
+            <span id="diff-table-action" class="text-xs font-bold text-indigo-700 block">-</span>
+          </div>
+          <div>
+            <span class="text-[10px] uppercase font-bold text-slate-400 block">Status Atual</span>
+            <span id="diff-status-badge" class="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">PENDENTE</span>
+          </div>
+        </div>
+
+        <div>
+          <span class="text-[11px] font-bold text-slate-700 uppercase block mb-1">Justificativa do Solicitante:</span>
+          <div id="diff-justification-text" class="p-3 bg-slate-50 rounded-lg border border-slate-200 text-slate-700 italic">
+            -
+          </div>
+        </div>
+
+        <!-- Comparativo Lado a Lado (Diff) -->
+        <div>
+          <span class="text-[11px] font-bold text-slate-700 uppercase block mb-2">Comparativo Lado a Lado (Original vs Proposto):</span>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            <!-- Coluna Original -->
+            <div class="border border-rose-200 rounded-xl overflow-hidden bg-rose-50/20">
+              <div class="p-2.5 bg-rose-100/60 border-b border-rose-200 flex items-center justify-between text-rose-800 font-bold">
+                <span>Dados Originais (Atuais)</span>
+                <i class="fa-solid fa-clock-rotate-left"></i>
+              </div>
+              <div id="diff-col-original" class="p-3 space-y-1.5 font-mono text-[11px] max-h-56 overflow-y-auto">
+                <!-- Injetado -->
+              </div>
+            </div>
+
+            <!-- Coluna Proposta -->
+            <div class="border border-emerald-200 rounded-xl overflow-hidden bg-emerald-50/20">
+              <div class="p-2.5 bg-emerald-100/60 border-b border-emerald-200 flex items-center justify-between text-emerald-800 font-bold">
+                <span>Dados Propostos (Staging)</span>
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+              </div>
+              <div id="diff-col-proposed" class="p-3 space-y-1.5 font-mono text-[11px] max-h-56 overflow-y-auto">
+                <!-- Injetado -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Campo de Justificativa para Rejeição (Oculto por padrão) -->
+        <div id="container-rejeicao-staging" class="hidden p-3 bg-rose-50 border border-rose-200 rounded-xl space-y-2">
+          <label class="block text-[11px] font-bold text-rose-800 uppercase">Motivo / Justificativa da Rejeição *</label>
+          <textarea id="diff-rejection-notes" rows="2" placeholder="Explique por que esta alteração foi reprovada para que o solicitante ajuste os dados..." class="w-full text-xs border border-rose-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500"></textarea>
+          <div class="flex justify-end gap-2">
+            <button type="button" onclick="cancelarRejeicaoStaging()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg text-xs cursor-pointer">Cancelar</button>
+            <button type="button" onclick="confirmarRejeicaoStaging()" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg text-xs cursor-pointer">Confirmar Rejeição</button>
+          </div>
+        </div>
+
+        <!-- Alerta de Bloqueio Maker-Checker (Se o usuário for o mesmo maker) -->
+        <div id="diff-maker-warning" class="hidden p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-900 text-xs flex items-center gap-2">
+          <i class="fa-solid fa-triangle-exclamation text-amber-600 text-base"></i>
+          <div>
+            <strong>Regra Four-Eyes Ativa (Maker ≠ Checker):</strong>
+            <p class="text-[11px] text-amber-800">Você é o criador desta proposta de alteração. Pelo princípio de dupla verificação, você não pode aprovar ou rejeitar suas próprias submissões. Solicite a outro Diretor ou Presidente a revisão.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Barra de Ações Homologação -->
+      <div id="diff-modal-footer" class="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+        <button type="button" onclick="fecharModalDiffStaging()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg transition cursor-pointer text-xs">
+          Fechar
+        </button>
+        <div id="diff-action-buttons" class="flex items-center gap-2">
+          <button type="button" onclick="iniciarRejeicaoStaging()" id="btn-rejeitar-staging" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer text-xs">
+            <i class="fa-solid fa-xmark"></i> Rejeitar
+          </button>
+          <button type="button" onclick="aprovarStagingRegistro()" id="btn-aprovar-staging" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition shadow-sm flex items-center gap-1.5 cursor-pointer text-xs">
+            <i class="fa-solid fa-check-double"></i> Homologar & Aprovar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: GOOGLE CALENDAR & FEED RFC 5545 (SUBSISTEMA 3) -->
+  <div id="modal-google-calendar" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-gradient-to-r from-indigo-900 via-blue-900 to-indigo-950 text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-white shadow-md text-base">
+            📅
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Sincronização Automatizada com Google Calendar</h3>
+            <span class="text-[10px] text-blue-300 font-mono">Feed Universal RFC 5545 (.ics) & Adição em 1-Clique</span>
+          </div>
+        </div>
+        <button onclick="fecharModalGoogleCalendar()" class="text-slate-400 hover:text-white text-lg font-bold p-1 cursor-pointer">✕</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4 text-xs">
+        
+        <!-- Cartão de Ações Rápidas -->
+        <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h4 class="font-bold text-xs text-blue-950">Inscrição de Calendário Oficial</h4>
+            <p class="text-[11px] text-blue-700 mt-0.5">Sincronize automaticamente os prazos de CRM, revisões de estatutos, PDI e marcas em seu celular ou PC.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="scanDeadlinesNow()" class="px-3 py-2 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-lg transition flex items-center gap-1.5 cursor-pointer" title="Escanear prazos pendentes no banco">
+              <i class="fa-solid fa-arrows-rotate"></i> Escanear
+            </button>
+            <a id="btn-feed-ics-download" href="#" target="_blank" download="edv_prazos_mej.ics" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+              <i class="fa-solid fa-download"></i> Baixar Feed .ics
+            </a>
+          </div>
+        </div>
+
+        <!-- Lista de Prazos Sincronizados -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[11px] font-bold text-slate-700 uppercase">Prazos & Compromissos Mapeados:</span>
+            <span id="calendar-events-count" class="text-[10px] font-mono text-slate-400">0 eventos</span>
+          </div>
+          
+          <div id="calendar-events-list" class="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+            <div class="p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              Carregando compromissos...
+            </div>
+          </div>
+        </div>
+
+        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 flex items-center gap-2">
+          <i class="fa-solid fa-circle-info text-indigo-600 text-sm"></i>
+          <span>Você pode clicar no botão <strong>"+ Google Agenda"</strong> em cada prazo para agendá-lo diretamente em sua conta Google em apenas um clique.</span>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-end">
+        <button type="button" onclick="fecharModalGoogleCalendar()" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg shadow-sm text-xs transition cursor-pointer">
+          Fechar
         </button>
       </div>
     </div>

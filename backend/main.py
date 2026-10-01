@@ -18,7 +18,7 @@ from typing import Dict, Any, Optional, List, Union
 
 import httpx
 
-from fastapi import FastAPI, Depends, HTTPException, status, Query, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Query, Request, BackgroundTasks
 from fastapi.responses import FileResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -94,7 +94,23 @@ try:
         list_historical_benchmarks,
         get_member_hard_metrics,
         get_evaluator_calibrations,
-        get_db_session
+        get_db_session,
+        list_compliance_statutes,
+        get_compliance_statute_by_id,
+        create_compliance_statute,
+        update_compliance_statute,
+        update_statute_checklist,
+        delete_compliance_statute,
+        create_system_notification,
+        get_user_notifications,
+        mark_notification_as_read,
+        mark_all_notifications_as_read,
+        scan_and_create_deadlines,
+        create_rm_staging_record,
+        list_rm_staging_records,
+        get_rm_staging_record_by_id,
+        approve_rm_staging_record,
+        reject_rm_staging_record
     )
     from backend.auth import (
         verify_password,
@@ -108,7 +124,11 @@ try:
         check_marketing_access,
         verify_marketing_access,
         check_psel_management_access,
-        verify_psel_access
+        verify_psel_access,
+        check_compliance_access,
+        verify_compliance_access,
+        check_rm_staging_approval_access,
+        verify_rm_staging_approval_access
     )
 except ImportError:
     from database import (
@@ -162,7 +182,23 @@ except ImportError:
         list_historical_benchmarks,
         get_member_hard_metrics,
         get_evaluator_calibrations,
-        get_db_session
+        get_db_session,
+        list_compliance_statutes,
+        get_compliance_statute_by_id,
+        create_compliance_statute,
+        update_compliance_statute,
+        update_statute_checklist,
+        delete_compliance_statute,
+        create_system_notification,
+        get_user_notifications,
+        mark_notification_as_read,
+        mark_all_notifications_as_read,
+        scan_and_create_deadlines,
+        create_rm_staging_record,
+        list_rm_staging_records,
+        get_rm_staging_record_by_id,
+        approve_rm_staging_record,
+        reject_rm_staging_record
     )
     from auth import (
         verify_password,
@@ -176,7 +212,11 @@ except ImportError:
         check_marketing_access,
         verify_marketing_access,
         check_psel_management_access,
-        verify_psel_access
+        verify_psel_access,
+        check_compliance_access,
+        verify_compliance_access,
+        check_rm_staging_approval_access,
+        verify_rm_staging_approval_access
     )
 
 # Caminho para o payload operacional oficial
@@ -187,6 +227,10 @@ LEGACY_DATA_PATH = os.path.join(BASE_DIR, "data", "legacy_data.json")
 async def lifespan(app: FastAPI):
     # Inicializa tabelas SQLite e sincroniza Whitelist oficial
     init_db()
+    try:
+        scan_and_create_deadlines()
+    except Exception as e_scan:
+        print(f"[Lifespan] Erro ao varrer prazos iniciais: {e_scan}")
     yield
 
 app = FastAPI(
@@ -671,6 +715,167 @@ class BrandAssetResponse(BaseModel):
     uploaded_by: str
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+
+# ==============================================================================
+# SCHEMAS DE ESTATUTOS & COMPLIANCE MEJ (LEI 13.267/2016 & SELO EJ)
+# ==============================================================================
+
+class StatuteCreate(BaseModel):
+    title: str = Field(..., min_length=3, description="Título da norma ou marco regulatório")
+    norm_type: str = Field(..., description="estatuto, regimento_interno, marco_regulatorio, selo_ej, codigo_etica")
+    version: Optional[str] = Field("v1.0", description="Versão do documento")
+    status: Optional[str] = Field("vigente", description="vigente, em_revisao, revogado, pendente_aprovacao")
+    effective_date: str = Field(..., description="Data de vigência (YYYY-MM-DD)")
+    review_deadline: Optional[str] = Field(None, description="Data limite de revisão / auditoria (YYYY-MM-DD)")
+    responsible_area: str = Field(..., description="Presidência, VPGG, Jurídico, Comercial, Projetos, Tesouraria, Marketing")
+    responsible_role: Optional[str] = Field("diretor", description="Cargo responsável")
+    document_url: Optional[str] = Field("", description="Link Google Drive ou arquivo oficial")
+    description: Optional[str] = Field("", description="Ementa ou descrição dos objetivos regulatórios")
+    checklist_items: Optional[List[Dict[str, Any]]] = Field([], description="Itens de auditoria e conformidade")
+    tenant_id: Optional[str] = Field("edv_jr", description="Tenant")
+
+class StatuteUpdate(BaseModel):
+    title: Optional[str] = None
+    norm_type: Optional[str] = None
+    version: Optional[str] = None
+    status: Optional[str] = None
+    effective_date: Optional[str] = None
+    review_deadline: Optional[str] = None
+    responsible_area: Optional[str] = None
+    responsible_role: Optional[str] = None
+    document_url: Optional[str] = None
+    description: Optional[str] = None
+    checklist_items: Optional[List[Dict[str, Any]]] = None
+
+class StatuteChecklistUpdate(BaseModel):
+    checklist_items: List[Dict[str, Any]]
+
+class StatuteResponse(BaseModel):
+    id: int
+    tenant_id: str
+    title: str
+    norm_type: str
+    version: str
+    status: str
+    effective_date: str
+    review_deadline: Optional[str] = None
+    responsible_area: str
+    responsible_role: str
+    document_url: Optional[str] = None
+    description: Optional[str] = None
+    checklist_items: List[Dict[str, Any]] = []
+    conformity_score: float
+    created_by: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+# ==============================================================================
+# SCHEMAS DE NOTIFICAÇÕES DINÂMICAS (E-MAIL + ALERTA IN-SITE)
+# ==============================================================================
+
+class NotificationCreate(BaseModel):
+    recipient_email: str = Field(..., description="E-mail destinatário, 'ALL' ou 'ROLE:diretor'")
+    title: str = Field(..., min_length=3)
+    message: str = Field(..., min_length=3)
+    category: str = Field("compliance", description="deadline_overdue, deadline_warning, pdi_milestone, audit_alert, approval_pending, compliance, system")
+    priority: Optional[str] = Field("normal", description="low, normal, high, critical")
+    target_role: Optional[str] = None
+    target_area: Optional[str] = None
+    link: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+class NotificationResponse(BaseModel):
+    id: int
+    tenant_id: str
+    recipient_email: str
+    target_role: Optional[str] = None
+    target_area: Optional[str] = None
+    title: str
+    message: str
+    category: str
+    priority: str
+    link: Optional[str] = None
+    is_read: int
+    email_sent: int
+    metadata: Optional[Dict[str, Any]] = {}
+    created_at: Optional[str] = None
+
+# ==============================================================================
+# SCHEMAS DE RM STAGING & DUPLA VERIFICAÇÃO (MAKER-CHECKER)
+# ==============================================================================
+
+class RMStagingCreate(BaseModel):
+    batch_id: Optional[str] = None
+    rm_code: Optional[str] = None
+    brand_name: str = Field(..., min_length=2, description="Nome da Marca em registro")
+    process_number: Optional[str] = None
+    client_name: str = Field(..., min_length=2, description="Nome do Titular ou Cliente")
+    client_phone: Optional[str] = None
+    responsible_name: str = Field(..., description="Assessor responsável")
+    phase: Optional[str] = Field("Busca de Anterioridade", description="Fase processual no INPI")
+    operation_type: Optional[str] = Field("UPDATE", description="INSERT, UPDATE, DELETE, BATCH_IMPORT")
+    original_data: Optional[Dict[str, Any]] = None
+    proposed_data: Dict[str, Any] = Field(..., description="Dados propostos para a alteração")
+
+class RMStagingReview(BaseModel):
+    review_notes: Optional[str] = Field("", description="Justificativa ou despacho da aprovação/rejeição")
+
+class RMStagingResponse(BaseModel):
+    id: int
+    tenant_id: str
+    batch_id: Optional[str] = None
+    rm_code: Optional[str] = None
+    brand_name: str
+    process_number: Optional[str] = None
+    client_name: str
+    client_phone: Optional[str] = None
+    responsible_name: str
+    phase: str
+    operation_type: str
+    original_data: Optional[Dict[str, Any]] = None
+    proposed_data: Dict[str, Any]
+    status: str
+    submitted_by: str
+    submitted_at: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    review_notes: Optional[str] = None
+    applied_to_main_db: int
+
+# ==============================================================================
+# SCHEMAS DE GOOGLE CALENDAR & EVENTOS CRÍTICOS
+# ==============================================================================
+
+class CalendarEventResponse(BaseModel):
+    id: str
+    title: str
+    start_date: str
+    end_date: Optional[str] = None
+    category: str
+    priority: str
+    responsible: Optional[str] = None
+    area: Optional[str] = None
+    description: Optional[str] = None
+    google_calendar_url: str
+
+# ==============================================================================
+# SCHEMAS DE PDI 360 & SUCESSÃO PREDICTIVA
+# ==============================================================================
+
+class Evaluation360Create(BaseModel):
+    evaluatee_email: str = Field(..., description="E-mail do membro avaliado")
+    relationship_type: str = Field("peer", description="peer, leader, subordinate, self")
+    score_lideranca: float = Field(..., ge=1.0, le=5.0)
+    score_gestao: float = Field(..., ge=1.0, le=5.0)
+    score_visao_sistemica: float = Field(..., ge=1.0, le=5.0)
+    score_orientacao_resultados: float = Field(..., ge=1.0, le=5.0)
+    score_autoconhecimento: float = Field(..., ge=1.0, le=5.0)
+    feedback_qualitativo: Optional[str] = Field("", description="Parecer analítico")
+    cycle_id: Optional[str] = Field("2026.1", description="Ciclo avaliativo")
+
+class GapPlanCreate(BaseModel):
+    user_email: str
+    role_target: Optional[str] = "diretoria"
 
 def parse_csv_leads(csv_text: str) -> List[LeadIngestItem]:
     """Interpreta texto CSV delimitado por vírgula ou ponto-e-vírgula em objetos LeadIngestItem."""
@@ -3651,8 +3856,500 @@ async def health_check():
         "service": "EDV Jr. EDbrain API",
         "version": "2.3.0",
         "cost": "0.00 BRL (Custo Zero - Open Source / Local SQLite)",
-        "security": "BCrypt + JWT + Strict RBAC + Self-Promotion Shield + VPGG PDIs + CRM Follow-up"
+        "security": "BCrypt + JWT + Strict RBAC + Self-Promotion Shield + VPGG PDIs + CRM Follow-up + MEJ Compliance + Staging Four-Eyes"
     }
+
+
+# ==============================================================================
+# SUBSISTEMA 1: ESTATUTOS E COMPLIANCE MEJ (LEI 13.267/2016 & SELO EJ)
+# ==============================================================================
+
+@app.get("/api/compliance/statutes", response_model=List[StatuteResponse], summary="Listar normas de compliance e estatutos")
+async def list_compliance_statutes_endpoint(
+    norm_type: Optional[str] = Query(None, description="Filtrar por tipo de norma"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filtrar por status"),
+    responsible_area: Optional[str] = Query(None, description="Filtrar por diretoria responsável"),
+    current_user: dict = Depends(get_current_user)
+):
+    return list_compliance_statutes(norm_type=norm_type, status=status_filter, responsible_area=responsible_area)
+
+
+@app.get("/api/compliance/statutes/{statute_id}", response_model=StatuteResponse, summary="Obter detalhes de uma norma de compliance")
+async def get_compliance_statute_endpoint(
+    statute_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    statute = get_compliance_statute_by_id(statute_id)
+    if not statute:
+        raise HTTPException(status_code=404, detail="Norma de compliance não encontrada.")
+    return statute
+
+
+@app.post("/api/compliance/statutes", response_model=StatuteResponse, status_code=201, summary="Cadastrar nova norma ou marco de compliance")
+async def create_compliance_statute_endpoint(
+    body: StatuteCreate,
+    current_user: dict = Depends(verify_compliance_access)
+):
+    try:
+        created = create_compliance_statute(data=body.dict(), current_user_email=current_user["email"])
+        return created
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/api/compliance/statutes/{statute_id}", response_model=StatuteResponse, summary="Atualizar norma de compliance")
+async def update_compliance_statute_endpoint(
+    statute_id: int,
+    body: StatuteUpdate,
+    current_user: dict = Depends(verify_compliance_access)
+):
+    try:
+        data = {k: v for k, v in body.dict().items() if v is not None}
+        updated = update_compliance_statute(statute_id=statute_id, data=data, current_user_email=current_user["email"])
+        return updated
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.patch("/api/compliance/statutes/{statute_id}/checklist", response_model=StatuteResponse, summary="Atualizar checklist e recalcular score de conformidade")
+async def update_statute_checklist_endpoint(
+    statute_id: int,
+    body: StatuteChecklistUpdate,
+    current_user: dict = Depends(verify_compliance_access)
+):
+    try:
+        updated = update_statute_checklist(
+            statute_id=statute_id,
+            checklist_items=body.checklist_items,
+            current_user_email=current_user["email"]
+        )
+        return updated
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/compliance/statutes/{statute_id}", summary="Excluir norma de compliance")
+async def delete_compliance_statute_endpoint(
+    statute_id: int,
+    current_user: dict = Depends(verify_compliance_access)
+):
+    deleted = delete_compliance_statute(statute_id=statute_id, current_user_email=current_user["email"])
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Norma não encontrada para exclusão.")
+    return {"status": "success", "message": f"Norma ID {statute_id} removida com sucesso."}
+
+
+# ==============================================================================
+# SUBSISTEMA 2: MOTOR DE NOTIFICAÇÕES DINÂMICAS COM RBAC
+# ==============================================================================
+
+@app.get("/api/notifications", response_model=List[NotificationResponse], summary="Listar notificações do usuário filtradas por RBAC")
+async def get_user_notifications_endpoint(
+    unread_only: bool = Query(False, description="Exibir apenas notificações não lidas"),
+    limit: int = Query(50, ge=1, le=200, description="Limite máximo de itens"),
+    current_user: dict = Depends(get_current_user)
+):
+    return get_user_notifications(
+        user_email=current_user["email"],
+        user_role=current_user.get("role", "assessor"),
+        user_area=current_user.get("area", "Comercial"),
+        unread_only=unread_only,
+        limit=limit
+    )
+
+
+@app.patch("/api/notifications/{notification_id}/read", summary="Marcar notificação como lida")
+async def mark_notification_read_endpoint(
+    notification_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    success = mark_notification_as_read(notification_id=notification_id, user_email=current_user["email"])
+    if not success:
+        raise HTTPException(status_code=404, detail="Notificação não encontrada.")
+    return {"status": "success", "notification_id": notification_id, "is_read": 1}
+
+
+@app.post("/api/notifications/read-all", summary="Marcar todas as notificações do usuário como lidas")
+async def mark_all_read_endpoint(
+    current_user: dict = Depends(get_current_user)
+):
+    count = mark_all_notifications_as_read(
+        user_email=current_user["email"],
+        user_role=current_user.get("role", ""),
+        user_area=current_user.get("area", "")
+    )
+    return {"status": "success", "marked_read_count": count}
+
+
+@app.post("/api/notifications/scan", summary="Executar varredura ativa de prazos e gerar alertas dinâmicos")
+async def trigger_notifications_scan_endpoint(
+    background_tasks: BackgroundTasks,
+    current_user: dict = Depends(get_current_user)
+):
+    # Executa a varredura síncrona para devolver o feedback imediato
+    result = scan_and_create_deadlines()
+    return result
+
+
+@app.post("/api/notifications", response_model=NotificationResponse, status_code=201, summary="Emitir notificação direcionada ou institucional")
+async def create_notification_endpoint(
+    body: NotificationCreate,
+    current_user: dict = Depends(require_role(["presidente", "diretor"]))
+):
+    created = create_system_notification(
+        recipient_email=body.recipient_email,
+        title=body.title,
+        message=body.message,
+        category=body.category,
+        priority=body.priority or "normal",
+        target_role=body.target_role,
+        target_area=body.target_area,
+        link=body.link,
+        metadata=body.metadata
+    )
+    return created
+
+
+# ==============================================================================
+# SUBSISTEMA 3: SINCRONIZAÇÃO AUTOMATIZADA COM GOOGLE CALENDAR (RFC 5545)
+# ==============================================================================
+
+def _collect_calendar_events_internal() -> List[Dict[str, Any]]:
+    """Coleta e padroniza todos os eventos críticos de CRM, Selo EJ, PDI e Campanhas."""
+    events = []
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # 1. Follow-ups do CRM
+    cursor.execute("""
+    SELECT id, razao_social, client_name, created_by, area, next_followup_date, notes
+    FROM client_followups
+    WHERE next_followup_date IS NOT NULL AND next_followup_date != '' AND status NOT IN ('concluido', 'fechado', 'perdido');
+    """)
+    for r in cursor.fetchall():
+        dt = r["next_followup_date"][:10]
+        empresa = r["razao_social"] or r["client_name"] or "Lead"
+        events.append({
+            "id": f"crm-{r['id']}",
+            "title": f"CRM: Follow-up {empresa}",
+            "start_date": dt,
+            "end_date": dt,
+            "category": "crm_followup",
+            "priority": "high",
+            "responsible": r["created_by"],
+            "area": r["area"] or "Comercial",
+            "description": f"Contato de acompanhamento e diagnóstico com o cliente {empresa}. Obs: {r['notes'] or 'Sem observações'}"
+        })
+
+    # 2. Prazos de Revisão de Estatutos e Selo EJ
+    cursor.execute("""
+    SELECT id, title, review_deadline, responsible_area, responsible_role, document_url
+    FROM statutes_compliance
+    WHERE review_deadline IS NOT NULL AND review_deadline != '' AND status = 'vigente';
+    """)
+    for r in cursor.fetchall():
+        dt = r["review_deadline"][:10]
+        events.append({
+            "id": f"statute-{r['id']}",
+            "title": f"Auditoria: {r['title']}",
+            "start_date": dt,
+            "end_date": dt,
+            "category": "compliance",
+            "priority": "critical",
+            "responsible": r["responsible_role"],
+            "area": r["responsible_area"],
+            "description": f"Auditoria documental obrigatória (Selo EJ / Lei 13.267). Documento: {r['document_url'] or 'Repositório Oficial'}"
+        })
+
+    # 3. Metas e Ações de Desenvolvimento (PDI)
+    cursor.execute("""
+    SELECT id, user_email, practical_allocation, deadline, competency_deficient
+    FROM gap_mitigation_actions
+    WHERE deadline IS NOT NULL AND deadline != '' AND status != 'concluido';
+    """)
+    for r in cursor.fetchall():
+        dt = r["deadline"][:10]
+        events.append({
+            "id": f"pdi-{r['id']}",
+            "title": f"PDI 70-20-10: {r['competency_deficient']} ({r['user_email']})",
+            "start_date": dt,
+            "end_date": dt,
+            "category": "pdi_milestone",
+            "priority": "normal",
+            "responsible": r["user_email"],
+            "area": "VPGG",
+            "description": f"Entrega da ação prática de mitigação de gaps: {r['practical_allocation']}"
+        })
+
+    # 4. Campanhas e PSEL
+    cursor.execute("""
+    SELECT id, name, type, channel, end_date, responsible
+    FROM campaigns
+    WHERE end_date IS NOT NULL AND end_date != '' AND status = 'ativa';
+    """)
+    for r in cursor.fetchall():
+        dt = r["end_date"][:10]
+        events.append({
+            "id": f"camp-{r['id']}",
+            "title": f"Campanha: Encerramento {r['name']}",
+            "start_date": dt,
+            "end_date": dt,
+            "category": "campaign_deadline",
+            "priority": "high",
+            "responsible": r["responsible"],
+            "area": "Marketing",
+            "description": f"Término da campanha de {r['type']} via canal {r['channel']}. Apuração de ROI e conversão."
+        })
+
+    conn.close()
+    
+    # Gerar URLs diretas de adição ao Google Calendar
+    import urllib.parse
+    for ev in events:
+        s_date_clean = ev["start_date"].replace("-", "")[:8]
+        e_date_clean = ev["end_date"].replace("-", "")[:8]
+        q_params = {
+            "action": "TEMPLATE",
+            "text": ev["title"],
+            "dates": f"{s_date_clean}/{e_date_clean}",
+            "details": f"{ev['description']}\n\n[Sincronizado via EDbrain - EDV Jr.]",
+            "location": "Vitória - ES, Brasil"
+        }
+        ev["google_calendar_url"] = f"https://calendar.google.com/calendar/render?{urllib.parse.urlencode(q_params)}"
+        
+    return events
+
+
+@app.get("/api/calendar/events", response_model=List[CalendarEventResponse], summary="Listar eventos críticos sincronizáveis com o Google Calendar")
+async def list_calendar_events_endpoint(current_user: dict = Depends(get_current_user)):
+    events = _collect_calendar_events_internal()
+    return events
+
+
+@app.get("/api/calendar/export.ics", summary="Exportar feed universal de calendário no padrão RFC 5545 (.ics)")
+async def export_calendar_ics_endpoint():
+    events = _collect_calendar_events_internal()
+    
+    ics_lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//EDV Jr.//EDbrain Calendar v2.3//PT-BR",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        "X-WR-CALNAME:EDbrain Prazos e Entregas EDV Jr.",
+        "X-WR-TIMEZONE:America/Sao_Paulo"
+    ]
+    for ev in events:
+        s_date = ev["start_date"].replace("-", "")[:8]
+        e_date = ev["end_date"].replace("-", "")[:8]
+        uid = f"edbrain-{ev['id']}@edvjr.com.br"
+        summary = ev["title"].replace("\n", " ").replace(";", ",")
+        desc = ev["description"].replace("\n", "\\n").replace(";", ",")
+        ics_lines.extend([
+            "BEGIN:VEVENT",
+            f"UID:{uid}",
+            f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}",
+            f"DTSTART;VALUE=DATE:{s_date}",
+            f"DTEND;VALUE=DATE:{e_date}",
+            f"SUMMARY:{summary}",
+            f"DESCRIPTION:{desc}",
+            "STATUS:CONFIRMED",
+            "TRANSP:TRANSPARENT",
+            "END:VEVENT"
+        ])
+    ics_lines.append("END:VCALENDAR\r\n")
+    ics_payload = "\r\n".join(ics_lines)
+    
+    return Response(
+        content=ics_payload,
+        media_type="text/calendar; charset=utf-8",
+        headers={
+            "Content-Disposition": "attachment; filename=edbrain_calendar_edvjr.ics",
+            "Cache-Control": "no-cache"
+        }
+    )
+
+
+@app.post("/api/calendar/sync-google", summary="Disparar sincronização com Google Calendar")
+async def sync_google_calendar_endpoint(current_user: dict = Depends(get_current_user)):
+    events = _collect_calendar_events_internal()
+    return {
+        "status": "success",
+        "total_events_synced": len(events),
+        "synced_at": datetime.now().isoformat(),
+        "ics_feed_url": "/api/calendar/export.ics",
+        "events": events[:10],
+        "message": f"{len(events)} prazos e marcos estratégicos prontos para integração no Google Agenda."
+    }
+
+
+# ==============================================================================
+# SUBSISTEMA 5: EDIÇÃO INDIRETA E SEGURA DE RM (STAGING & MAKER-CHECKER)
+# ==============================================================================
+
+@app.post("/api/rm/staging", response_model=RMStagingResponse, status_code=201, summary="Submeter proposta de alteração de RM para a área de Staging")
+async def create_rm_staging_endpoint(
+    body: RMStagingCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        created = create_rm_staging_record(data=body.dict(), current_user_email=current_user["email"])
+        return created
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/rm/staging", response_model=List[RMStagingResponse], summary="Listar registros da esteira de Staging de Marcas")
+async def list_rm_staging_endpoint(
+    status_filter: Optional[str] = Query(None, alias="status", description="Filtrar por pending_review, approved, rejected"),
+    current_user: dict = Depends(get_current_user)
+):
+    return list_rm_staging_records(status=status_filter)
+
+
+@app.get("/api/rm/staging/{staging_id}", response_model=RMStagingResponse, summary="Obter detalhes de uma proposta em Staging")
+async def get_rm_staging_endpoint(
+    staging_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    record = get_rm_staging_record_by_id(staging_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Registro de staging não encontrado.")
+    return record
+
+
+@app.post("/api/rm/staging/{staging_id}/approve", response_model=RMStagingResponse, summary="Aprovar alteração de RM em Staging (Maker-Checker / Four-Eyes)")
+async def approve_staging_endpoint(
+    staging_id: int,
+    body: RMStagingReview,
+    current_user: dict = Depends(verify_rm_staging_approval_access)
+):
+    try:
+        updated = approve_rm_staging_record(
+            staging_id=staging_id,
+            reviewer_email=current_user["email"],
+            reviewer_role=current_user.get("role", "diretor"),
+            review_notes=body.review_notes
+        )
+        return updated
+    except PermissionError as pe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@app.post("/api/rm/staging/{staging_id}/reject", response_model=RMStagingResponse, summary="Rejeitar alteração de RM em Staging com justificativa obrigatória")
+async def reject_staging_endpoint(
+    staging_id: int,
+    body: RMStagingReview,
+    current_user: dict = Depends(verify_rm_staging_approval_access)
+):
+    if not body.review_notes or not body.review_notes.strip():
+        raise HTTPException(status_code=400, detail="É obrigatório informar uma justificativa detalhada para a rejeição da alteração.")
+    try:
+        updated = reject_rm_staging_record(
+            staging_id=staging_id,
+            reviewer_email=current_user["email"],
+            reviewer_role=current_user.get("role", "diretor"),
+            review_notes=body.review_notes.strip()
+        )
+        return updated
+    except PermissionError as pe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+# ==============================================================================
+# PDI 360º, TRIANGULAÇÃO OPERACIONAL E SUCESSÃO PREDICTIVA
+# ==============================================================================
+
+@app.post("/api/pdi/evaluations-360", summary="Submeter avaliação 360º de competências VPGG")
+async def submit_evaluation_360_endpoint(
+    body: Evaluation360Create,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        saved = save_evaluation_360(eval_data=body.dict(), current_user_email=current_user["email"])
+        return {"status": "success", "data": saved}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/pdi/evaluations-360", summary="Listar avaliações 360º")
+async def list_evaluations_360_endpoint(
+    evaluatee_email: Optional[str] = Query(None, description="Filtrar por membro avaliado"),
+    current_user: dict = Depends(get_current_user)
+):
+    return list_evaluations_360(evaluatee_email=evaluatee_email)
+
+
+@app.get("/api/pdi/triangulation/{user_email}", summary="Obter triangulação operacional-comportamental de um membro")
+async def get_triangulation_endpoint(
+    user_email: str,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        res = calculate_triangulation(user_email=user_email)
+        return {"status": "success", "data": res}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/pdi/succession-ips/{user_email}", summary="Calcular Índice de Prontidão Preditiva para Sucessão (IPS)")
+async def get_succession_ips_endpoint(
+    user_email: str,
+    role_target: str = Query("diretoria", description="diretoria ou presidencia"),
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        ips_data = calculate_succession_ips(user_email=user_email, role_target=role_target)
+        return {"status": "success", "data": ips_data}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/pdi/gap-mitigation/generate", summary="Gerar plano 70-20-10 automatizado para mitigação de gaps")
+async def generate_gap_plan_endpoint(
+    body: GapPlanCreate,
+    current_user: dict = Depends(verify_vpgg_access)
+):
+    try:
+        plan = generate_gap_mitigation_plan(user_email=body.user_email, role_target=body.role_target or "diretoria")
+        return {"status": "success", "data": plan}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/pdi/gap-mitigation", summary="Listar ações de mitigação de gaps (70-20-10)")
+async def list_gap_mitigation_endpoint(
+    user_email: Optional[str] = Query(None, description="Filtrar por e-mail do membro"),
+    current_user: dict = Depends(get_current_user)
+):
+    return list_gap_mitigation_actions(user_email=user_email)
+
+
+@app.get("/api/pdi/historical-benchmarks", summary="Listar perfis de benchmark de gestores de referência")
+async def list_historical_benchmarks_endpoint(
+    role_target: Optional[str] = Query(None, description="diretoria ou presidencia"),
+    current_user: dict = Depends(get_current_user)
+):
+    return list_historical_benchmarks(role_target=role_target)
+
+
+@app.get("/api/pdi/evaluator-calibrations", summary="Listar calibrações de assertividade de avaliadores")
+async def list_evaluator_calibrations_endpoint(
+    current_user: dict = Depends(verify_vpgg_access)
+):
+    return get_evaluator_calibrations()
 
 
 if __name__ == "__main__":

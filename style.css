@@ -225,3 +225,131 @@ header {
     color: #92400e;
     border: 1px solid #fde68a;
 }
+
+/* ==========================================================================
+   SUBSISTEMA 4: RESPONSIVIDADE MOBILE NATIVA & OFF-CANVAS DRAWER
+   ========================================================================== */
+@media (max-width: 1023px) {
+  #main-sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  #main-sidebar.mobile-open {
+    transform: translateX(0) !important;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35);
+  }
+}
+
+#sidebar-backdrop {
+  display: none;
+}
+#sidebar-backdrop.active {
+  display: block !important;
+}
+
+/* Touch targets >= 44x44px for Mobile Navigation & Interactive Controls */
+@media (max-width: 768px) {
+  button, 
+  .touch-target, 
+  nav button,
+  input[type="button"], 
+  input[type="submit"] {
+    min-height: 44px;
+  }
+  
+  /* Conversão de DataGrids em Cards Verticais Mobile */
+  .responsive-card-table {
+    display: block !important;
+    width: 100% !important;
+  }
+  .responsive-card-table thead {
+    display: none !important;
+  }
+  .responsive-card-table tbody,
+  .responsive-card-table tr,
+  .responsive-card-table td {
+    display: block !important;
+    width: 100% !important;
+  }
+  .responsive-card-table tr {
+    margin-bottom: 0.85rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    background: #ffffff;
+    padding: 0.85rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .responsive-card-table td {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 0.45rem 0.2rem !important;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: right;
+  }
+  .responsive-card-table td:last-child {
+    border-bottom: none;
+    padding-top: 0.75rem !important;
+  }
+  .responsive-card-table td::before {
+    content: attr(data-label);
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.65rem;
+    color: #64748b;
+    text-align: left;
+    margin-right: 0.75rem;
+    flex-shrink: 0;
+  }
+}
+
+/* ==========================================================================
+   SUBSISTEMA 2: NOTIFICAÇÕES & BADGES DE PRIORIDADE
+   ========================================================================== */
+.badge-priority-alta {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+.badge-priority-critica {
+  background-color: #fef2f2;
+  color: #7f1d1d;
+  border: 1px solid #fca5a5;
+  animation: pulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+.badge-priority-media {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+.badge-priority-baixa {
+  background-color: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+/* ==========================================================================
+   SUBSISTEMA 5: MAKER-CHECKER STAGING DIFF STYLING
+   ========================================================================== */
+.diff-del {
+  background-color: #fee2e2;
+  color: #991b1b;
+  text-decoration: line-through;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.diff-add {
+  background-color: #dcfce7;
+  color: #166534;
+  font-weight: 600;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.diff-same {
+  color: #475569;
+}
