@@ -160,6 +160,12 @@
 
         <div class="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Pessoas & Conhecimento</div>
 
+        <button onclick="switchTab('painel_membro'); toggleMobileSidebar(false);" id="nav-painel_membro" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
+          <i class="fa-solid fa-graduation-cap w-4 text-center text-purple-400"></i>
+          <span class="text-xs font-semibold text-purple-300">Meu PDI & Dúvidas</span>
+          <span id="nav-badge-pdi-progresso" class="ml-auto text-[9px] bg-purple-900/60 text-purple-200 px-1.5 py-0.5 rounded-full font-mono">Trilha ⚡</span>
+        </button>
+
         <button onclick="switchTab('vpgg'); toggleMobileSidebar(false);" id="nav-vpgg" class="w-full text-left px-3 py-2 rounded-md flex items-center gap-3 tab-inactive">
           <i class="fa-solid fa-users w-4 text-center text-blue-400"></i>
           <span class="text-xs">Gente & Gestão (VPGG)</span>
@@ -2228,6 +2234,240 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
                 </table>
               </div>
             </div>
+          </div>
+
+        </section>
+
+        <!-- 7.1 PAINEL DO MEMBRO: CENTRO DE EXECUÇÃO DO PDI & FÓRUM COLABORATIVO DE DÚVIDAS -->
+        <section id="view-painel_membro" class="hidden space-y-6">
+          
+          <!-- Navegação de Sub-abas do Painel do Membro -->
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="switchPainelMembroSubtab('pdi-exec')" id="subtab-btn-pdi-exec" class="px-4 py-2 text-xs font-bold rounded-lg bg-purple-700 text-white shadow-sm flex items-center gap-2 transition">
+                <i class="fa-solid fa-graduation-cap"></i>
+                <span>Centro de Execução do PDI</span>
+              </button>
+              <button type="button" onclick="switchPainelMembroSubtab('forum-duvidas')" id="subtab-btn-forum-duvidas" class="px-4 py-2 text-xs font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-2 transition">
+                <i class="fa-solid fa-comments"></i>
+                <span>Caixa de Dúvidas & Ajuda Coletiva</span>
+                <span id="badge-total-duvidas" class="px-1.5 py-0.2 bg-purple-200 text-purple-900 rounded-full text-[10px] font-mono font-bold">0</span>
+              </button>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="carregarDadosPainelMembro()" class="px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg flex items-center gap-1.5 shadow-xs transition cursor-pointer">
+                <i class="fa-solid fa-rotate text-slate-500"></i>
+                <span>Sincronizar</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- ============================================================== -->
+          <!-- CONTEÚDO 1: CENTRO DE EXECUÇÃO DO PDI (MINHA TRILHA ATÔMICA)  -->
+          <!-- ============================================================== -->
+          <div id="subtab-content-pdi-exec" class="space-y-6">
+            
+            <!-- Card Principal de Visão Geral do Colaborador & Progresso -->
+            <div class="glass-card rounded-2xl p-6 border border-slate-200/80 shadow-sm relative overflow-hidden bg-gradient-to-br from-white via-purple-50/20 to-slate-50">
+              <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                
+                <!-- Identificação do Colaborador -->
+                <div class="flex items-start gap-4">
+                  <div id="pdi-exec-avatar" class="w-14 h-14 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-black text-xl shadow-md border-2 border-purple-300 shrink-0">
+                    --
+                  </div>
+                  <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <span id="pdi-exec-badge-area" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                        VPGG • Membro
+                      </span>
+                      <span id="pdi-exec-email" class="text-xs text-slate-400 font-mono">carregando...</span>
+                    </div>
+                    <h3 id="pdi-exec-nome" class="text-xl font-black text-slate-900 mt-1">Carregando Trilha...</h3>
+                    <p class="text-xs text-slate-600 mt-0.5">
+                      <strong>Diretriz Brasil Júnior:</strong> Modelo de Competências e Micro-Entregáveis Atômicos com SLA.
+                    </p>
+                    
+                    <!-- Assinatura SHA-256 -->
+                    <div class="mt-2.5 inline-flex items-center gap-2 px-3 py-1 bg-slate-900 text-emerald-400 font-mono text-[11px] rounded-lg border border-slate-800 shadow-inner">
+                      <i class="fa-solid fa-fingerprint text-emerald-400"></i>
+                      <span class="text-slate-400">Assinatura SHA-256:</span>
+                      <span id="pdi-exec-hash" class="font-bold tracking-wider">Calculando...</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Painel de Progresso & Métricas de SLA -->
+                <div class="lg:w-80 shrink-0 p-4 bg-white/90 rounded-xl border border-purple-100 shadow-xs space-y-3">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-bold text-slate-700 flex items-center gap-1.5">
+                      <i class="fa-solid fa-chart-line text-purple-600"></i> Progresso da Trilha
+                    </span>
+                    <span id="pdi-exec-pct" class="font-black text-purple-700 font-mono text-sm">0.0%</span>
+                  </div>
+                  
+                  <!-- Barra de Progresso Animada -->
+                  <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden p-0.5 border border-slate-200">
+                    <div id="pdi-exec-prog-bar" class="bg-gradient-to-r from-purple-600 to-emerald-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+                  </div>
+
+                  <!-- Contadores de Status -->
+                  <div class="grid grid-cols-3 gap-2 text-center text-[11px] pt-1">
+                    <div class="p-1.5 bg-slate-50 rounded border border-slate-200">
+                      <div class="text-slate-400 text-[9px] uppercase font-bold">Pendentes</div>
+                      <div id="pdi-count-pendentes" class="font-bold text-slate-700 text-xs">0</div>
+                    </div>
+                    <div class="p-1.5 bg-amber-50 rounded border border-amber-200">
+                      <div class="text-amber-600 text-[9px] uppercase font-bold">Em Curso</div>
+                      <div id="pdi-count-andamento" class="font-bold text-amber-800 text-xs">0</div>
+                    </div>
+                    <div class="p-1.5 bg-emerald-50 rounded border border-emerald-200">
+                      <div class="text-emerald-600 text-[9px] uppercase font-bold">Concluídos</div>
+                      <div id="pdi-count-concluidos" class="font-bold text-emerald-800 text-xs">0</div>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Filtros & Controles Operacionais -->
+            <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
+                  <i class="fa-solid fa-filter text-slate-400"></i> Filtrar:
+                </span>
+                <button type="button" onclick="filtrarBlocosPDI('todos')" id="filter-btn-pdi-todos" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-purple-100 text-purple-800 border border-purple-300">Todos</button>
+                <button type="button" onclick="filtrarBlocosPDI('pendente')" id="filter-btn-pdi-pendente" class="px-2.5 py-1 text-xs font-medium rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200">Pendentes</button>
+                <button type="button" onclick="filtrarBlocosPDI('em_andamento')" id="filter-btn-pdi-em_andamento" class="px-2.5 py-1 text-xs font-medium rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200">Em Andamento</button>
+                <button type="button" onclick="filtrarBlocosPDI('concluido')" id="filter-btn-pdi-concluido" class="px-2.5 py-1 text-xs font-medium rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200">Concluídos</button>
+              </div>
+
+              <!-- Seletor de Membros (Exclusivo para Liderança/VPGG) -->
+              <div id="pdi-exec-admin-selector" class="hidden items-center gap-2">
+                <span class="text-xs text-slate-500 font-medium">Ver trilha de:</span>
+                <select id="pdi-exec-member-select" onchange="aoTrocarMembroExecucaoPDI()" class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-800 font-medium focus:ring-1 focus:ring-purple-500">
+                  <option value="me">Minha Própria Trilha</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Feed de Cards dos Micro-Blocos Atômicos -->
+            <div id="pdi-exec-cards-container" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <!-- Renderizado dinamicamente via app.js -->
+              <div class="col-span-full text-center py-12 text-slate-400">
+                <i class="fa-solid fa-spinner fa-spin text-2xl text-purple-600 mb-2"></i>
+                <p class="text-xs">Carregando Centro de Execução do PDI...</p>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ============================================================== -->
+          <!-- CONTEÚDO 2: CAIXA DE DÚVIDAS & AJUDA COLETIVA (FÓRUM PÚBLICO) -->
+          <!-- ============================================================== -->
+          <div id="subtab-content-forum-duvidas" class="hidden space-y-6">
+            
+            <!-- Barra Superior com Ação de Nova Dúvida e Filtros -->
+            <div class="glass-card rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-blue-50/40 via-white to-slate-50">
+              <div>
+                <h4 class="text-base font-black text-slate-900 flex items-center gap-2">
+                  <i class="fa-solid fa-comments text-blue-600"></i> Fórum Coletivo de Dúvidas & Entraves Operacionais
+                </h4>
+                <p class="text-xs text-slate-600 mt-0.5">
+                  Espaço transparente para mapeamento ágil de dificuldades técnicas, operacionais e de governança da EJ.
+                </p>
+              </div>
+              <button type="button" onclick="toggleFormNovaDuvida()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-lg shadow-sm flex items-center gap-2 transition self-start md:self-auto cursor-pointer">
+                <i class="fa-solid fa-circle-question"></i>
+                <span>Relatar Nova Dúvida</span>
+              </button>
+            </div>
+
+            <!-- Formulário Colapsável de Nova Dúvida -->
+            <div id="form-nova-duvida-container" class="hidden glass-card rounded-xl p-5 border border-blue-200 shadow-sm bg-blue-50/30 space-y-4">
+              <div class="flex items-center justify-between border-b border-blue-100 pb-2">
+                <h5 class="text-xs font-bold text-blue-900 flex items-center gap-2">
+                  <i class="fa-solid fa-pen-to-square text-blue-600"></i> Publicar Dúvida ou Desafio no Feed Geral
+                </h5>
+                <button type="button" onclick="toggleFormNovaDuvida(false)" class="text-slate-400 hover:text-slate-600 text-xs">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+
+              <form onsubmit="submeterNovaDuvida(event)" class="space-y-3">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div class="md:col-span-2">
+                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Título Resumido da Dificuldade *</label>
+                    <input type="text" id="duvida_titulo" required placeholder="Ex: Erro ao submeter RM no portal do INPI para classe 35" class="w-full text-xs p-2.5 rounded-lg border border-slate-300 focus:ring-1 focus:ring-blue-500 bg-white">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-700 mb-1">Categoria Corporativa *</label>
+                    <select id="duvida_categoria" class="w-full text-xs p-2.5 rounded-lg border border-slate-300 focus:ring-1 focus:ring-blue-500 bg-white">
+                      <option value="Execução de Serviços/RMs">Execução de Serviços / RMs</option>
+                      <option value="Sistema/EDbrain">Sistema / EDbrain</option>
+                      <option value="Comercial/CRM">Comercial / CRM / Vendas</option>
+                      <option value="Financeiro">Financeiro / Tesouraria</option>
+                      <option value="Processos/MEJ">Processos / MEJ / Selo EJ</option>
+                      <option value="Geral">Geral / Dúvidas Diversas</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-700 mb-1">Descrição Detalhada do Entrave *</label>
+                  <textarea id="duvida_descricao" required rows="3" placeholder="Explique o que aconteceu, qual o passo a passo realizado e qual a ajuda esperada da equipe..." class="w-full text-xs p-2.5 rounded-lg border border-slate-300 focus:ring-1 focus:ring-blue-500 bg-white"></textarea>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-1">
+                  <button type="button" onclick="toggleFormNovaDuvida(false)" class="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg">Cancelar</button>
+                  <button type="submit" id="btn-submit-duvida" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-lg shadow-sm flex items-center gap-1.5 transition cursor-pointer">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>Publicar no Fórum</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Filtros de Busca do Fórum -->
+            <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-slate-500 flex items-center gap-1">
+                  <i class="fa-solid fa-filter text-slate-400"></i> Status:
+                </span>
+                <select id="forum-filtro-status" onchange="carregarFeedDuvidas()" class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-800 font-medium">
+                  <option value="todas">Todas as Dúvidas</option>
+                  <option value="aberta" selected>Abertas (Pendentes)</option>
+                  <option value="resolvida">Resolvidas</option>
+                </select>
+
+                <select id="forum-filtro-categoria" onchange="carregarFeedDuvidas()" class="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 text-slate-800 font-medium ml-2">
+                  <option value="todas">Todas as Categorias</option>
+                  <option value="Execução de Serviços/RMs">Serviços / RMs</option>
+                  <option value="Sistema/EDbrain">Sistema / EDbrain</option>
+                  <option value="Comercial/CRM">Comercial / CRM</option>
+                  <option value="Financeiro">Financeiro</option>
+                  <option value="Processos/MEJ">Processos / MEJ</option>
+                  <option value="Geral">Geral</option>
+                </select>
+              </div>
+
+              <div class="relative w-full sm:w-64">
+                <input type="text" id="forum-busca" oninput="debounceBuscaForum()" placeholder="Buscar por termo ou dúvida..." class="w-full text-xs pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:ring-1 focus:ring-blue-500">
+                <i class="fa-solid fa-magnifying-glass text-slate-400 text-xs absolute left-2.5 top-2.5"></i>
+              </div>
+            </div>
+
+            <!-- Feed Aberto de Dúvidas & Threads -->
+            <div id="forum-duvidas-feed-container" class="space-y-4">
+              <!-- Preenchido via app.js -->
+              <div class="text-center py-12 text-slate-400">
+                <i class="fa-solid fa-spinner fa-spin text-2xl text-blue-600 mb-2"></i>
+                <p class="text-xs">Carregando ocorrências e dúvidas coletivas...</p>
+              </div>
+            </div>
+
           </div>
 
         </section>

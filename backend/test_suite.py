@@ -36,6 +36,9 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         conn.execute("DELETE FROM transactions;")
         conn.execute("DELETE FROM notices;")
         conn.execute("DELETE FROM pdis;")
+        conn.execute("DELETE FROM member_pdi_blocks;")
+        conn.execute("DELETE FROM forum_respostas;")
+        conn.execute("DELETE FROM forum_duvidas;")
         conn.commit()
         conn.close()
         cls.client = TestClient(app)
@@ -1763,6 +1766,170 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
 
         # Garantia de Singularidade Matemática: hashes devem ser distintos
         self.assertNotEqual(hash_charles, hash_estevao)
+
+    def test_50_pdi_member_execution_trail_generation_and_listing(self):
+        """Valida endpoint /api/pdi/trilha/{user_id} para consulta individual, SLAs, dias restantes e hash SHA-256"""
+        token_com = self.tokens["assessor_comercial"]
+        token_pres = self.tokens["presidente"]
+
+        # 1. Assessor Comercial acessa sua própria trilha via 'me'
+        res_me = self.client.get("/api/pdi/trilha/me", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_me.status_code, 200)
+        data_me = res_me.json()
+        self.assertEqual(data_me["status"], "success")
+        self.assertEqual(data_me["user"]["email"], "estevao.coutinho@edvjr.com.br")
+
+        trilha = data_me["trilha"]
+        self.assertGreaterEqual(trilha["total_blocos"], 4)
+        self.assertLessEqual(trilha["total_blocos"], 6)
+        self.assertEqual(trilha["progresso_percentual"], 0.0)
+        self.assertEqual(len(trilha["singularidade_hash"]), 64)
+
+        # Validar atributos de cada micro-bloco
+        for b in trilha["blocos"]:
+            self.assertTrue(b["microblock_code"].startswith("MB-"))
+            self.assertTrue(bool(b["title"]))
+            self.assertIn(b["eixo"], ["hard_skills", "soft_skills"])
+            self.assertIn("sla_days", b)
+            self.assertIn("dias_restantes", b)
+            self.assertEqual(b["status"], "pendente")
+            self.assertTrue(bool(b["justificativa_algoritmica"]))
+
+        # 2. Consulta via ID numérico
+        user_id = data_me["user"]["id"]
+        res_id = self.client.get(f"/api/pdi/trilha/{user_id}", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_id.status_code, 200)
+
+        # 3. Tentativa de Assessor acessar a trilha de outro membro -> 403 Forbidden
+        token_proj = self.tokens["assessor_projetos"]
+        res_forbidden = self.client.get(f"/api/pdi/trilha/{user_id}", headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res_forbidden.status_code, 403)
+
+        # 4. Presidente tem autoridade de visualizar qualquer trilha -> 200 OK
+        res_leader = self.client.get(f"/api/pdi/trilha/{user_id}", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_leader.status_code, 200)
+
+    def test_51_pdi_microblock_status_update_and_progress_recalculation(self):
+        """Valida transição de status de micro-blocos (PATCH /api/pdi/micro-bloco/{id}) e recálculo dinâmico do avanço percentual"""
+        token_com = self.tokens["assessor_comercial"]
+
+        # Obter primeiro bloco da trilha
+        res_trilha = self.client.get("/api/pdi/trilha/me", headers={"Authorization": f"Bearer {token_com}"})
+        blocos = res_trilha.json()["trilha"]["blocos"]
+        bloco_id = blocos[0]["id"]
+        total_blocos = len(blocos)
+
+        # 1. Mudar status para 'em_andamento'
+        res_andamento = self.client.patch(
+            f"/api/pdi/micro-bloco/{bloco_id}",
+            headers={"Authorization": f"Bearer {token_com}"},
+            json={"status": "em_andamento"}
+        )
+        self.assertEqual(res_andamento.status_code, 200)
+        data_andamento = res_andamento.json()
+        self.assertEqual(data_andamento["micro_bloco"]["status"], "em_andamento")
+        self.assertEqual(data_andamento["trilha_progresso"]["em_andamento"], 1)
+
+        # 2. Concluir o micro-bloco
+        res_concluido = self.client.patch(
+            f"/api/pdi/micro-bloco/{bloco_id}",
+            headers={"Authorization": f"Bearer {token_com}"},
+            json={"status": "concluido"}
+        )
+        self.assertEqual(res_concluido.status_code, 200)
+        data_concluido = res_concluido.json()
+        self.assertEqual(data_concluido["micro_bloco"]["status"], "concluido")
+        self.assertIsNotNone(data_concluido["micro_bloco"]["completed_at"])
+        
+        # Validar recálculo percentual matemático
+        prog_esperado = round((1 / total_blocos * 100), 1)
+        self.assertEqual(data_concluido["trilha_progresso"]["progresso_percentual"], prog_esperado)
+        self.assertEqual(data_concluido["trilha_progresso"]["concluidos"], 1)
+
+        # 3. Tentativa de status inválido -> 400 Bad Request
+        res_invalido = self.client.patch(
+            f"/api/pdi/micro-bloco/{bloco_id}",
+            headers={"Authorization": f"Bearer {token_com}"},
+            json={"status": "status_inexistente"}
+        )
+        self.assertEqual(res_invalido.status_code, 400)
+
+    def test_52_forum_duvidas_creation_and_public_feed(self):
+        """Valida criação de dúvidas (POST /api/duvidas) e consulta do feed coletivo (GET /api/duvidas)"""
+        token_proj = self.tokens["assessor_projetos"]
+
+        # 1. Registrar dúvida
+        payload = {
+            "title": "Dúvida sobre especificação da classe 35 no INPI",
+            "description": "Ao cadastrar processo de registro de marca de contabilidade, devemos usar classe 35 ou 36?",
+            "category": "Execução de Serviços/RMs"
+        }
+        res_post = self.client.post("/api/duvidas", headers={"Authorization": f"Bearer {token_proj}"}, json=payload)
+        self.assertEqual(res_post.status_code, 201)
+        duvida_criada = res_post.json()["duvida"]
+        self.assertEqual(duvida_criada["title"], payload["title"])
+        self.assertEqual(duvida_criada["status"], "aberta")
+        self.assertIn("Alice Mizuki", duvida_criada["author_name"])
+        duvida_id = duvida_criada["id"]
+
+        # 2. Consultar feed público
+        res_feed = self.client.get("/api/duvidas", headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res_feed.status_code, 200)
+        feed = res_feed.json()
+        self.assertIsInstance(feed, list)
+        self.assertTrue(any(d["id"] == duvida_id for d in feed))
+
+        # 3. Filtragem por categoria e busca
+        res_cat = self.client.get("/api/duvidas?category=Execução de Serviços/RMs", headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res_cat.status_code, 200)
+        self.assertTrue(all("Serviços" in d["category"] for d in res_cat.json()))
+
+        res_search = self.client.get("/api/duvidas?search=INPI", headers={"Authorization": f"Bearer {token_proj}"})
+        self.assertEqual(res_search.status_code, 200)
+        self.assertTrue(any("INPI" in d["title"] for d in res_search.json()))
+
+    def test_53_forum_threaded_responses_and_resolution(self):
+        """Valida respostas em thread colaborativa (POST /api/duvidas/{id}/respostas) e encerramento/resolução da ocorrência"""
+        token_proj = self.tokens["assessor_projetos"]
+        token_ger = self.tokens["gerente"]
+
+        # 1. Criar dúvida
+        res_post = self.client.post(
+            "/api/duvidas",
+            headers={"Authorization": f"Bearer {token_proj}"},
+            json={
+                "title": "Dúvida sobre emissão de nota fiscal de honorários",
+                "description": "Qual o código de tributação municipal correto para serviços de consultoria jurídica?",
+                "category": "Financeiro"
+            }
+        )
+        self.assertEqual(res_post.status_code, 201)
+        duvida_id = res_post.json()["duvida"]["id"]
+
+        # 2. Gerente (Thais) responde a dúvida de Alice
+        res_resp = self.client.post(
+            f"/api/duvidas/{duvida_id}/respostas",
+            headers={"Authorization": f"Bearer {token_ger}"},
+            json={"content": "Utilize o código 17.01 da LC 116/03 com retenção simples na fonte conforme o manual da prefeitura."}
+        )
+        self.assertEqual(res_resp.status_code, 201)
+        resposta_data = res_resp.json()["resposta"]
+        self.assertEqual(resposta_data["author_name"], "Thais")
+
+        # 3. Verificar que o feed reflete a resposta na thread
+        res_feed = self.client.get("/api/duvidas", headers={"Authorization": f"Bearer {token_proj}"})
+        duvida_no_feed = next(d for d in res_feed.json() if d["id"] == duvida_id)
+        self.assertGreaterEqual(duvida_no_feed["total_respostas"], 1)
+        self.assertEqual(duvida_no_feed["respostas"][0]["content"], resposta_data["content"])
+
+        # 4. Autor marca a dúvida como resolvida
+        res_resolvida = self.client.patch(
+            f"/api/duvidas/{duvida_id}/status",
+            headers={"Authorization": f"Bearer {token_proj}"},
+            json={"status": "resolvida"}
+        )
+        self.assertEqual(res_resolvida.status_code, 200)
+        self.assertEqual(res_resolvida.json()["duvida"]["status"], "resolvida")
 
 
 if __name__ == "__main__":

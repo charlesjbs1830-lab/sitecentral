@@ -460,6 +460,7 @@ const titles = {
   'projetos': { title: 'Módulo de Projetos (INPI)', subtitle: 'Acompanhamento contínuo da RPI e prazos fatais de 60 dias.' },
   'financeiro': { title: 'Módulo Tesouraria & Fluxo de Caixa', subtitle: 'Controle de honorários parcelados e custas federais (Padrão CJA).' },
   'vpgg': { title: 'Gente & Gestão (VPGG)', subtitle: 'Assiduidade nas Ágoras, PDI, Trilhas de Desenvolvimento e Clima.' },
+  'painel_membro': { title: 'Meu PDI & Dúvidas Coletivas', subtitle: 'Centro individual de execução de micro-blocos e fórum colaborativo de suporte.' },
   'tutoriais': { title: 'Hub de Tutoriais & Base de Conhecimento', subtitle: 'Manuais passo a passo salvos no Drive e capacitações gravadas da EDV Jr.' },
   'planilhas': { title: 'Central de Planilhas & Legado', subtitle: 'Repositório setorizado de planilhas e acervo histórico de 10 anos.' },
   'auditoria': { title: 'Auditoria de Ações & Telemetria', subtitle: 'Rastreabilidade de transações por membro e controle RBAC.' }
@@ -467,7 +468,7 @@ const titles = {
 
 const tabsList = [
   'dashboard', 'presidencia', 'comercial', 'copys', 'marketing',
-  'projetos', 'financeiro', 'vpgg', 'tutoriais', 'planilhas', 'auditoria'
+  'projetos', 'financeiro', 'vpgg', 'painel_membro', 'tutoriais', 'planilhas', 'auditoria'
 ];
 
 function switchTab(tabId) {
@@ -543,6 +544,8 @@ function switchTab(tabId) {
     carregarEstatutosCompliance();
   } else if (tabId === 'projetos') {
     carregarStagingRMs();
+  } else if (tabId === 'painel_membro') {
+    carregarDadosPainelMembro();
   }
 
   // Fechar sidebar mobile automaticamente ao alternar abas
@@ -7826,7 +7829,731 @@ function escapeHtml(text) {
 }
 
 // ==============================================================================
-// 6. INICIALIZAÇÃO DEFINITIVA DO ECOSSISTEMA
+// 7. SUBSISTEMA DO PAINEL DO MEMBRO: CENTRO DE EXECUÇÃO DO PDI & FÓRUM COLETIVO
+// ==============================================================================
+
+window.CURRENT_PDI_TRAIL_DATA = null;
+window.CURRENT_PDI_FILTER = 'todos';
+window.CURRENT_FORUM_DUVIDAS = [];
+let debounceBuscaForumTimer = null;
+
+function switchPainelMembroSubtab(subtabId) {
+  const pdiContent = document.getElementById('subtab-content-pdi-exec');
+  const forumContent = document.getElementById('subtab-content-forum-duvidas');
+  const btnPdi = document.getElementById('subtab-btn-pdi-exec');
+  const btnForum = document.getElementById('subtab-btn-forum-duvidas');
+
+  if (subtabId === 'pdi-exec') {
+    if (pdiContent) pdiContent.classList.remove('hidden');
+    if (forumContent) forumContent.classList.add('hidden');
+    if (btnPdi) {
+      btnPdi.className = 'px-4 py-2 text-xs font-bold rounded-lg bg-purple-700 text-white shadow-sm flex items-center gap-2 transition cursor-pointer';
+    }
+    if (btnForum) {
+      btnForum.className = 'px-4 py-2 text-xs font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-2 transition cursor-pointer';
+    }
+    if (!window.CURRENT_PDI_TRAIL_DATA) {
+      carregarCentroExecucaoPDI();
+    }
+  } else if (subtabId === 'forum-duvidas') {
+    if (pdiContent) pdiContent.classList.add('hidden');
+    if (forumContent) forumContent.classList.remove('hidden');
+    if (btnPdi) {
+      btnPdi.className = 'px-4 py-2 text-xs font-bold rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 flex items-center gap-2 transition cursor-pointer';
+    }
+    if (btnForum) {
+      btnForum.className = 'px-4 py-2 text-xs font-bold rounded-lg bg-blue-600 text-white shadow-sm flex items-center gap-2 transition cursor-pointer';
+    }
+    carregarFeedDuvidas();
+  }
+}
+
+async function carregarDadosPainelMembro() {
+  await Promise.all([
+    carregarCentroExecucaoPDI('me'),
+    carregarFeedDuvidas()
+  ]);
+}
+
+async function carregarCentroExecucaoPDI(userId = 'me') {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const container = document.getElementById('pdi-exec-cards-container');
+  
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/pdi/trilha/${userId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      if (container) {
+        container.innerHTML = `
+          <div class="col-span-full p-8 bg-rose-50 border border-rose-200 rounded-2xl text-center space-y-2">
+            <i class="fa-solid fa-triangle-exclamation text-rose-500 text-2xl"></i>
+            <h4 class="text-sm font-bold text-rose-900">Não foi possível carregar o Centro de Execução</h4>
+            <p class="text-xs text-rose-700">${escapeHtml(err.detail || 'Erro na requisição')}</p>
+          </div>
+        `;
+      }
+      return;
+    }
+
+    const data = await res.json();
+    window.CURRENT_PDI_TRAIL_DATA = data;
+
+    const user = data.user || {};
+    const trilha = data.trilha || {};
+
+    // 1. Atualizar Identificação do Colaborador
+    const avatarEl = document.getElementById('pdi-exec-avatar');
+    const nomeEl = document.getElementById('pdi-exec-nome');
+    const emailEl = document.getElementById('pdi-exec-email');
+    const badgeAreaEl = document.getElementById('pdi-exec-badge-area');
+    const hashEl = document.getElementById('pdi-exec-hash');
+
+    if (avatarEl) {
+      const initials = (user.nome || 'M').split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+      avatarEl.textContent = initials;
+    }
+    if (nomeEl) nomeEl.textContent = user.nome || 'Colaborador';
+    if (emailEl) emailEl.textContent = user.email || '';
+    if (badgeAreaEl) {
+      badgeAreaEl.textContent = `${user.area || 'VPGG'} • ${user.cargo || user.role || 'Membro'}`;
+    }
+    if (hashEl) {
+      const h = trilha.singularidade_hash || 'N/A';
+      hashEl.textContent = h.length > 20 ? `${h.slice(0, 10)}...${h.slice(-8)}` : h;
+      hashEl.title = `Hash de Singularidade SHA-256: ${h}`;
+    }
+
+    // 2. Atualizar Progresso e Contadores
+    const pct = Number(trilha.progresso_percentual || 0).toFixed(1);
+    const pctEl = document.getElementById('pdi-exec-pct');
+    const progBarEl = document.getElementById('pdi-exec-prog-bar');
+    const pendEl = document.getElementById('pdi-count-pendentes');
+    const andEl = document.getElementById('pdi-count-andamento');
+    const concEl = document.getElementById('pdi-count-concluidos');
+    const badgeSidebar = document.getElementById('nav-badge-pdi-progresso');
+
+    if (pctEl) pctEl.textContent = `${pct}%`;
+    if (progBarEl) progBarEl.style.width = `${pct}%`;
+    if (pendEl) pendEl.textContent = trilha.pendentes ?? 0;
+    if (andEl) andEl.textContent = trilha.em_andamento ?? 0;
+    if (concEl) concEl.textContent = trilha.concluidos ?? 0;
+    if (badgeSidebar) badgeSidebar.textContent = `${pct}%`;
+
+    // 3. Seletor de membros para Liderança / VPGG
+    configurarSeletorMembrosAdmin(user);
+
+    // 4. Renderizar Cards de Micro-Blocos
+    renderBlocosPDI(trilha.blocos || []);
+
+  } catch (err) {
+    console.error("Falha ao carregar trilha do PDI:", err);
+    if (container) {
+      container.innerHTML = `
+        <div class="col-span-full p-8 bg-slate-50 border border-slate-200 rounded-2xl text-center space-y-2">
+          <i class="fa-solid fa-cloud-bolt text-slate-400 text-2xl"></i>
+          <h4 class="text-sm font-bold text-slate-800">Servidor EDbrain Offline</h4>
+          <p class="text-xs text-slate-500">Não foi possível conectar ao backend local.</p>
+        </div>
+      `;
+    }
+  }
+}
+
+function configurarSeletorMembrosAdmin(usuarioVisualizado) {
+  const adminSelector = document.getElementById('pdi-exec-admin-selector');
+  const selectEl = document.getElementById('pdi-exec-member-select');
+  if (!adminSelector || !selectEl) return;
+
+  const role = (currentUserSession?.role || '').toLowerCase();
+  const area = (currentUserSession?.area || '').toLowerCase();
+  const isLeader = ['presidente', 'diretor'].includes(role) || area.includes('vpgg');
+
+  if (!isLeader) {
+    adminSelector.classList.add('hidden');
+    adminSelector.classList.remove('flex');
+    return;
+  }
+
+  adminSelector.classList.remove('hidden');
+  adminSelector.classList.add('flex');
+
+  // Popular membros se ainda não populado
+  if (selectEl.options.length <= 1 && Array.isArray(window.LISTA_MEMBROS_WHITELIST) && window.LISTA_MEMBROS_WHITELIST.length > 0) {
+    selectEl.innerHTML = '<option value="me">Minha Própria Trilha</option>';
+    window.LISTA_MEMBROS_WHITELIST.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.email.toLowerCase();
+      opt.textContent = `${m.nome} (${m.area} - ${m.role})`;
+      selectEl.appendChild(opt);
+    });
+  }
+}
+
+function aoTrocarMembroExecucaoPDI() {
+  const selectEl = document.getElementById('pdi-exec-member-select');
+  const val = selectEl?.value || 'me';
+  carregarCentroExecucaoPDI(val);
+}
+
+function filtrarBlocosPDI(statusFiltro) {
+  window.CURRENT_PDI_FILTER = statusFiltro;
+  
+  const botoes = ['todos', 'pendente', 'em_andamento', 'concluido'];
+  botoes.forEach(b => {
+    const btn = document.getElementById(`filter-btn-pdi-${b}`);
+    if (btn) {
+      if (b === statusFiltro) {
+        btn.className = 'px-2.5 py-1 text-xs font-bold rounded-lg bg-purple-100 text-purple-800 border border-purple-300';
+      } else {
+        btn.className = 'px-2.5 py-1 text-xs font-medium rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200';
+      }
+    }
+  });
+
+  const blocos = window.CURRENT_PDI_TRAIL_DATA?.trilha?.blocos || [];
+  renderBlocosPDI(blocos);
+}
+
+function renderBlocosPDI(blocos) {
+  const container = document.getElementById('pdi-exec-cards-container');
+  if (!container) return;
+
+  const filtro = window.CURRENT_PDI_FILTER || 'todos';
+  const filtrados = filtro === 'todos' ? blocos : blocos.filter(b => b.status === filtro);
+
+  if (filtrados.length === 0) {
+    container.innerHTML = `
+      <div class="col-span-full p-8 bg-slate-50 border border-slate-200/80 rounded-2xl text-center space-y-2">
+        <i class="fa-solid fa-list-check text-slate-400 text-2xl"></i>
+        <h4 class="text-sm font-bold text-slate-700">Nenhum micro-bloco encontrado no filtro atual</h4>
+        <p class="text-xs text-slate-500">Alterne os filtros acima para visualizar os demais entregáveis.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const compLabels = {
+    'lideranca': 'Liderança',
+    'gestao': 'Gestão',
+    'visao_sistemica': 'Visão Sistêmica',
+    'orientacao_resultados': 'Orientação para Resultados',
+    'autoconhecimento': 'Autoconhecimento'
+  };
+
+  container.innerHTML = filtrados.map(b => {
+    const isHard = b.eixo === 'hard_skills';
+    const eixoBadge = isHard
+      ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200"><i class="fa-solid fa-code"></i> Hard</span>'
+      : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200"><i class="fa-solid fa-heart"></i> Soft</span>';
+
+    const stars = '★'.repeat(b.complexity || 1) + '☆'.repeat(Math.max(0, 3 - (b.complexity || 1)));
+
+    // SLA e Dias Restantes
+    let slaBadge = '';
+    if (b.status === 'concluido') {
+      slaBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> Concluído</span>`;
+    } else {
+      const diasRest = b.dias_restantes ?? b.sla_days ?? 30;
+      let corDias = 'bg-slate-100 text-slate-700 border-slate-200';
+      if (diasRest <= 5) corDias = 'bg-rose-100 text-rose-800 border-rose-300 font-bold';
+      else if (diasRest <= 15) corDias = 'bg-amber-100 text-amber-800 border-amber-300 font-bold';
+      else corDias = 'bg-emerald-50 text-emerald-800 border-emerald-200';
+
+      slaBadge = `
+        <span class="px-2 py-0.5 rounded text-[10px] font-mono border ${corDias}">
+          <i class="fa-regular fa-clock mr-1"></i>SLA: D+${b.sla_days}d • ${diasRest >= 0 ? `Faltam ${diasRest}d` : `Atrasado ${Math.abs(diasRest)}d`}
+        </span>
+      `;
+    }
+
+    // Botões de Status
+    const st = b.status || 'pendente';
+    const btnPendenteClass = st === 'pendente'
+      ? 'bg-slate-800 text-white font-bold ring-2 ring-slate-400'
+      : 'bg-slate-100 text-slate-600 hover:bg-slate-200';
+
+    const btnAndamentoClass = st === 'em_andamento'
+      ? 'bg-amber-500 text-white font-bold ring-2 ring-amber-300'
+      : 'bg-slate-100 text-slate-600 hover:bg-amber-50 hover:text-amber-700';
+
+    const btnConcluidoClass = st === 'concluido'
+      ? 'bg-emerald-600 text-white font-bold ring-2 ring-emerald-300'
+      : 'bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700';
+
+    const cardBorder = st === 'concluido'
+      ? 'border-emerald-300 bg-emerald-50/20'
+      : (st === 'em_andamento' ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200 bg-white');
+
+    return `
+      <div id="card-microbloco-${b.id}" class="p-5 rounded-2xl border ${cardBorder} shadow-sm hover:shadow-md transition space-y-3 flex flex-col justify-between">
+        <div class="space-y-2.5">
+          <!-- Cabeçalho do Card -->
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 bg-purple-700 text-white font-mono font-black text-xs rounded shadow-xs">#${escapeHtml(b.microblock_code)}</span>
+              <span class="text-xs font-bold text-slate-900">${escapeHtml(b.title)}</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5">
+              ${eixoBadge}
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200">
+                ${compLabels[b.competency_mej] || b.competency_mej}
+              </span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                <span class="text-amber-500">${stars}</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Descrição -->
+          <p class="text-xs text-slate-700 leading-relaxed">${escapeHtml(b.description)}</p>
+
+          <!-- Formato de Entrega e Critério de Aceite -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
+            <div class="p-2 bg-slate-50 rounded-lg border border-slate-200/80 text-slate-700">
+              <strong class="text-slate-900"><i class="fa-solid fa-file-signature text-blue-600 mr-1"></i> Formato:</strong>
+              <span class="ml-1">${escapeHtml(b.deliverable_format || 'Entregável')}</span>
+            </div>
+            <div class="p-2 bg-slate-50 rounded-lg border border-slate-200/80 text-slate-700">
+              <strong class="text-slate-900"><i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i> Critério:</strong>
+              <span class="ml-1">${escapeHtml(b.evaluation_metric || 'Conformidade SLA')}</span>
+            </div>
+          </div>
+
+          <!-- Racional da IA -->
+          ${b.justificativa_algoritmica ? `
+          <div class="p-2 bg-purple-50/60 border border-purple-200/60 rounded-lg text-[11px] text-purple-950 flex items-start gap-1.5">
+            <i class="fa-solid fa-wand-magic-sparkles text-purple-600 shrink-0 mt-0.5"></i>
+            <span><strong>Racional:</strong> ${escapeHtml(b.justificativa_algoritmica)}</span>
+          </div>
+          ` : ''}
+        </div>
+
+        <!-- Rodapé do Card com SLA e Ações Interativas -->
+        <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            ${slaBadge}
+          </div>
+
+          <div class="flex items-center gap-1.5 text-xs font-semibold">
+            <span class="text-[10px] text-slate-400 font-bold uppercase mr-1">Status:</span>
+            <button type="button" onclick="atualizarStatusMicrobloco(${b.id}, 'pendente')" class="px-2.5 py-1 rounded-md text-[11px] transition cursor-pointer ${btnPendenteClass}" title="Marcar como pendente">
+              Pendente
+            </button>
+            <button type="button" onclick="atualizarStatusMicrobloco(${b.id}, 'em_andamento')" class="px-2.5 py-1 rounded-md text-[11px] transition cursor-pointer ${btnAndamentoClass}" title="Marcar em andamento">
+              <i class="fa-solid fa-play text-[9px] mr-1"></i>Iniciar
+            </button>
+            <button type="button" onclick="atualizarStatusMicrobloco(${b.id}, 'concluido')" class="px-2.5 py-1 rounded-md text-[11px] transition cursor-pointer ${btnConcluidoClass}" title="Concluir entrega">
+              <i class="fa-solid fa-check text-[9px] mr-1"></i>Concluir
+            </button>
+          </div>
+        </div>
+
+      </div>
+    `;
+  }).join('');
+}
+
+async function atualizarStatusMicrobloco(blocoId, novoStatus) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/pdi/micro-bloco/${blocoId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ status: novoStatus })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(`⚠️ ${err.detail || 'Não foi possível atualizar o status.'}`);
+      return;
+    }
+
+    const data = await res.json();
+    const updated = data.micro_bloco;
+    const prog = data.trilha_progresso;
+
+    // Atualizar no estado local
+    if (window.CURRENT_PDI_TRAIL_DATA && window.CURRENT_PDI_TRAIL_DATA.trilha) {
+      const t = window.CURRENT_PDI_TRAIL_DATA.trilha;
+      t.progresso_percentual = prog.progresso_percentual;
+      t.total_blocos = prog.total_blocos;
+      t.concluidos = prog.concluidos;
+      t.em_andamento = prog.em_andamento;
+      t.pendentes = prog.pendentes;
+
+      const idx = (t.blocos || []).findIndex(b => b.id === blocoId);
+      if (idx !== -1) {
+        t.blocos[idx] = { ...t.blocos[idx], ...updated };
+      }
+
+      // Atualizar contadores visuais
+      const pct = Number(prog.progresso_percentual || 0).toFixed(1);
+      const pctEl = document.getElementById('pdi-exec-pct');
+      const progBarEl = document.getElementById('pdi-exec-prog-bar');
+      const pendEl = document.getElementById('pdi-count-pendentes');
+      const andEl = document.getElementById('pdi-count-andamento');
+      const concEl = document.getElementById('pdi-count-concluidos');
+      const badgeSidebar = document.getElementById('nav-badge-pdi-progresso');
+
+      if (pctEl) pctEl.textContent = `${pct}%`;
+      if (progBarEl) progBarEl.style.width = `${pct}%`;
+      if (pendEl) pendEl.textContent = prog.pendentes ?? 0;
+      if (andEl) andEl.textContent = prog.em_andamento ?? 0;
+      if (concEl) concEl.textContent = prog.concluidos ?? 0;
+      if (badgeSidebar) badgeSidebar.textContent = `${pct}%`;
+
+      // Re-renderizar cards de blocos
+      renderBlocosPDI(t.blocos);
+    }
+
+    const statusMsg = novoStatus === 'concluido' ? 'concluído com sucesso! 🎉' : (novoStatus === 'em_andamento' ? 'iniciado!' : 'movido para pendente.');
+    showToast(`✅ Micro-bloco #${updated.microblock_code} ${statusMsg}`);
+
+  } catch (err) {
+    console.error("Falha ao atualizar status do micro-bloco:", err);
+    showToast("⚠️ Servidor offline.");
+  }
+}
+
+// ------------------------------------------------------------------------------
+// FÓRUM COLETIVO DE DÚVIDAS & AJUDA MÚTUA
+// ------------------------------------------------------------------------------
+
+function toggleFormNovaDuvida(force) {
+  const container = document.getElementById('form-nova-duvida-container');
+  if (!container) return;
+  if (typeof force === 'boolean') {
+    if (force) container.classList.remove('hidden');
+    else container.classList.add('hidden');
+  } else {
+    container.classList.toggle('hidden');
+  }
+  if (!container.classList.contains('hidden')) {
+    const inputTitulo = document.getElementById('duvida_titulo');
+    if (inputTitulo) inputTitulo.focus();
+  }
+}
+
+function debounceBuscaForum() {
+  if (debounceBuscaForumTimer) clearTimeout(debounceBuscaForumTimer);
+  debounceBuscaForumTimer = setTimeout(() => {
+    carregarFeedDuvidas();
+  }, 350);
+}
+
+async function carregarFeedDuvidas() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const container = document.getElementById('forum-duvidas-feed-container');
+  const badgeTotal = document.getElementById('badge-total-duvidas');
+
+  const statusVal = document.getElementById('forum-filtro-status')?.value || 'todas';
+  const catVal = document.getElementById('forum-filtro-categoria')?.value || 'todas';
+  const buscaVal = (document.getElementById('forum-busca')?.value || '').trim();
+
+  const params = new URLSearchParams();
+  if (statusVal) params.append('status', statusVal);
+  if (catVal) params.append('category', catVal);
+  if (buscaVal) params.append('search', buscaVal);
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/duvidas?${params.toString()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+
+    if (!res.ok) {
+      if (container) {
+        container.innerHTML = `
+          <div class="p-8 bg-rose-50 border border-rose-200 rounded-2xl text-center">
+            <p class="text-xs font-bold text-rose-800">Falha ao sincronizar o fórum de dúvidas.</p>
+          </div>
+        `;
+      }
+      return;
+    }
+
+    const duvidas = await res.json();
+    window.CURRENT_FORUM_DUVIDAS = duvidas;
+
+    const abertasCount = duvidas.filter(d => d.status === 'aberta').length;
+    if (badgeTotal) badgeTotal.textContent = abertasCount;
+
+    renderFeedDuvidas(duvidas);
+
+  } catch (err) {
+    console.error("Falha ao carregar feed de dúvidas:", err);
+    if (container) {
+      container.innerHTML = `
+        <div class="p-8 bg-slate-50 border border-slate-200 rounded-2xl text-center">
+          <p class="text-xs text-slate-500">Servidor EDbrain offline.</p>
+        </div>
+      `;
+    }
+  }
+}
+
+function renderFeedDuvidas(duvidas) {
+  const container = document.getElementById('forum-duvidas-feed-container');
+  if (!container) return;
+
+  if (duvidas.length === 0) {
+    container.innerHTML = `
+      <div class="p-10 bg-slate-50 border border-slate-200/80 rounded-2xl text-center space-y-2">
+        <i class="fa-regular fa-comments text-slate-400 text-3xl"></i>
+        <h4 class="text-sm font-bold text-slate-700">Nenhuma dúvida relatada com os filtros atuais</h4>
+        <p class="text-xs text-slate-500">Caso encontre algum gargalo em sua rotina, clique em "Relatar Nova Dúvida".</p>
+      </div>
+    `;
+    return;
+  }
+
+  const userEmail = (currentUserSession?.email || '').toLowerCase().trim();
+  const userRole = (currentUserSession?.role || '').toLowerCase().trim();
+  const isLeader = ['presidente', 'diretor', 'gerente'].includes(userRole);
+
+  container.innerHTML = duvidas.map(d => {
+    const isAberta = d.status === 'aberta';
+    const statusBadge = isAberta
+      ? `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1"><i class="fa-solid fa-circle-notch fa-spin text-[8px]"></i> Aberta</span>`
+      : `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1"><i class="fa-solid fa-circle-check"></i> Resolvida</span>`;
+
+    const canResolve = isLeader || (userEmail === (d.author_email || '').toLowerCase().trim());
+    const respostas = d.respostas || [];
+    const totalResp = respostas.length;
+
+    // Respostas em thread
+    const respostasHtml = respostas.map(r => `
+      <div class="p-3 bg-white rounded-xl border border-slate-200/80 space-y-1.5 shadow-xs">
+        <div class="flex items-center justify-between text-[11px]">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-slate-800">${escapeHtml(r.author_name)}</span>
+            <span class="px-2 py-0.2 rounded-full text-[9px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+              ${escapeHtml(r.author_area || 'Cross-Setorial')} • ${escapeHtml(r.author_role || 'Membro')}
+            </span>
+          </div>
+          <span class="text-[10px] text-slate-400 font-mono">${(r.created_at || '').slice(0, 16)}</span>
+        </div>
+        <p class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">${escapeHtml(r.content)}</p>
+      </div>
+    `).join('');
+
+    return `
+      <div class="glass-card rounded-2xl p-5 border border-slate-200/90 shadow-sm space-y-4 bg-white hover:border-slate-300 transition">
+        
+        <!-- Cabeçalho da Dúvida -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-100 pb-3">
+          <div class="space-y-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="px-2.5 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-bold rounded-md border border-blue-200">
+                ${escapeHtml(d.category || 'Geral')}
+              </span>
+              ${statusBadge}
+              <span class="text-xs text-slate-400 font-mono">#D-${d.id}</span>
+            </div>
+            <h4 class="text-sm font-black text-slate-900 leading-snug">${escapeHtml(d.title)}</h4>
+          </div>
+
+          <div class="flex items-center gap-2 self-start sm:self-center">
+            ${canResolve ? `
+            <button type="button" onclick="alternarStatusDuvida(${d.id}, '${isAberta ? 'resolvida' : 'aberta'}')" class="text-xs px-3 py-1.5 rounded-lg border font-bold transition flex items-center gap-1.5 cursor-pointer ${isAberta ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}">
+              <i class="fa-solid ${isAberta ? 'fa-check-double text-emerald-600' : 'fa-rotate-left text-slate-500'}"></i>
+              <span>${isAberta ? 'Marcar Resolvida' : 'Reabrir Dúvida'}</span>
+            </button>
+            ` : ''}
+          </div>
+        </div>
+
+        <!-- Descrição do Entrave -->
+        <p class="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap bg-slate-50/60 p-3.5 rounded-xl border border-slate-100">${escapeHtml(d.description)}</p>
+
+        <!-- Informações do Autor e Contador de Respostas -->
+        <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 pt-1">
+          <div class="flex items-center gap-2">
+            <span class="font-semibold text-slate-700">Relatado por:</span>
+            <span class="text-slate-900 font-bold">${escapeHtml(d.author_name)}</span>
+            <span class="text-slate-400">(${escapeHtml(d.author_area || 'Cross-Setorial')})</span>
+            <span class="text-slate-400 font-mono">• ${(d.created_at || '').slice(0, 16)}</span>
+          </div>
+
+          <button type="button" onclick="toggleThreadDuvida(${d.id})" class="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1.5 cursor-pointer">
+            <i class="fa-regular fa-comment-dots"></i>
+            <span>${totalResp} ${totalResp === 1 ? 'resposta' : 'respostas'}</span>
+            <i id="chevron-thread-${d.id}" class="fa-solid fa-chevron-down text-[10px] transition-transform"></i>
+          </button>
+        </div>
+
+        <!-- Seção de Thread de Respostas (Colapsável) -->
+        <div id="thread-duvida-${d.id}" class="hidden pt-3 border-t border-slate-100 space-y-3 bg-slate-50/50 -mx-5 -mb-5 p-5 rounded-b-2xl">
+          
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <i class="fa-solid fa-comments text-blue-600"></i> Respostas e Orientações (${totalResp})
+            </span>
+          </div>
+
+          <!-- Lista de Respostas -->
+          <div class="space-y-2.5">
+            ${respostasHtml || '<p class="text-xs text-slate-400 italic">Nenhuma orientação postada ainda. Seja o primeiro a ajudar!</p>'}
+          </div>
+
+          <!-- Formulário de Resposta Rápida -->
+          <div class="pt-2">
+            <div class="flex items-center gap-2">
+              <input type="text" id="input-resp-${d.id}" placeholder="Escreva uma orientação, diretriz ou solução..." class="w-full text-xs p-2 rounded-lg border border-slate-300 focus:ring-1 focus:ring-blue-500 bg-white" onkeydown="if(event.key === 'Enter'){ submeterRespostaDuvida(${d.id}); }">
+              <button type="button" onclick="submeterRespostaDuvida(${d.id})" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg shadow-sm flex items-center gap-1.5 transition shrink-0 cursor-pointer">
+                <i class="fa-solid fa-reply"></i>
+                <span>Enviar</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleThreadDuvida(duvidaId) {
+  const thread = document.getElementById(`thread-duvida-${duvidaId}`);
+  const chevron = document.getElementById(`chevron-thread-${duvidaId}`);
+  if (!thread) return;
+  thread.classList.toggle('hidden');
+  if (chevron) {
+    if (thread.classList.contains('hidden')) {
+      chevron.className = 'fa-solid fa-chevron-down text-[10px] transition-transform';
+    } else {
+      chevron.className = 'fa-solid fa-chevron-up text-[10px] transition-transform';
+    }
+  }
+}
+
+async function submeterNovaDuvida(event) {
+  event.preventDefault();
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const titulo = document.getElementById('duvida_titulo')?.value || '';
+  const categoria = document.getElementById('duvida_categoria')?.value || 'Geral';
+  const descricao = document.getElementById('duvida_descricao')?.value || '';
+
+  const btn = document.getElementById('btn-submit-duvida');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Publicando...';
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/duvidas`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        title: titulo,
+        category: categoria,
+        description: descricao
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(`⚠️ ${err.detail || 'Falha ao registrar dúvida.'}`);
+      return;
+    }
+
+    // Limpar e fechar form
+    document.getElementById('duvida_titulo').value = '';
+    document.getElementById('duvida_descricao').value = '';
+    toggleFormNovaDuvida(false);
+
+    showToast("🚀 Dúvida publicada com sucesso no feed coletivo!");
+    carregarFeedDuvidas();
+
+  } catch (err) {
+    console.error("Falha ao registrar dúvida:", err);
+    showToast("⚠️ Servidor offline.");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> <span>Publicar no Fórum</span>';
+    }
+  }
+}
+
+async function submeterRespostaDuvida(duvidaId) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const inputEl = document.getElementById(`input-resp-${duvidaId}`);
+  const content = (inputEl?.value || '').trim();
+
+  if (!content) {
+    showToast("⚠️ Digite uma mensagem para responder.");
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/duvidas/${duvidaId}/respostas`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ content })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(`⚠️ ${err.detail || 'Falha ao registrar resposta.'}`);
+      return;
+    }
+
+    if (inputEl) inputEl.value = '';
+    showToast("💬 Resposta enviada com sucesso!");
+    await carregarFeedDuvidas();
+    
+    // Manter thread aberta
+    const thread = document.getElementById(`thread-duvida-${duvidaId}`);
+    if (thread) thread.classList.remove('hidden');
+
+  } catch (err) {
+    console.error("Falha ao responder dúvida:", err);
+    showToast("⚠️ Servidor offline.");
+  }
+}
+
+async function alternarStatusDuvida(duvidaId, novoStatus) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/duvidas/${duvidaId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ status: novoStatus })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(`⚠️ ${err.detail || 'Não foi possível alterar status da dúvida.'}`);
+      return;
+    }
+
+    showToast(`✅ Dúvida marcada como ${novoStatus === 'resolvida' ? 'resolvida' : 'aberta'}!`);
+    carregarFeedDuvidas();
+
+  } catch (err) {
+    console.error("Falha ao atualizar status da dúvida:", err);
+    showToast("⚠️ Servidor offline.");
+  }
+}
+
+// ==============================================================================
+// 8. INICIALIZAÇÃO DEFINITIVA DO ECOSSISTEMA
 // ==============================================================================
 function initApp() {
   initAuth();

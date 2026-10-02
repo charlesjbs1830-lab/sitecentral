@@ -11,7 +11,7 @@ import unicodedata
 import bcrypt
 import math
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Optional, List, Dict, Union, Tuple
 
 try:
@@ -241,6 +241,63 @@ class UserORM(Base):
     setor = Column(String(100), nullable=True)
     cargo = Column(String(100), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+
+class MemberPDIBlockORM(Base):
+    __tablename__ = "member_pdi_blocks"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, default="edv_jr")
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_email = Column(String(150), nullable=False, index=True)
+    pdi_id = Column(Integer, nullable=True)
+    microblock_code = Column(String(50), nullable=False)
+    title = Column(String(200), nullable=False)
+    competency_mej = Column(String(50), nullable=False)
+    eixo = Column(String(50), nullable=False)
+    area = Column(String(100), nullable=False)
+    complexity = Column(Integer, default=1)
+    description = Column(Text, nullable=False)
+    deliverable_format = Column(String(100), nullable=True)
+    evaluation_metric = Column(Text, nullable=True)
+    sla_days = Column(Integer, default=30)
+    deadline_date = Column(String(50), nullable=True)
+    status = Column(String(50), nullable=False, default="pendente")  # pendente, em_andamento, concluido
+    justificativa_algoritmica = Column(Text, nullable=True)
+    singularidade_hash = Column(String(64), nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+class ForumDuvidaORM(Base):
+    __tablename__ = "forum_duvidas"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, default="edv_jr")
+    author_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    author_email = Column(String(150), nullable=False)
+    author_name = Column(String(150), nullable=False)
+    author_area = Column(String(100), nullable=False)
+    author_role = Column(String(50), nullable=False)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    category = Column(String(100), nullable=False, default="Geral")
+    status = Column(String(50), nullable=False, default="aberta")  # aberta, em_andamento, resolvida
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    respostas = relationship("ForumRespostaORM", back_populates="duvida", cascade="all, delete-orphan")
+
+class ForumRespostaORM(Base):
+    __tablename__ = "forum_respostas"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, default="edv_jr")
+    duvida_id = Column(Integer, ForeignKey("forum_duvidas.id"), nullable=False, index=True)
+    author_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    author_email = Column(String(150), nullable=False)
+    author_name = Column(String(150), nullable=False)
+    author_area = Column(String(100), nullable=False)
+    author_role = Column(String(50), nullable=False)
+    content = Column(Text, nullable=False)
+    is_solution = Column(Integer, default=0)
+    created_at = Column(DateTime, server_default=func.now())
+    duvida = relationship("ForumDuvidaORM", back_populates="respostas")
 
 
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
@@ -1249,6 +1306,76 @@ def init_db():
             0
         );
         """)
+
+    # 19. Tabela de Execução Individual de Micro-Blocos de PDI (Painel do Membro)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS member_pdi_blocks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        user_email TEXT NOT NULL,
+        pdi_id INTEGER,
+        microblock_code TEXT NOT NULL,
+        title TEXT NOT NULL,
+        competency_mej TEXT NOT NULL,
+        eixo TEXT NOT NULL,
+        area TEXT NOT NULL,
+        complexity INTEGER NOT NULL DEFAULT 1,
+        description TEXT NOT NULL,
+        deliverable_format TEXT,
+        evaluation_metric TEXT,
+        sla_days INTEGER NOT NULL DEFAULT 30,
+        deadline_date TEXT,
+        status TEXT NOT NULL DEFAULT 'pendente' CHECK(status IN ('pendente', 'em_andamento', 'concluido')),
+        justificativa_algoritmica TEXT,
+        singularidade_hash TEXT,
+        completed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_member_pdi_user_id ON member_pdi_blocks(user_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_member_pdi_email ON member_pdi_blocks(user_email);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_member_pdi_status ON member_pdi_blocks(status);")
+
+    # 20. Tabelas da Caixa de Dúvidas e Ajuda Coletiva (Fórum Colaborativo)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS forum_duvidas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        author_id INTEGER REFERENCES users(id),
+        author_email TEXT NOT NULL,
+        author_name TEXT NOT NULL,
+        author_area TEXT NOT NULL,
+        author_role TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'Geral',
+        status TEXT NOT NULL DEFAULT 'aberta' CHECK(status IN ('aberta', 'em_andamento', 'resolvida')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_forum_duvidas_status ON forum_duvidas(status);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_forum_duvidas_category ON forum_duvidas(category);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_forum_duvidas_created ON forum_duvidas(created_at);")
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS forum_respostas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        duvida_id INTEGER NOT NULL REFERENCES forum_duvidas(id) ON DELETE CASCADE,
+        author_id INTEGER REFERENCES users(id),
+        author_email TEXT NOT NULL,
+        author_name TEXT NOT NULL,
+        author_area TEXT NOT NULL,
+        author_role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        is_solution INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_forum_respostas_duvida ON forum_respostas(duvida_id);")
 
     ensure_learning_microblocks(conn)
     conn.commit()
@@ -3785,6 +3912,334 @@ def reject_rm_staging_record(staging_id: int, reviewer_email: str, reviewer_role
         pass
         
     return get_rm_staging_record_by_id(staging_id)
+
+# ==============================================================================
+# 19. SUBSISTEMA DE EXECUÇÃO INDIVIDUAL DO PDI & FÓRUM COLABORATIVO DE DÚVIDAS
+# ==============================================================================
+
+def get_user_by_id_or_email(user_identifier: Union[int, str]) -> Optional[Dict[str, Any]]:
+    """Busca usuário de forma flexível por ID numérico ou endereço de e-mail institucional."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    user = None
+    ident_str = str(user_identifier).strip()
+    if ident_str.isdigit():
+        cursor.execute("SELECT * FROM users WHERE id = ?;", (int(ident_str),))
+        row = cursor.fetchone()
+        if row:
+            user = dict(row)
+    if not user:
+        cursor.execute("SELECT * FROM users WHERE LOWER(email) = ?;", (ident_str.lower(),))
+        row = cursor.fetchone()
+        if row:
+            user = dict(row)
+    conn.close()
+    return user
+
+
+def get_or_create_member_pdi_trail(user_identifier: Union[int, str], current_user: Optional[dict] = None) -> Optional[Dict[str, Any]]:
+    """
+    Retorna a trilha de micro-blocos atribuída ao colaborador com acompanhamento de SLA e status.
+    Se o colaborador ainda não possuir blocos gravados, aciona a montagem algorítmica e persiste.
+    """
+    target_user = None
+    if str(user_identifier).lower() == "me" and current_user:
+        target_user = current_user
+    else:
+        target_user = get_user_by_id_or_email(user_identifier)
+        
+    if not target_user:
+        return None
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM member_pdi_blocks WHERE user_id = ? ORDER BY id ASC;", (target_user["id"],))
+    rows = cursor.fetchall()
+
+    if not rows:
+        # Geração autônoma e calibrada da primeira trilha
+        try:
+            try:
+                from semantic_nlp import montar_trilha_algoritmica
+            except ImportError:
+                from backend.semantic_nlp import montar_trilha_algoritmica
+            triang = {}
+            try:
+                triang = calculate_triangulation(target_user["email"])
+            except Exception:
+                triang = {}
+            trilha_data = montar_trilha_algoritmica(member=target_user, triangulacao=triang)
+            sig_hash = trilha_data.get("singularidade_hash", "")
+            
+            for b in trilha_data.get("micro_blocos_selecionados", []):
+                sla = int(b.get("suggested_deadline_days") or 30)
+                deadline = (datetime.now() + timedelta(days=sla)).strftime("%Y-%m-%d")
+                cursor.execute("""
+                INSERT INTO member_pdi_blocks (
+                    tenant_id, user_id, user_email, microblock_code, title, competency_mej,
+                    eixo, area, complexity, description, deliverable_format, evaluation_metric,
+                    sla_days, deadline_date, status, justificativa_algoritmica, singularidade_hash
+                ) VALUES ('edv_jr', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendente', ?, ?);
+                """, (
+                    target_user["id"],
+                    target_user["email"].lower().strip(),
+                    b.get("code", "MB-GER-00"),
+                    b.get("title", "Micro-bloco Operacional"),
+                    b.get("competency_mej", "gestao"),
+                    b.get("eixo", "hard_skills"),
+                    b.get("area", target_user.get("area", "VPGG")),
+                    int(b.get("complexity") or 1),
+                    b.get("description", ""),
+                    b.get("deliverable_format", "Entregável"),
+                    b.get("evaluation_metric", "Aprovação formal pela liderança"),
+                    sla,
+                    deadline,
+                    b.get("justificativa_algoritmica", "Alinhamento com competências Brasil Júnior"),
+                    sig_hash
+                ))
+            conn.commit()
+            cursor.execute("SELECT * FROM member_pdi_blocks WHERE user_id = ? ORDER BY id ASC;", (target_user["id"],))
+            rows = cursor.fetchall()
+        except Exception as err:
+            print(f"[PDI Trail] Erro ao semear blocos para {target_user['email']}: {err}")
+
+    blocks = []
+    today = datetime.now().date()
+    for r in rows:
+        b_dict = dict(r)
+        dias_rest = b_dict.get("sla_days", 30)
+        d_str = b_dict.get("deadline_date")
+        if d_str:
+            try:
+                d_obj = datetime.strptime(d_str, "%Y-%m-%d").date()
+                dias_rest = (d_obj - today).days if b_dict.get("status") != "concluido" else 0
+            except Exception:
+                dias_rest = b_dict.get("sla_days", 30)
+        elif b_dict.get("status") == "concluido":
+            dias_rest = 0
+            
+        b_dict["dias_restantes"] = dias_rest
+        blocks.append(b_dict)
+
+    conn.close()
+
+    total = len(blocks)
+    concluidos = sum(1 for b in blocks if b["status"] == "concluido")
+    em_andamento = sum(1 for b in blocks if b["status"] == "em_andamento")
+    pendentes = sum(1 for b in blocks if b["status"] == "pendente")
+    progresso_pct = round((concluidos / total * 100), 1) if total > 0 else 0.0
+    sig_hash = blocks[0]["singularidade_hash"] if blocks else ""
+
+    return {
+        "user": {
+            "id": target_user["id"],
+            "nome": target_user["nome"],
+            "email": target_user["email"],
+            "area": target_user["area"],
+            "role": target_user["role"],
+            "cargo": target_user.get("cargo", "")
+        },
+        "trilha": {
+            "singularidade_hash": sig_hash,
+            "progresso_percentual": progresso_pct,
+            "total_blocos": total,
+            "concluidos": concluidos,
+            "em_andamento": em_andamento,
+            "pendentes": pendentes,
+            "blocos": blocks
+        }
+    }
+
+
+def update_microblock_status(bloco_id: int, new_status: str, current_user: dict) -> Dict[str, Any]:
+    """
+    Atualiza o status operacional do micro-bloco e recalcula o progresso percentual da trilha.
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM member_pdi_blocks WHERE id = ?;", (bloco_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise ValueError(f"Micro-bloco ID #{bloco_id} não encontrado.")
+        
+    block = dict(row)
+    c_email = current_user["email"].lower().strip()
+    c_role = current_user.get("role", "assessor").lower()
+    c_area = current_user.get("area", "").lower()
+    
+    is_owner = (c_email == block["user_email"].lower().strip())
+    is_leader = (c_role in ["presidente", "diretor"] or "vpgg" in c_area)
+    if not is_owner and not is_leader:
+        conn.close()
+        raise PermissionError("Você não possui permissão para modificar o status deste micro-bloco.")
+        
+    st_clean = new_status.lower().strip()
+    if st_clean not in ["pendente", "em_andamento", "concluido"]:
+        conn.close()
+        raise ValueError(f"Status '{new_status}' inválido. Permitidos: pendente, em_andamento, concluido.")
+        
+    completed_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S") if st_clean == "concluido" else None
+    
+    cursor.execute("""
+    UPDATE member_pdi_blocks
+    SET status = ?, completed_at = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?;
+    """, (st_clean, completed_at, bloco_id))
+    conn.commit()
+    
+    # Recalcular avanço percentual da trilha do usuário
+    cursor.execute("SELECT * FROM member_pdi_blocks WHERE user_id = ? ORDER BY id ASC;", (block["user_id"],))
+    user_blocks = [dict(b) for b in cursor.fetchall()]
+    total = len(user_blocks)
+    concluidos = sum(1 for b in user_blocks if b["status"] == "concluido")
+    em_andamento = sum(1 for b in user_blocks if b["status"] == "em_andamento")
+    pendentes = sum(1 for b in user_blocks if b["status"] == "pendente")
+    progresso_pct = round((concluidos / total * 100), 1) if total > 0 else 0.0
+
+    cursor.execute("SELECT * FROM member_pdi_blocks WHERE id = ?;", (bloco_id,))
+    updated_block = dict(cursor.fetchone())
+    conn.close()
+    
+    return {
+        "status": "success",
+        "micro_bloco": updated_block,
+        "trilha_progresso": {
+            "total_blocos": total,
+            "concluidos": concluidos,
+            "em_andamento": em_andamento,
+            "pendentes": pendentes,
+            "progresso_percentual": progresso_pct
+        }
+    }
+
+
+def create_forum_duvida(author: dict, title: str, description: str, category: str = "Geral") -> Dict[str, Any]:
+    """Registra uma nova dúvida pública no Fórum Colaborativo."""
+    if not title or not title.strip():
+        raise ValueError("O título da dúvida não pode ser vazio.")
+    if not description or not description.strip():
+        raise ValueError("A descrição da dúvida não pode ser vazia.")
+        
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    INSERT INTO forum_duvidas (
+        tenant_id, author_id, author_email, author_name, author_area, author_role,
+        title, description, category, status
+    ) VALUES ('edv_jr', ?, ?, ?, ?, ?, ?, ?, ?, 'aberta');
+    """, (
+        author.get("id"),
+        author["email"].lower().strip(),
+        author.get("nome", "Membro"),
+        author.get("area", "Cross-Setorial"),
+        author.get("role", "assessor"),
+        title.strip(),
+        description.strip(),
+        (category or "Geral").strip()
+    ))
+    duvida_id = cursor.lastrowid
+    conn.commit()
+    cursor.execute("SELECT * FROM forum_duvidas WHERE id = ?;", (duvida_id,))
+    created = dict(cursor.fetchone())
+    conn.close()
+    created["total_respostas"] = 0
+    created["respostas"] = []
+    return created
+
+
+def list_forum_duvidas(status_filter: Optional[str] = None, category_filter: Optional[str] = None, search: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Retorna o feed público de dúvidas com dados dos autores e respectivas respostas em thread."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    query = "SELECT * FROM forum_duvidas WHERE 1=1"
+    params = []
+    
+    if status_filter and status_filter.lower() != "todas":
+        query += " AND status = ?"
+        params.append(status_filter.lower().strip())
+    if category_filter and category_filter.lower() != "todas":
+        query += " AND LOWER(category) = ?"
+        params.append(category_filter.lower().strip())
+    if search and search.strip():
+        query += " AND (title LIKE ? OR description LIKE ?)"
+        s_term = f"%{search.strip()}%"
+        params.extend([s_term, s_term])
+        
+    query += " ORDER BY id DESC;"
+    cursor.execute(query, tuple(params))
+    duvidas = [dict(r) for r in cursor.fetchall()]
+    
+    for d in duvidas:
+        cursor.execute("SELECT * FROM forum_respostas WHERE duvida_id = ? ORDER BY id ASC;", (d["id"],))
+        respostas = [dict(r) for r in cursor.fetchall()]
+        d["total_respostas"] = len(respostas)
+        d["respostas"] = respostas
+        
+    conn.close()
+    return duvidas
+
+
+def add_forum_resposta(duvida_id: int, author: dict, content: str) -> Dict[str, Any]:
+    """Adiciona resposta/comentário/diretriz colaborativa em uma dúvida existente."""
+    if not content or not content.strip():
+        raise ValueError("O conteúdo da resposta não pode ser vazio.")
+        
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM forum_duvidas WHERE id = ?;", (duvida_id,))
+    duvida = cursor.fetchone()
+    if not duvida:
+        conn.close()
+        raise ValueError(f"Dúvida ID #{duvida_id} não encontrada.")
+        
+    cursor.execute("""
+    INSERT INTO forum_respostas (
+        tenant_id, duvida_id, author_id, author_email, author_name, author_area, author_role, content, is_solution
+    ) VALUES ('edv_jr', ?, ?, ?, ?, ?, ?, ?, 0);
+    """, (
+        duvida_id,
+        author.get("id"),
+        author["email"].lower().strip(),
+        author.get("nome", "Membro"),
+        author.get("area", "Cross-Setorial"),
+        author.get("role", "assessor"),
+        content.strip()
+    ))
+    resp_id = cursor.lastrowid
+    cursor.execute("UPDATE forum_duvidas SET updated_at = CURRENT_TIMESTAMP WHERE id = ?;", (duvida_id,))
+    conn.commit()
+    cursor.execute("SELECT * FROM forum_respostas WHERE id = ?;", (resp_id,))
+    res_dict = dict(cursor.fetchone())
+    conn.close()
+    return res_dict
+
+
+def resolve_forum_duvida(duvida_id: int, current_user: dict, new_status: str = "resolvida") -> Dict[str, Any]:
+    """Alterna o status de uma dúvida para resolvida (ou reaberta)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM forum_duvidas WHERE id = ?;", (duvida_id,))
+    duvida = cursor.fetchone()
+    if not duvida:
+        conn.close()
+        raise ValueError(f"Dúvida ID #{duvida_id} não encontrada.")
+        
+    c_email = current_user["email"].lower().strip()
+    c_role = current_user.get("role", "assessor").lower()
+    is_author = (c_email == duvida["author_email"].lower().strip())
+    is_leader = (c_role in ["presidente", "diretor", "gerente"])
+    if not is_author and not is_leader:
+        conn.close()
+        raise PermissionError("Apenas o autor da dúvida ou a liderança possuem permissão para alterar o status.")
+        
+    st_clean = new_status.lower().strip()
+    cursor.execute("UPDATE forum_duvidas SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;", (st_clean, duvida_id))
+    conn.commit()
+    cursor.execute("SELECT * FROM forum_duvidas WHERE id = ?;", (duvida_id,))
+    updated = dict(cursor.fetchone())
+    conn.close()
+    return updated
 
 
 if __name__ == "__main__":

@@ -110,7 +110,13 @@ try:
         list_rm_staging_records,
         get_rm_staging_record_by_id,
         approve_rm_staging_record,
-        reject_rm_staging_record
+        reject_rm_staging_record,
+        get_or_create_member_pdi_trail,
+        update_microblock_status,
+        create_forum_duvida,
+        list_forum_duvidas,
+        add_forum_resposta,
+        resolve_forum_duvida
     )
     from backend.auth import (
         verify_password,
@@ -199,7 +205,13 @@ except ImportError:
         list_rm_staging_records,
         get_rm_staging_record_by_id,
         approve_rm_staging_record,
-        reject_rm_staging_record
+        reject_rm_staging_record,
+        get_or_create_member_pdi_trail,
+        update_microblock_status,
+        create_forum_duvida,
+        list_forum_duvidas,
+        add_forum_resposta,
+        resolve_forum_duvida
     )
     from auth import (
         verify_password,
@@ -386,6 +398,20 @@ class PDIGenerateRequest(BaseModel):
     member_email: str = Field(..., description="E-mail corporativo do membro para geração da trilha")
     foco_adicional: Optional[str] = Field(None, description="Foco customizado opcional (ex: liderança, oratória, vendas)")
     sanitization_mode: Optional[str] = Field("adaptive", description="Modo de saneamento: 'adaptive' (IA inteligente) ou 'restrictive' (governança rígida)")
+
+class MicroblockStatusUpdate(BaseModel):
+    status: str = Field(..., description="Novo status: pendente, em_andamento ou concluido")
+
+class DuvidaCreate(BaseModel):
+    title: str = Field(..., min_length=3, description="Título da dúvida ou ocorrência")
+    description: str = Field(..., min_length=5, description="Descrição detalhada do problema")
+    category: Optional[str] = Field("Geral", description="Categoria corporativa")
+
+class RespostaCreate(BaseModel):
+    content: str = Field(..., min_length=2, description="Conteúdo da resposta colaborativa")
+
+class DuvidaStatusUpdate(BaseModel):
+    status: str = Field(..., description="Novo status da dúvida (aberta ou resolvida)")
 
 class Evaluation360Create(BaseModel):
     evaluatee_email: str = Field(..., description="E-mail institucional do colaborador avaliado")
@@ -1913,6 +1939,166 @@ async def list_benchmarks_endpoint(
     current_user: dict = Depends(verify_vpgg_access)
 ):
     return list_historical_benchmarks(role_target)
+
+# ==============================================================================
+# 5.1 PAINEL DO MEMBRO (CENTRO DE EXECUÇÃO DO PDI) & FÓRUM DE DÚVIDAS
+# ==============================================================================
+
+@app.get(
+    "/api/pdi/trilha/{user_id}",
+    summary="Obter trilha individual de micro-blocos de PDI do colaborador com SLAs e hash SHA-256"
+)
+@app.get(
+    "/vpgg/pdi/trilha/{user_id}",
+    include_in_schema=False
+)
+async def get_member_pdi_trail_endpoint(
+    user_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Retorna a estrutura JSON contendo os micro-blocos atômicos atribuídos, seus respectivos
+    eixos da Brasil Júnior, prazos calculados de SLA, dias restantes, status e o hash SHA-256 de integridade.
+    """
+    trail_data = get_or_create_member_pdi_trail(user_id, current_user)
+    if not trail_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Colaborador '{user_id}' não encontrado no sistema."
+        )
+    
+    # Controle de Acesso: O próprio usuário pode ver sua trilha; VPGG, Presidência e Diretores podem ver qualquer trilha
+    c_email = current_user["email"].lower().strip()
+    c_role = current_user.get("role", "assessor").lower()
+    c_area = current_user.get("area", "").lower()
+    is_owner = (c_email == trail_data["user"]["email"].lower().strip())
+    is_leader = (c_role in ["presidente", "diretor"] or "vpgg" in c_area)
+    if not is_owner and not is_leader:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso não autorizado para visualizar a trilha deste colaborador."
+        )
+
+    return {
+        "status": "success",
+        **trail_data
+    }
+
+
+@app.patch(
+    "/api/pdi/micro-bloco/{bloco_id}",
+    summary="Atualizar status operacional do micro-bloco de PDI e recalcular progresso"
+)
+@app.patch(
+    "/vpgg/pdi/micro-bloco/{bloco_id}",
+    include_in_schema=False
+)
+async def update_microblock_status_endpoint(
+    bloco_id: int,
+    payload: MicroblockStatusUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Modifica o status de execução do item (pendente, em_andamento, concluido)
+    e recalcula o ponteiro de avanço percentual da trilha do colaborador.
+    """
+    try:
+        res = update_microblock_status(bloco_id, payload.status, current_user)
+        return res
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except PermissionError as pe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
+
+
+# Fórum Colaborativo de Dúvidas
+
+@app.post(
+    "/api/duvidas",
+    status_code=status.HTTP_201_CREATED,
+    summary="Registrar nova dúvida ou dificuldade no Fórum Colaborativo"
+)
+async def create_duvida_endpoint(
+    payload: DuvidaCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        created = create_forum_duvida(
+            author=current_user,
+            title=payload.title,
+            description=payload.description,
+            category=payload.category or "Geral"
+        )
+        return {
+            "status": "success",
+            "duvida": created
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+
+
+@app.get(
+    "/api/duvidas",
+    summary="Listar feed público de ocorrências e dúvidas com interações/respostas"
+)
+async def list_duvidas_endpoint(
+    status: Optional[str] = Query(None, description="Filtrar por status: aberta, resolvida, todas"),
+    category: Optional[str] = Query(None, description="Filtrar por categoria"),
+    search: Optional[str] = Query(None, description="Busca textual por título ou descrição"),
+    current_user: dict = Depends(get_current_user)
+):
+    duvidas = list_forum_duvidas(status_filter=status, category_filter=category, search=search)
+    return duvidas
+
+
+@app.post(
+    "/api/duvidas/{duvida_id}/respostas",
+    status_code=status.HTTP_201_CREATED,
+    summary="Adicionar comentário, solução ou diretriz para auxiliar o colega"
+)
+async def add_resposta_endpoint(
+    duvida_id: int,
+    payload: RespostaCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        resp = add_forum_resposta(
+            duvida_id=duvida_id,
+            author=current_user,
+            content=payload.content
+        )
+        return {
+            "status": "success",
+            "resposta": resp
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND if "não encontrada" in str(ve) else status.HTTP_400_BAD_REQUEST, detail=str(ve))
+
+
+@app.patch(
+    "/api/duvidas/{duvida_id}/status",
+    summary="Alternar status da dúvida (aberta / resolvida)"
+)
+async def update_duvida_status_endpoint(
+    duvida_id: int,
+    payload: DuvidaStatusUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        updated = resolve_forum_duvida(
+            duvida_id=duvida_id,
+            current_user=current_user,
+            new_status=payload.status
+        )
+        return {
+            "status": "success",
+            "duvida": updated
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ve))
+    except PermissionError as pe:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
+
 
 # ==============================================================================
 # 6. MÓDULO DE INTELIGÊNCIA COMERCIAL, ENRIQUECIMENTO BRASILAPI & RADAR (EDbrain)
