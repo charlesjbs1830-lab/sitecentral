@@ -551,7 +551,10 @@
           
           <!-- Sub-Abas do Módulo Presidência -->
           <div class="flex border-b border-slate-200 gap-4 text-xs font-bold overflow-x-auto">
-            <button onclick="switchPresidenciaSubtab('seloej')" id="subtab-pres-seloej" class="pb-3 subtab-active flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+            <button onclick="switchPresidenciaSubtab('bi')" id="subtab-pres-bi" class="pb-3 subtab-active flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-chart-line text-indigo-600"></i> Dashboard Executivo (BI Consolidado)
+            </button>
+            <button onclick="switchPresidenciaSubtab('seloej')" id="subtab-pres-seloej" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
               <i class="fa-solid fa-award text-amber-500"></i> Selo EJ Brasil Júnior (Oficial)
             </button>
             <button onclick="switchPresidenciaSubtab('estatutos')" id="subtab-pres-estatutos" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
@@ -560,8 +563,299 @@
             </button>
           </div>
 
+          <!-- SUB-ABA 0: DASHBOARD EXECUTIVO (BI CONSOLIDADO) -->
+          <div id="pres-sub-bi" class="space-y-6">
+            <!-- Header Banner do BI Executivo -->
+            <div class="glass-card rounded-xl p-5 border-t-4 border-indigo-700 bg-gradient-to-r from-indigo-50/50 via-white to-blue-50/30">
+              <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div>
+                  <div class="flex items-center gap-2 mb-1 flex-wrap">
+                    <span class="text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded">BI Executivo 360°</span>
+                    <span class="text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-800 px-2 py-0.5 rounded">Presidência & Diretorias</span>
+                    <span class="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">Tempo Real</span>
+                  </div>
+                  <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                    <span>📊 Panorama Estratégico Consolidado</span>
+                  </h3>
+                  <p class="text-xs text-slate-500 mt-0.5">Indicadores macro integrados de Saúde Financeira, Pipeline Comercial, Matriz de Competências (PDI) e Eficiência Operacional.</p>
+                </div>
+                <div class="flex items-center gap-3 flex-wrap">
+                  <div id="bi-badge-status-geral" class="px-3 py-1.5 rounded-lg border border-slate-200 bg-white shadow-2xs text-xs font-bold text-slate-700 flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Saúde: <strong class="text-emerald-700 font-mono">92/100</strong> (Saudável)</span>
+                  </div>
+                  <button onclick="carregarDashboardExecutivoBI()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-arrows-rotate"></i> Atualizar BI
+                  </button>
+                </div>
+              </div>
+              <div class="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                <span>Base unificada sob governança da Lei Federal nº 13.267/2016</span>
+                <span id="bi-last-updated">Última atualização: Carregando...</span>
+              </div>
+            </div>
+
+            <!-- SEÇÃO DE ALERTAS DE ATENÇÃO & GARGALOS OPERACIONAIS -->
+            <div id="alertas-executivos-section" class="glass-card rounded-xl p-5 border-l-4 border-amber-500 bg-amber-50/20">
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                  <i class="fa-solid fa-triangle-exclamation text-amber-500 text-base"></i>
+                  <h4 class="text-sm font-bold text-slate-800">Alertas de Atenção & Gargalos Críticos</h4>
+                </div>
+                <span id="bi-alertas-count" class="text-[11px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full font-mono">0 alertas</span>
+              </div>
+              <div id="alertas-executivos-container" class="space-y-2.5">
+                <div class="text-xs text-slate-500 italic py-2 text-center">Nenhum gargalo crítico identificado no momento. Todos os quadrantes operam dentro dos parâmetros de conformidade.</div>
+              </div>
+            </div>
+
+            <!-- QUADRANTES ESTRATÉGICOS (GRID 2x2 OU 4 CARDS) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+              
+              <!-- QUADRANTE 1: FINANCEIRO & CAIXA -->
+              <div class="glass-card rounded-xl p-5 border-t-4 border-emerald-600 flex flex-col justify-between shadow-xs">
+                <div>
+                  <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                    <div class="flex items-center gap-2">
+                      <span class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-sm">
+                        <i class="fa-solid fa-vault"></i>
+                      </span>
+                      <div>
+                        <div class="text-xs font-bold text-slate-800">Saúde Financeira</div>
+                        <div class="text-[10px] text-slate-400 font-mono">Fluxo de Caixa 2.0</div>
+                      </div>
+                    </div>
+                    <span class="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded">Liquidez</span>
+                  </div>
+
+                  <div class="space-y-3">
+                    <div>
+                      <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Saldo Bruto em Caixa</span>
+                      <div id="bi-fin-saldo" class="text-xl font-bold font-mono text-emerald-700">R$ 0,00</div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-50">
+                      <div>
+                        <span class="text-[10px] text-slate-400">A Receber (Mês)</span>
+                        <div id="bi-fin-receber" class="font-bold font-mono text-blue-600 text-xs">R$ 0,00</div>
+                      </div>
+                      <div>
+                        <span class="text-[10px] text-slate-400">A Pagar (Mês)</span>
+                        <div id="bi-fin-pagar" class="font-bold font-mono text-amber-600 text-xs">R$ 0,00</div>
+                      </div>
+                    </div>
+                    <div class="pt-2 border-t border-slate-50 flex items-center justify-between text-xs">
+                      <span class="text-[11px] text-slate-500">Inadimplência:</span>
+                      <span id="bi-fin-inadimplencia" class="font-mono font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">0,0%</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400 font-mono flex items-center justify-between">
+                      <span>Títulos em Atraso:</span>
+                      <span id="bi-fin-atrasadas-info" class="font-bold text-slate-700">0 faturas</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pt-4 mt-3 border-t border-slate-100">
+                  <button onclick="switchTab('financeiro'); switchFinanceiroSubtab('caixa');" class="w-full py-1.5 text-xs font-semibold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer">
+                    <span>Gerenciar Fluxo de Caixa</span>
+                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- QUADRANTE 2: PERFORMANCE COMERCIAL & RMS -->
+              <div class="glass-card rounded-xl p-5 border-t-4 border-purple-600 flex flex-col justify-between shadow-xs">
+                <div>
+                  <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                    <div class="flex items-center gap-2">
+                      <span class="w-8 h-8 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-sm">
+                        <i class="fa-solid fa-bullseye"></i>
+                      </span>
+                      <div>
+                        <div class="text-xs font-bold text-slate-800">Comercial & RMs</div>
+                        <div class="text-[10px] text-slate-400 font-mono">Funil de Vendas CRM</div>
+                      </div>
+                    </div>
+                    <span class="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded">Tração</span>
+                  </div>
+
+                  <div class="space-y-3">
+                    <div>
+                      <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Volume Pipeline Aberto</span>
+                      <div id="bi-crm-pipeline" class="text-xl font-bold font-mono text-purple-700">R$ 0,00</div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-50">
+                      <div>
+                        <span class="text-[10px] text-slate-400">Em Negociação</span>
+                        <div id="bi-crm-negociacao" class="font-bold font-mono text-indigo-600 text-xs">0 leads</div>
+                      </div>
+                      <div>
+                        <span class="text-[10px] text-slate-400">RMs Ativos</span>
+                        <div id="bi-crm-contratos" class="font-bold font-mono text-emerald-600 text-xs">0 contratos</div>
+                      </div>
+                    </div>
+                    <div class="pt-2 border-t border-slate-50 flex items-center justify-between text-xs">
+                      <span class="text-[11px] text-slate-500">Taxa de Conversão:</span>
+                      <span id="bi-crm-conversao" class="font-mono font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded">0,0%</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400 font-mono flex items-center justify-between">
+                      <span>Volume Fechado:</span>
+                      <span id="bi-crm-fechado" class="font-bold text-slate-700">R$ 0,00</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pt-4 mt-3 border-t border-slate-100">
+                  <button onclick="switchTab('comercial'); switchComercialSubtab('kanban');" class="w-full py-1.5 text-xs font-semibold text-purple-700 hover:text-purple-800 bg-purple-50 hover:bg-purple-100 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer">
+                    <span>Acessar Funil Kanban</span>
+                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- QUADRANTE 3: GESTÃO DE PESSOAS & PDI -->
+              <div class="glass-card rounded-xl p-5 border-t-4 border-blue-600 flex flex-col justify-between shadow-xs">
+                <div>
+                  <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                    <div class="flex items-center gap-2">
+                      <span class="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-sm">
+                        <i class="fa-solid fa-graduation-cap"></i>
+                      </span>
+                      <div>
+                        <div class="text-xs font-bold text-slate-800">Desenvolvimento PDI</div>
+                        <div class="text-[10px] text-slate-400 font-mono">Motor de Competências</div>
+                      </div>
+                    </div>
+                    <span class="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded">Talentos</span>
+                  </div>
+
+                  <div class="space-y-3">
+                    <div>
+                      <div class="flex items-center justify-between">
+                        <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Avanço Médio da Equipe</span>
+                        <span id="bi-pdi-avanco-badge" class="font-mono text-xs font-bold text-blue-700">0,0%</span>
+                      </div>
+                      <div class="w-full bg-slate-100 rounded-full h-2 mt-1.5 overflow-hidden">
+                        <div id="bi-pdi-progressbar" class="bg-blue-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                      </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-50">
+                      <div>
+                        <span class="text-[10px] text-slate-400">Concluídos</span>
+                        <div id="bi-pdi-concluidos" class="font-bold font-mono text-emerald-600 text-xs">0 blocos</div>
+                      </div>
+                      <div>
+                        <span class="text-[10px] text-slate-400">Pendentes</span>
+                        <div id="bi-pdi-pendentes" class="font-bold font-mono text-slate-600 text-xs">0 blocos</div>
+                      </div>
+                    </div>
+                    <div class="pt-2 border-t border-slate-50 flex items-center justify-between text-xs">
+                      <span class="text-[11px] text-slate-500">Prazos Estourados:</span>
+                      <span id="bi-pdi-atrasados" class="font-mono font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">0 atrasados</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400 font-mono flex items-center justify-between">
+                      <span>Membros em Trilha:</span>
+                      <span id="bi-pdi-membros" class="font-bold text-slate-700">0 colaboradores</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pt-4 mt-3 border-t border-slate-100">
+                  <button onclick="switchTab('painel_membro');" class="w-full py-1.5 text-xs font-semibold text-blue-700 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer">
+                    <span>Ver Painel do Membro</span>
+                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- QUADRANTE 4: GOVERNANÇA & EFICIÊNCIA OPERACIONAL -->
+              <div class="glass-card rounded-xl p-5 border-t-4 border-amber-500 flex flex-col justify-between shadow-xs">
+                <div>
+                  <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                    <div class="flex items-center gap-2">
+                      <span class="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center font-bold text-sm">
+                        <i class="fa-solid fa-scale-balanced"></i>
+                      </span>
+                      <div>
+                        <div class="text-xs font-bold text-slate-800">Governança & Selo EJ</div>
+                        <div class="text-[10px] text-slate-400 font-mono">Conformidade e Suporte</div>
+                      </div>
+                    </div>
+                    <span class="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded">Selo EJ</span>
+                  </div>
+
+                  <div class="space-y-3">
+                    <div>
+                      <span class="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Dúvidas no Fórum</span>
+                      <div id="bi-gov-duvidas-abertas" class="text-xl font-bold font-mono text-amber-600">0 aguardando</div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-50">
+                      <div>
+                        <span class="text-[10px] text-slate-400">Resolvidas</span>
+                        <div id="bi-gov-duvidas-resolvidas" class="font-bold font-mono text-emerald-600 text-xs">0 homologadas</div>
+                      </div>
+                      <div>
+                        <span class="text-[10px] text-slate-400">Estatutos</span>
+                        <div id="bi-gov-estatutos" class="font-bold font-mono text-blue-600 text-xs">5 vigentes</div>
+                      </div>
+                    </div>
+                    <div class="pt-2 border-t border-slate-50 flex items-center justify-between text-xs">
+                      <span class="text-[11px] text-slate-500">Selo BJ 2026:</span>
+                      <span class="font-mono font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">100% Regular</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400 font-mono flex items-center justify-between">
+                      <span>Total Ocorrências:</span>
+                      <span id="bi-gov-duvidas-total" class="font-bold text-slate-700">0 registradas</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pt-4 mt-3 border-t border-slate-100">
+                  <button onclick="switchTab('painel_membro'); switchMembroSubtab('forum');" class="w-full py-1.5 text-xs font-semibold text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer">
+                    <span>Acessar Fórum Colaborativo</span>
+                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- ATALHOS RÁPIDOS DA DIRETORIA EXECUTIVA -->
+            <div class="glass-card rounded-xl p-4 bg-slate-50/60 border border-slate-200/80">
+              <div class="text-xs font-bold text-slate-700 mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-compass text-indigo-600"></i>
+                <span>Navegação Rápida da Diretoria Executiva</span>
+              </div>
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <button onclick="switchTab('financeiro'); switchFinanceiroSubtab('caixa');" class="p-2.5 bg-white border border-slate-200 hover:border-emerald-300 rounded-lg shadow-2xs hover:shadow-xs transition text-left cursor-pointer group">
+                  <div class="font-bold text-slate-800 group-hover:text-emerald-700 flex items-center gap-1.5">
+                    <i class="fa-solid fa-money-bill-wave text-emerald-600"></i> Fluxo de Caixa
+                  </div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">Auditoria e lançamentos</div>
+                </button>
+                <button onclick="switchTab('comercial'); switchComercialSubtab('kanban');" class="p-2.5 bg-white border border-slate-200 hover:border-purple-300 rounded-lg shadow-2xs hover:shadow-xs transition text-left cursor-pointer group">
+                  <div class="font-bold text-slate-800 group-hover:text-purple-700 flex items-center gap-1.5">
+                    <i class="fa-solid fa-funnel-dollar text-purple-600"></i> Funil Comercial
+                  </div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">Propostas e contratos RM</div>
+                </button>
+                <button onclick="switchTab('vpgg'); switchVpggSubtab('pdis');" class="p-2.5 bg-white border border-slate-200 hover:border-blue-300 rounded-lg shadow-2xs hover:shadow-xs transition text-left cursor-pointer group">
+                  <div class="font-bold text-slate-800 group-hover:text-blue-700 flex items-center gap-1.5">
+                    <i class="fa-solid fa-users-gear text-blue-600"></i> Gestão de Pessoas
+                  </div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">Trilhas e inteligência VPGG</div>
+                </button>
+                <button onclick="switchPresidenciaSubtab('estatutos');" class="p-2.5 bg-white border border-slate-200 hover:border-indigo-300 rounded-lg shadow-2xs hover:shadow-xs transition text-left cursor-pointer group">
+                  <div class="font-bold text-slate-800 group-hover:text-indigo-700 flex items-center gap-1.5">
+                    <i class="fa-solid fa-shield-halved text-indigo-600"></i> Compliance & Estatutos
+                  </div>
+                  <div class="text-[10px] text-slate-400 mt-0.5">Normas e marcos vigentes</div>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- SUB-ABA 1: SELO EJ (OFICIAL) -->
-          <div id="pres-sub-seloej" class="space-y-6">
+          <div id="pres-sub-seloej" class="hidden space-y-6">
             <div class="glass-card rounded-xl p-5 border-t-4 border-blue-700">
               <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>

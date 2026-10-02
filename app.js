@@ -260,6 +260,9 @@ function applyUserSession(user) {
     carregarPipelineCRM();
     carregarPainelContratos();
     carregarModuloFinanceiro2();
+    if (isLeadership) {
+      carregarDashboardExecutivoBI();
+    }
     iniciarPollingNotificacoes();
   }
 }
@@ -546,6 +549,7 @@ function switchTab(tabId) {
     carregarModuloMarketing();
   } else if (tabId === 'presidencia') {
     carregarEstatutosCompliance();
+    carregarDashboardExecutivoBI();
   } else if (tabId === 'projetos') {
     carregarStagingRMs();
   } else if (tabId === 'painel_membro') {
@@ -6806,23 +6810,35 @@ function toggleMobileSidebar(open) {
 
 // Sub-abas de Presidência
 function switchPresidenciaSubtab(subtab) {
+  const viewBi = document.getElementById('pres-sub-bi');
   const viewSelo = document.getElementById('pres-sub-seloej');
   const viewEstatutos = document.getElementById('pres-sub-estatutos');
+
+  const btnBi = document.getElementById('subtab-pres-bi');
   const btnSelo = document.getElementById('subtab-pres-seloej');
   const btnEstatutos = document.getElementById('subtab-pres-estatutos');
 
+  [viewBi, viewSelo, viewEstatutos].forEach(el => el && el.classList.add('hidden'));
+  [btnBi, btnSelo, btnEstatutos].forEach(btn => {
+    if (btn) {
+      btn.classList.remove('subtab-active');
+      btn.classList.add('subtab-inactive');
+    }
+  });
+
   if (subtab === 'estatutos') {
-    if (viewSelo) viewSelo.classList.add('hidden');
     if (viewEstatutos) viewEstatutos.classList.remove('hidden');
-    if (btnSelo) { btnSelo.classList.remove('subtab-active'); btnSelo.classList.add('subtab-inactive'); }
     if (btnEstatutos) { btnEstatutos.classList.remove('subtab-inactive'); btnEstatutos.classList.add('subtab-active'); }
     carregarEstatutosCompliance();
-  } else {
-    if (viewEstatutos) viewEstatutos.classList.add('hidden');
+  } else if (subtab === 'seloej') {
     if (viewSelo) viewSelo.classList.remove('hidden');
-    if (btnEstatutos) { btnEstatutos.classList.remove('subtab-active'); btnEstatutos.classList.add('subtab-inactive'); }
     if (btnSelo) { btnSelo.classList.remove('subtab-inactive'); btnSelo.classList.add('subtab-active'); }
     if (typeof initSeloEJDataGrid === 'function') initSeloEJDataGrid();
+  } else {
+    // Padrão: Dashboard Executivo BI Consolidado
+    if (viewBi) viewBi.classList.remove('hidden');
+    if (btnBi) { btnBi.classList.remove('subtab-inactive'); btnBi.classList.add('subtab-active'); }
+    carregarDashboardExecutivoBI();
   }
 }
 
@@ -9748,6 +9764,245 @@ async function salvarNovaTransacaoFinanceira(event) {
 }
 
 // ==============================================================================
+// 7.5 DASHBOARD EXECUTIVO DA PRESIDÊNCIA & DIRETORIA (BI CONSOLIDADO)
+// ==============================================================================
+
+async function carregarDashboardExecutivoBI() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const userRole = (currentUserSession?.role || '').toLowerCase();
+
+  const containerAlertas = document.getElementById('alertas-executivos-container');
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/executivo/kpis-consolidados`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      credentials: 'include'
+    });
+
+    if (res.status === 403) {
+      if (containerAlertas) {
+        containerAlertas.innerHTML = `
+          <div class="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex items-center gap-2">
+            <i class="fa-solid fa-lock text-red-500"></i>
+            <span>Acesso restrito à Presidência e Diretorias (RBAC Lei 13.267). Perfil atual não autorizado.</span>
+          </div>
+        `;
+      }
+      return;
+    }
+
+    if (!res.ok) {
+      console.warn("[BI Executivo] Erro ao carregar KPIs consolidados:", res.status);
+      return;
+    }
+
+    const dados = await res.json();
+    renderDashboardExecutivoBI(dados);
+
+  } catch (err) {
+    console.error("[BI Executivo] Falha de comunicação:", err);
+    if (containerAlertas) {
+      containerAlertas.innerHTML = `
+        <div class="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-500 flex items-center gap-2">
+          <i class="fa-solid fa-circle-exclamation text-slate-400"></i>
+          <span>Servidor offline ou inicializando banco analítico.</span>
+        </div>
+      `;
+    }
+  }
+}
+
+function renderDashboardExecutivoBI(dados) {
+  if (!dados) return;
+
+  // 1. Data e Hora da Atualização
+  const lastUpdatedEl = document.getElementById('bi-last-updated');
+  if (lastUpdatedEl) {
+    const agora = new Date();
+    lastUpdatedEl.innerText = `Última atualização: ${agora.toLocaleDateString('pt-BR')} às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+  }
+
+  // 2. Badge de Status Geral de Saúde
+  const badgeSaude = document.getElementById('bi-badge-status-geral');
+  if (badgeSaude && dados.resumo_executivo) {
+    const score = dados.resumo_executivo.score_saude_organizacional || 0.0;
+    const st = dados.resumo_executivo.status_geral || 'saudavel';
+    let corDot = 'bg-emerald-500';
+    let corTexto = 'text-emerald-700';
+    let rotulo = 'Saudável';
+
+    if (st === 'critico') {
+      corDot = 'bg-red-500';
+      corTexto = 'text-red-700';
+      rotulo = 'Atenção Crítica';
+    } else if (st === 'atencao') {
+      corDot = 'bg-amber-500';
+      corTexto = 'text-amber-700';
+      rotulo = 'Atenção';
+    }
+
+    badgeSaude.innerHTML = `
+      <span class="w-2.5 h-2.5 rounded-full ${corDot} animate-pulse"></span>
+      <span>Saúde: <strong class="${corTexto} font-mono">${score.toFixed(1)}/100</strong> (${rotulo})</span>
+    `;
+  }
+
+  // 3. Quadrante 1: Financeiro
+  if (dados.financeiro) {
+    const fin = dados.financeiro;
+    const saldoEl = document.getElementById('bi-fin-saldo');
+    if (saldoEl) {
+      saldoEl.innerText = formatarMoedaBRL(fin.saldo_caixa || 0.0);
+      saldoEl.className = `text-xl font-bold font-mono ${fin.saldo_caixa >= 0 ? 'text-emerald-700' : 'text-red-600'}`;
+    }
+    const recEl = document.getElementById('bi-fin-receber');
+    if (recEl) recEl.innerText = formatarMoedaBRL(fin.total_receber_mes || 0.0);
+
+    const pagEl = document.getElementById('bi-fin-pagar');
+    if (pagEl) pagEl.innerText = formatarMoedaBRL(fin.total_pagar_mes || 0.0);
+
+    const inadEl = document.getElementById('bi-fin-inadimplencia');
+    if (inadEl) {
+      const taxa = fin.taxa_inadimplencia || 0.0;
+      inadEl.innerText = `${taxa.toFixed(1)}%`;
+      inadEl.className = `font-mono font-bold px-1.5 py-0.5 rounded ${taxa > 10 ? 'text-red-700 bg-red-100' : 'text-emerald-700 bg-emerald-100'}`;
+    }
+
+    const atrasadasEl = document.getElementById('bi-fin-atrasadas-info');
+    if (atrasadasEl) {
+      atrasadasEl.innerText = `${fin.qtd_faturas_atrasadas || 0} título(s) (${formatarMoedaBRL(fin.total_receitas_atrasadas || 0.0)})`;
+    }
+  }
+
+  // 4. Quadrante 2: Comercial & RMs
+  if (dados.comercial) {
+    const crm = dados.comercial;
+    const pipeEl = document.getElementById('bi-crm-pipeline');
+    if (pipeEl) pipeEl.innerText = formatarMoedaBRL(crm.volume_pipeline_aberto || 0.0);
+
+    const negEl = document.getElementById('bi-crm-negociacao');
+    if (negEl) negEl.innerText = `${crm.leads_em_negociacao || 0} leads`;
+
+    const rmEl = document.getElementById('bi-crm-contratos');
+    if (rmEl) rmEl.innerText = `${crm.contratos_rm_ativos || 0} contratos`;
+
+    const convEl = document.getElementById('bi-crm-conversao');
+    if (convEl) convEl.innerText = `${(crm.taxa_conversao || 0.0).toFixed(1)}%`;
+
+    const fechEl = document.getElementById('bi-crm-fechado');
+    if (fechEl) fechEl.innerText = formatarMoedaBRL(crm.volume_fechado || 0.0);
+  }
+
+  // 5. Quadrante 3: Gestão de Talentos & PDI
+  if (dados.pessoas_pdi) {
+    const pdi = dados.pessoas_pdi;
+    const avancoPct = Math.max(0, Math.min(100, pdi.media_avanco_global_pct || 0.0));
+
+    const avancoBadgeEl = document.getElementById('bi-pdi-avanco-badge');
+    if (avancoBadgeEl) avancoBadgeEl.innerText = `${avancoPct.toFixed(1)}%`;
+
+    const progressbarEl = document.getElementById('bi-pdi-progressbar');
+    if (progressbarEl) progressbarEl.style.width = `${avancoPct}%`;
+
+    const concEl = document.getElementById('bi-pdi-concluidos');
+    if (concEl) concEl.innerText = `${pdi.micro_blocos_concluidos || 0} blocos`;
+
+    const pendEl = document.getElementById('bi-pdi-pendentes');
+    if (pendEl) pendEl.innerText = `${pdi.micro_blocos_pendentes || 0} blocos`;
+
+    const atrasEl = document.getElementById('bi-pdi-atrasados');
+    if (atrasEl) {
+      const q = pdi.micro_blocos_atrasados || 0;
+      atrasEl.innerText = `${q} atrasado(s)`;
+      atrasEl.className = `font-mono font-bold px-1.5 py-0.5 rounded ${q > 0 ? 'text-red-700 bg-red-100' : 'text-emerald-700 bg-emerald-100'}`;
+    }
+
+    const membrosEl = document.getElementById('bi-pdi-membros');
+    if (membrosEl) membrosEl.innerText = `${pdi.colaboradores_com_trilha || 0} colaboradores`;
+  }
+
+  // 6. Quadrante 4: Governança Operacional & Selo EJ
+  if (dados.governanca_operacional) {
+    const gov = dados.governanca_operacional;
+    const duvAbertasEl = document.getElementById('bi-gov-duvidas-abertas');
+    if (duvAbertasEl) {
+      const ab = gov.duvidas_forum_abertas || 0;
+      duvAbertasEl.innerText = `${ab} aguardando`;
+      duvAbertasEl.className = `text-xl font-bold font-mono ${ab > 0 ? 'text-amber-600' : 'text-emerald-700'}`;
+    }
+
+    const duvResolvEl = document.getElementById('bi-gov-duvidas-resolvidas');
+    if (duvResolvEl) duvResolvEl.innerText = `${gov.duvidas_forum_resolvidas || 0} resolvidas`;
+
+    const estatutosEl = document.getElementById('bi-gov-estatutos');
+    if (estatutosEl) estatutosEl.innerText = `${gov.estatutos_vigentes || 5} vigentes`;
+
+    const duvTotaisEl = document.getElementById('bi-gov-duvidas-total');
+    if (duvTotaisEl) duvTotaisEl.innerText = `${gov.duvidas_totais || 0} registradas`;
+  }
+
+  // 7. Alertas de Atenção & Gargalos Críticos
+  const alertasContainer = document.getElementById('alertas-executivos-container');
+  const countAlertasEl = document.getElementById('bi-alertas-count');
+  const alertas = dados.alertas_atencao || [];
+
+  if (countAlertasEl) {
+    countAlertasEl.innerText = `${alertas.length} alerta(s)`;
+    countAlertasEl.className = `text-[11px] font-bold px-2 py-0.5 rounded-full font-mono ${
+      alertas.length > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+    }`;
+  }
+
+  if (alertasContainer) {
+    if (alertas.length === 0) {
+      alertasContainer.innerHTML = `
+        <div class="text-xs text-slate-500 italic py-2 text-center flex items-center justify-center gap-2">
+          <i class="fa-solid fa-circle-check text-emerald-600 text-sm"></i>
+          <span>Nenhum gargalo crítico identificado. Todas as áreas operam em conformidade com as diretrizes da Presidência.</span>
+        </div>
+      `;
+    } else {
+      alertasContainer.innerHTML = alertas.map(alerta => {
+        let borderClass = 'border-amber-400 bg-amber-50/70 text-amber-900';
+        let iconClass = 'fa-solid fa-triangle-exclamation text-amber-600';
+        let btnClass = 'bg-amber-600 hover:bg-amber-700 text-white';
+
+        if (alerta.nivel === 'danger') {
+          borderClass = 'border-red-400 bg-red-50/80 text-red-900';
+          iconClass = 'fa-solid fa-circle-exclamation text-red-600';
+          btnClass = 'bg-red-600 hover:bg-red-700 text-white';
+        } else if (alerta.nivel === 'info') {
+          borderClass = 'border-blue-400 bg-blue-50/70 text-blue-900';
+          iconClass = 'fa-solid fa-circle-info text-blue-600';
+          btnClass = 'bg-blue-600 hover:bg-blue-700 text-white';
+        }
+
+        return `
+          <div class="p-3 rounded-lg border ${borderClass} flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+            <div class="flex items-start gap-2.5">
+              <i class="${iconClass} text-sm mt-0.5"></i>
+              <div>
+                <div class="font-bold text-xs">${escaparHTMLSeguro(alerta.titulo)}</div>
+                <div class="text-[11px] opacity-90 mt-0.5">${escaparHTMLSeguro(alerta.mensagem)}</div>
+              </div>
+            </div>
+            ${alerta.acao_link ? `
+              <button onclick="switchTab('${alerta.acao_link}')" class="px-3 py-1 text-[11px] font-bold rounded shadow-2xs transition cursor-pointer shrink-0 ${btnClass}">
+                ${escaparHTMLSeguro(alerta.acao_texto || 'Acessar')}
+              </button>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    }
+  }
+}
+
+// ==============================================================================
 // 8. INICIALIZAÇÃO DEFINITIVA DO ECOSSISTEMA
 // ==============================================================================
 function initApp() {
@@ -9774,6 +10029,10 @@ function initApp() {
   carregarPipelineCRM();
   carregarPainelContratos();
   carregarModuloFinanceiro2();
+  const role = (currentUserSession?.role || '').toLowerCase();
+  if (['presidente', 'diretor'].includes(role)) {
+    carregarDashboardExecutivoBI();
+  }
   iniciarPollingNotificacoes();
 }
 

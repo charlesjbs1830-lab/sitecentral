@@ -4989,6 +4989,210 @@ def get_financeiro_kpis(mes_referencia: Optional[str] = None) -> dict:
     }
 
 
+# ==============================================================================
+# 22. BI EXECUTIVO DA PRESIDÊNCIA & DIRETORIA (KPIs CONSOLIDADOS)
+# ==============================================================================
+
+def get_executivo_kpis_consolidados() -> dict:
+    """
+    Retorna o panorama macro de inteligência de negócios (BI) unificando:
+    1. Saúde Financeira (saldo em caixa, valores a receber no mês, taxa de inadimplência)
+    2. Funil Comercial & RMs (pipeline aberto, leads em negociação, contratos de RM ativos)
+    3. Gestão de Talentos / PDI (avanço médio da equipe, micro-blocos concluídos vs pendentes)
+    4. Governança Operacional (dúvidas abertas no fórum, estatutos vigentes)
+    5. Alertas de Gargalos Críticos e Score de Saúde Organizacional
+    """
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    
+    # 1. Métricas Financeiras
+    fin_kpis = get_financeiro_kpis()
+    saldo_caixa = fin_kpis.get("saldo_caixa", 0.0)
+    total_receber_mes = fin_kpis.get("total_receber_mes", 0.0)
+    total_pagar_mes = fin_kpis.get("total_pagar_mes", 0.0)
+    taxa_inadimplencia = fin_kpis.get("taxa_inadimplencia", 0.0)
+    total_receitas_atrasadas = fin_kpis.get("total_receitas_atrasadas", 0.0)
+    qtd_faturas_atrasadas = fin_kpis.get("qtd_faturas_atrasadas", 0)
+
+    # 2. Métricas Comerciais & RMs
+    crm_pipeline = get_crm_pipeline()
+    vol_pipeline_aberto = crm_pipeline.get("total_pipeline_value", 0.0)
+    vol_fechado = crm_pipeline.get("total_fechado_value", 0.0)
+    leads_em_negociacao = crm_pipeline.get("resumo_etapas", {}).get("negociacao", {}).get("count", 0)
+    total_leads = crm_pipeline.get("total_leads_count", 0)
+    taxa_conversao = crm_pipeline.get("conversion_rate", 0.0)
+    
+    contratos_ativos_lista = list_contratos_rm(status_filter="ativo")
+    contratos_rm_ativos = len(contratos_ativos_lista)
+
+    # 3. Métricas de Pessoas & PDI
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT COUNT(*) as total FROM member_pdi_blocks;")
+    total_micro_blocos = int(cursor.fetchone()["total"])
+
+    cursor.execute("SELECT COUNT(*) as c FROM member_pdi_blocks WHERE status = 'concluido';")
+    micro_blocos_concluidos = int(cursor.fetchone()["c"])
+
+    cursor.execute("SELECT COUNT(*) as e FROM member_pdi_blocks WHERE status = 'em_andamento';")
+    micro_blocos_em_andamento = int(cursor.fetchone()["e"])
+
+    cursor.execute("SELECT COUNT(*) as p FROM member_pdi_blocks WHERE status = 'pendente';")
+    micro_blocos_pendentes = int(cursor.fetchone()["p"])
+
+    cursor.execute("""
+    SELECT COUNT(*) as a 
+    FROM member_pdi_blocks 
+    WHERE status != 'concluido' AND deadline_date < ?;
+    """, (today_str,))
+    micro_blocos_atrasados = int(cursor.fetchone()["a"])
+
+    cursor.execute("SELECT COUNT(DISTINCT user_id) as u FROM member_pdi_blocks;")
+    colaboradores_com_trilha = int(cursor.fetchone()["u"])
+
+    cursor.execute("""
+    SELECT user_id, 
+           COUNT(*) as total_m,
+           SUM(CASE WHEN status = 'concluido' THEN 1 ELSE 0 END) as concluidos_m
+    FROM member_pdi_blocks
+    GROUP BY user_id;
+    """)
+    member_rows = cursor.fetchall()
+    if member_rows:
+        member_pcts = [(float(r["concluidos_m"]) / float(r["total_m"]) * 100.0) for r in member_rows if r["total_m"] > 0]
+        media_avanco_global_pct = round(sum(member_pcts) / len(member_pcts), 1) if member_pcts else 0.0
+    elif total_micro_blocos > 0:
+        media_avanco_global_pct = round((micro_blocos_concluidos / total_micro_blocos) * 100.0, 1)
+    else:
+        media_avanco_global_pct = 0.0
+
+    # 4. Métricas de Governança Operacional
+    cursor.execute("SELECT COUNT(*) as abertas FROM forum_duvidas WHERE status = 'aberta';")
+    duvidas_forum_abertas = int(cursor.fetchone()["abertas"])
+
+    cursor.execute("SELECT COUNT(*) as resolvidas FROM forum_duvidas WHERE status = 'resolvida';")
+    duvidas_forum_resolvidas = int(cursor.fetchone()["resolvidas"])
+
+    cursor.execute("SELECT COUNT(*) as total_d FROM forum_duvidas;")
+    duvidas_totais = int(cursor.fetchone()["total_d"])
+
+    # Estatutos vigentes
+    try:
+        cursor.execute("SELECT COUNT(*) as vig FROM compliance_statutes WHERE status = 'vigente';")
+        estatutos_vigentes = int(cursor.fetchone()["vig"])
+    except Exception:
+        estatutos_vigentes = 5
+
+    conn.close()
+
+    # 5. Destaques de Alertas & Gargalos Críticos
+    alertas_atencao = []
+
+    # Alerta Financeiro
+    if taxa_inadimplencia > 10.0 or total_receitas_atrasadas > 0:
+        nivel_fin = "danger" if (taxa_inadimplencia > 15.0 or total_receitas_atrasadas >= 2000.0) else "warning"
+        alertas_atencao.append({
+            "id": "alerta-inadimplencia",
+            "tipo": "financeiro",
+            "nivel": nivel_fin,
+            "titulo": "Risco de Inadimplência ou Recebíveis em Atraso",
+            "mensagem": f"Inadimplência em {taxa_inadimplencia}% com {qtd_faturas_atrasadas} título(s) pendente(s) totalizando R$ {total_receitas_atrasadas:,.2f}.",
+            "acao_texto": "Auditar Fluxo de Caixa",
+            "acao_link": "financeiro"
+        })
+
+    # Alerta Governança (Fórum)
+    if duvidas_forum_abertas > 0:
+        alertas_atencao.append({
+            "id": "alerta-forum-duvidas",
+            "tipo": "governanca",
+            "nivel": "warning",
+            "titulo": "Demandas Operacionais Sem Resolução no Fórum",
+            "mensagem": f"Há {duvidas_forum_abertas} dúvida(s) aberta(s) de membros aguardando parecer ou diretriz da liderança.",
+            "acao_texto": "Responder Dúvidas",
+            "acao_link": "painel_membro"
+        })
+
+    # Alerta PDI (Micro-blocos Atrasados)
+    if micro_blocos_atrasados > 0:
+        alertas_atencao.append({
+            "id": "alerta-pdi-atraso",
+            "tipo": "pessoas",
+            "nivel": "danger",
+            "titulo": "Atraso no Cumprimento de Trilhas de PDI",
+            "mensagem": f"{micro_blocos_atrasados} micro-bloco(s) de capacitação estão com SLA/data limite expirada na equipe.",
+            "acao_texto": "Intervir no PDI",
+            "acao_link": "vpgg"
+        })
+
+    # Alerta Comercial (Oportunidades em Negociação)
+    if leads_em_negociacao > 0:
+        alertas_atencao.append({
+            "id": "alerta-crm-negociacao",
+            "tipo": "comercial",
+            "nivel": "info",
+            "titulo": "Propostas Comerciais em Fase Decisiva",
+            "mensagem": f"{leads_em_negociacao} oportunidade(s) quente(s) em etapa de negociação no CRM. Priorize o contato com os clientes.",
+            "acao_texto": "Ver Funil Kanban",
+            "acao_link": "comercial"
+        })
+
+    # 6. Score Sintético de Saúde Organizacional (0 a 100)
+    score_fin = max(0.0, 30.0 - (taxa_inadimplencia * 0.5))
+    score_crm = min(25.0, 10.0 + (taxa_conversao * 0.3) + (contratos_rm_ativos * 2.0))
+    score_pdi = min(25.0, (media_avanco_global_pct * 0.25) - (micro_blocos_atrasados * 2.0))
+    score_gov = max(5.0, 20.0 - (duvidas_forum_abertas * 2.0))
+    score_total = round(max(10.0, min(100.0, score_fin + score_crm + score_pdi + score_gov)), 1)
+
+    if score_total >= 75.0:
+        status_geral = "saudavel"
+    elif score_total >= 50.0:
+        status_geral = "atencao"
+    else:
+        status_geral = "critico"
+
+    return {
+        "status": "success",
+        "timestamp": datetime.now().isoformat(),
+        "financeiro": {
+            "saldo_caixa": round(saldo_caixa, 2),
+            "total_receber_mes": round(total_receber_mes, 2),
+            "total_pagar_mes": round(total_pagar_mes, 2),
+            "taxa_inadimplencia": taxa_inadimplencia,
+            "total_receitas_atrasadas": round(total_receitas_atrasadas, 2),
+            "qtd_faturas_atrasadas": qtd_faturas_atrasadas
+        },
+        "comercial": {
+            "volume_pipeline_aberto": round(vol_pipeline_aberto, 2),
+            "volume_fechado": round(vol_fechado, 2),
+            "leads_em_negociacao": leads_em_negociacao,
+            "leads_totais": total_leads,
+            "contratos_rm_ativos": contratos_rm_ativos,
+            "taxa_conversao": taxa_conversao
+        },
+        "pessoas_pdi": {
+            "media_avanco_global_pct": media_avanco_global_pct,
+            "total_micro_blocos": total_micro_blocos,
+            "micro_blocos_concluidos": micro_blocos_concluidos,
+            "micro_blocos_em_andamento": micro_blocos_em_andamento,
+            "micro_blocos_pendentes": micro_blocos_pendentes,
+            "micro_blocos_atrasados": micro_blocos_atrasados,
+            "colaboradores_com_trilha": colaboradores_com_trilha
+        },
+        "governanca_operacional": {
+            "duvidas_forum_abertas": duvidas_forum_abertas,
+            "duvidas_forum_resolvidas": duvidas_forum_resolvidas,
+            "duvidas_totais": duvidas_totais,
+            "estatutos_vigentes": estatutos_vigentes
+        },
+        "alertas_atencao": alertas_atencao,
+        "resumo_executivo": {
+            "score_saude_organizacional": score_total,
+            "status_geral": status_geral
+        }
+    }
+
+
 if __name__ == "__main__":
     init_db()
 

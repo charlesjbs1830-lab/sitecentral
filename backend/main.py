@@ -129,7 +129,8 @@ try:
         get_transacao_financeira_by_id,
         list_transacoes_financeiras,
         update_transacao_financeira_status,
-        get_financeiro_kpis
+        get_financeiro_kpis,
+        get_executivo_kpis_consolidados
     )
     from backend.auth import (
         verify_password,
@@ -237,7 +238,8 @@ except ImportError:
         get_transacao_financeira_by_id,
         list_transacoes_financeiras,
         update_transacao_financeira_status,
-        get_financeiro_kpis
+        get_financeiro_kpis,
+        get_executivo_kpis_consolidados
     )
     from auth import (
         verify_password,
@@ -2524,6 +2526,19 @@ async def obter_kpis_financeiros_endpoint(
 ):
     try:
         return get_financeiro_kpis(mes_referencia=mes_referencia)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@app.get(
+    "/api/executivo/kpis-consolidados",
+    summary="Obter indicadores consolidados de BI macro (exclusivo Presidência e Diretoria)"
+)
+async def obter_kpis_executivo_endpoint(
+    current_user: dict = Depends(require_role(["presidente", "diretor"]))
+):
+    try:
+        return get_executivo_kpis_consolidados()
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 

@@ -2404,6 +2404,152 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         self.assertGreaterEqual(kpis2["total_receitas_atrasadas"], 1000.0)
         self.assertEqual(kpis2["saldo_caixa"], round(kpis2["total_receitas_pagas"] - kpis2["total_despesas_pagas"], 2))
 
+    def test_63_executivo_bi_rbac_protection(self):
+        """Valida que o endpoint de BI executivo é estritamente protegido por RBAC (401 sem token, 403 para assessor e gerente, 200 para diretor e presidente)"""
+        # 1. Sem autenticação (deve retornar 401)
+        res_no_auth = self.client.get("/api/executivo/kpis-consolidados")
+        self.assertEqual(res_no_auth.status_code, 401)
+
+        # 2. Perfil Assessor Comercial (deve retornar 403)
+        token_assessor_com = self.tokens["assessor_comercial"]
+        res_assessor_com = self.client.get("/api/executivo/kpis-consolidados", headers={"Authorization": f"Bearer {token_assessor_com}"})
+        self.assertEqual(res_assessor_com.status_code, 403)
+        self.assertIn("Acesso negado", res_assessor_com.json()["detail"])
+
+        # 3. Perfil Assessor Projetos (deve retornar 403)
+        token_assessor_proj = self.tokens["assessor_projetos"]
+        res_assessor_proj = self.client.get("/api/executivo/kpis-consolidados", headers={"Authorization": f"Bearer {token_assessor_proj}"})
+        self.assertEqual(res_assessor_proj.status_code, 403)
+        self.assertIn("Acesso negado", res_assessor_proj.json()["detail"])
+
+        # 4. Perfil Gerente (deve retornar 403)
+        token_gerente = self.tokens["gerente"]
+        res_gerente = self.client.get("/api/executivo/kpis-consolidados", headers={"Authorization": f"Bearer {token_gerente}"})
+        self.assertEqual(res_gerente.status_code, 403)
+        self.assertIn("Acesso negado", res_gerente.json()["detail"])
+
+        # 5. Perfil Diretor (deve retornar 200)
+        token_diretor = self.tokens["diretor"]
+        res_diretor = self.client.get("/api/executivo/kpis-consolidados", headers={"Authorization": f"Bearer {token_diretor}"})
+        self.assertEqual(res_diretor.status_code, 200)
+        data_diretor = res_diretor.json()
+        self.assertEqual(data_diretor["status"], "success")
+
+        # 6. Perfil Presidente (deve retornar 200)
+        token_pres = self.tokens["presidente"]
+        res_pres = self.client.get("/api/executivo/kpis-consolidados", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_pres.status_code, 200)
+        data_pres = res_pres.json()
+        self.assertEqual(data_pres["status"], "success")
+
+    def test_64_executivo_bi_data_aggregation_integrity(self):
+        """Valida a consolidação de dados dos 4 quadrantes (Financeiro, Comercial, PDI e Governança) e geração dinâmica de alertas"""
+        token_pres = self.tokens["presidente"]
+
+        # 1. Semear dados específicos para garantir presença em todos os quadrantes
+        # A. Financeiro: Receita paga e despesa paga
+        res_rec = self.client.post("/api/financeiro/transacoes", headers={"Authorization": f"Bearer {token_pres}"}, json={
+            "tipo": "receita",
+            "categoria": "consultoria_rm",
+            "descricao": "Parcela RM BI Executivo",
+            "valor": 5000.0,
+            "data_vencimento": "2026-08-15",
+            "status": "pago"
+        })
+        self.assertEqual(res_rec.status_code, 201)
+
+        res_desp = self.client.post("/api/financeiro/transacoes", headers={"Authorization": f"Bearer {token_pres}"}, json={
+            "tipo": "despesa",
+            "categoria": "capacitacao",
+            "descricao": "Treinamento de Liderança Executiva",
+            "valor": 1200.0,
+            "data_vencimento": "2026-08-20",
+            "status": "pago"
+        })
+        self.assertEqual(res_desp.status_code, 201)
+
+        # B. Comercial: Lead em negociação
+        res_lead = self.client.post("/api/crm/leads", headers={"Authorization": f"Bearer {token_pres}"}, json={
+            "client_name": "Holding Inovação BI",
+            "cnpj": "12.345.678/0001-90",
+            "contact_person": "Dr. Fernando BI",
+            "contact_email": "fernando@holdingbi.com.br",
+            "estimated_value": 7500.0,
+            "etapa": "negociacao"
+        })
+        self.assertEqual(res_lead.status_code, 201)
+        lead_id = res_lead.json()["lead"]["id"]
+
+        # C. Contrato RM ativo
+        res_ct = self.client.post("/api/crm/contratos", headers={"Authorization": f"Bearer {token_pres}"}, json={
+            "lead_id": lead_id,
+            "brand_name": "Holding Inovação BI",
+            "consultoria_escopo": "Registro de Marca e Proteção Intelectual",
+            "valor_total": 7500.0,
+            "prazo_dias": 45,
+            "marcos_financeiros": [{"marco": "Entrada", "valor": 3750.0}],
+            "status_execucao": "ativo"
+        })
+        self.assertEqual(res_ct.status_code, 201)
+
+        # D. Fórum de dúvidas: dúvida aberta
+        res_forum = self.client.post("/api/duvidas", headers={"Authorization": f"Bearer {token_pres}"}, json={
+            "title": "Dúvida sobre registro de marca e procuração no INPI",
+            "description": "Precisamos de alinhamento com a presidência sobre procuração em cartório.",
+            "category": "tecnica"
+        })
+        self.assertEqual(res_forum.status_code, 201)
+
+        # 2. Consultar BI Executivo Consolidado
+        res_bi = self.client.get("/api/executivo/kpis-consolidados", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_bi.status_code, 200)
+        data = res_bi.json()
+
+        # 3. Validar seções de topo
+        self.assertEqual(data["status"], "success")
+        self.assertIn("financeiro", data)
+        self.assertIn("comercial", data)
+        self.assertIn("pessoas_pdi", data)
+        self.assertIn("governanca_operacional", data)
+        self.assertIn("alertas_atencao", data)
+        self.assertIn("resumo_executivo", data)
+
+        # 4. Validar Quadrante Financeiro
+        fin = data["financeiro"]
+        self.assertIn("saldo_caixa", fin)
+        self.assertIn("total_receber_mes", fin)
+        self.assertIn("total_pagar_mes", fin)
+        self.assertIn("taxa_inadimplencia", fin)
+
+        # 5. Validar Quadrante Comercial
+        com = data["comercial"]
+        self.assertGreaterEqual(com["volume_pipeline_aberto"], 7500.0)
+        self.assertGreaterEqual(com["leads_em_negociacao"], 1)
+        self.assertGreaterEqual(com["contratos_rm_ativos"], 1)
+
+        # 6. Validar Quadrante PDI
+        pdi = data["pessoas_pdi"]
+        self.assertIn("media_avanco_global_pct", pdi)
+        self.assertIn("micro_blocos_concluidos", pdi)
+        self.assertIn("micro_blocos_pendentes", pdi)
+
+        # 7. Validar Quadrante Governança
+        gov = data["governanca_operacional"]
+        self.assertGreaterEqual(gov["duvidas_forum_abertas"], 1)
+
+        # 8. Validar Alertas de Atenção
+        alertas = data["alertas_atencao"]
+        self.assertIsInstance(alertas, list)
+        tipos_alertas = [a["tipo"] for a in alertas]
+        self.assertIn("comercial", tipos_alertas)
+        self.assertIn("governanca", tipos_alertas)
+
+        # 9. Validar Resumo Executivo
+        resumo = data["resumo_executivo"]
+        self.assertIn("score_saude_organizacional", resumo)
+        self.assertIn("status_geral", resumo)
+        self.assertIn(resumo["status_geral"], ["saudavel", "atencao", "critico"])
+
 
 if __name__ == "__main__":
     unittest.main()
