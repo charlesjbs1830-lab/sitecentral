@@ -2183,17 +2183,152 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
         <section id="view-financeiro" class="hidden space-y-6">
           
           <!-- Sub-Abas do Módulo Financeiro -->
-          <div class="flex border-b border-slate-200 gap-4 text-xs font-bold">
-            <button onclick="switchFinanceiroSubtab('edbrain')" id="subtab-fin-edbrain" class="pb-3 subtab-active flex items-center gap-1.5">
-              <i class="fa-solid fa-shield-halved text-emerald-600"></i> Lançamentos Oficiais EDbrain (Blindagem SQLite & API)
+          <div class="flex border-b border-slate-200 gap-4 text-xs font-bold overflow-x-auto">
+            <button onclick="switchFinanceiroSubtab('caixa')" id="subtab-fin-caixa" class="pb-3 subtab-active flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-chart-line text-emerald-600"></i> Fluxo de Caixa & Contas (Financeiro 2.0)
             </button>
-            <button onclick="switchFinanceiroSubtab('legado')" id="subtab-fin-legado" class="pb-3 subtab-inactive flex items-center gap-1.5">
-              <i class="fa-solid fa-table text-slate-500"></i> Livro Caixa Legado (Planilha Cora / CJA - 78 Transações)
+            <button onclick="switchFinanceiroSubtab('legado')" id="subtab-fin-legado" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-table text-slate-500"></i> Livro Caixa Legado (Cora / CJA)
+            </button>
+            <button onclick="switchFinanceiroSubtab('edbrain')" id="subtab-fin-edbrain" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-shield-halved text-blue-600"></i> Lançamentos por Alçada (Blindagem)
             </button>
           </div>
 
-          <!-- SUB-ABA 1: EDbrain OFICIAL (FORMULÁRIO INDIRETO + TETO DE ALÇADA + TABELA CONSOLIDADA) -->
-          <div id="fin-sub-edbrain" class="space-y-6">
+          <!-- SUB-ABA PRINCIPAL: FLUXO DE CAIXA CORPORATIVO & CONTROLE DE CONTAS 2.0 -->
+          <div id="fin-sub-caixa" class="space-y-6">
+
+            <!-- Header com Métricas & Ações -->
+            <div class="glass-card rounded-xl p-5 border-t-4 border-emerald-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-base font-bold text-slate-800">💰 Fluxo de Caixa & Gestão Financeira Integrada</h3>
+                  <span class="text-[10px] bg-emerald-100 text-emerald-800 font-mono font-bold px-2 py-0.5 rounded-full border border-emerald-200">EDbrain Finance 2.0</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">Controle em tempo real de contas a pagar, a receber, quitação de parcelas de consultoria (RMs) e saúde financeira.</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="button" onclick="abrirModalNovaTransacao()" class="px-3.5 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition flex items-center gap-1.5 shadow-xs cursor-pointer">
+                  <i class="fa-solid fa-plus"></i> Novo Lançamento
+                </button>
+                <button type="button" onclick="carregarModuloFinanceiro2()" class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg border border-slate-300 transition flex items-center gap-1.5 shadow-2xs cursor-pointer">
+                  <i class="fa-solid fa-arrows-rotate text-emerald-600"></i> Atualizar Indicadores
+                </button>
+              </div>
+            </div>
+
+            <!-- Dashboard de Indicadores Financeiros (KPIs Consolidados) -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              
+              <!-- 1. Saldo Bruto em Caixa -->
+              <div class="glass-card rounded-xl p-4 border-l-4 border-emerald-600 bg-white shadow-xs">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Saldo em Caixa</span>
+                  <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs"><i class="fa-solid fa-wallet"></i></span>
+                </div>
+                <div id="kpi-fin-saldo" class="text-xl font-black font-mono text-emerald-700 mt-1">R$ 0,00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Receitas pagas - Despesas pagas</div>
+              </div>
+
+              <!-- 2. Total a Receber no Mês -->
+              <div class="glass-card rounded-xl p-4 border-l-4 border-blue-600 bg-white shadow-xs">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Entradas Previstas</span>
+                  <span class="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs"><i class="fa-solid fa-arrow-trend-up"></i></span>
+                </div>
+                <div id="kpi-fin-receber" class="text-xl font-black font-mono text-blue-700 mt-1">R$ 0,00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">A receber no mês corrente</div>
+              </div>
+
+              <!-- 3. Total a Pagar no Mês -->
+              <div class="glass-card rounded-xl p-4 border-l-4 border-rose-600 bg-white shadow-xs">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Saídas Previstas</span>
+                  <span class="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-xs"><i class="fa-solid fa-arrow-trend-down"></i></span>
+                </div>
+                <div id="kpi-fin-pagar" class="text-xl font-black font-mono text-rose-700 mt-1">R$ 0,00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Contas a pagar no mês corrente</div>
+              </div>
+
+              <!-- 4. Alerta de Inadimplência -->
+              <div class="glass-card rounded-xl p-4 border-l-4 border-amber-500 bg-white shadow-xs">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Inadimplência</span>
+                  <span id="kpi-fin-inadimplencia-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-emerald-100 text-emerald-800">0.0%</span>
+                </div>
+                <div id="kpi-fin-inadimplencia" class="text-xl font-black font-mono text-amber-600 mt-1">0.0%</div>
+                <div id="kpi-fin-atrasadas-val" class="text-[10px] text-slate-400 mt-0.5">R$ 0,00 em atraso</div>
+              </div>
+
+            </div>
+
+            <!-- Tabela de Transações (DataGrid Financeiro) -->
+            <div class="glass-card rounded-xl overflow-hidden shadow-sm space-y-3">
+              <div class="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/50">
+                <div>
+                  <h4 class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-receipt text-emerald-600"></i> Livro de Movimentações & Títulos
+                  </h4>
+                  <p class="text-[11px] text-slate-500 mt-0.5">Monitore recebíveis de consultoria, despesas de custas INPI e pagamentos com quitação em 1 clique.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <input 
+                    type="text" 
+                    id="filtro-fin-busca" 
+                    oninput="filtrarTransacoesFinanceirasClient()" 
+                    placeholder="Buscar histórico, categoria ou cliente..." 
+                    class="text-xs border border-slate-300 rounded-lg px-3 py-1.5 w-56 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                  <select 
+                    id="filtro-fin-tipo" 
+                    onchange="carregarTransacoesFinanceiras()" 
+                    class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                  >
+                    <option value="">Todos os Tipos</option>
+                    <option value="receita">Receitas (+)</option>
+                    <option value="despesa">Despesas (-)</option>
+                  </select>
+                  <select 
+                    id="filtro-fin-status" 
+                    onchange="carregarTransacoesFinanceiras()" 
+                    class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                  >
+                    <option value="">Todos os Status</option>
+                    <option value="pendente">Pendente</option>
+                    <option value="pago">Pago</option>
+                    <option value="atrasado">Atrasado</option>
+                    <option value="cancelado">Cancelado</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="overflow-x-auto max-h-[550px]">
+                <table class="w-full text-xs text-left datagrid-table responsive-card-table">
+                  <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                    <tr>
+                      <th class="px-4 py-3">Código</th>
+                      <th class="px-4 py-3">Tipo</th>
+                      <th class="px-4 py-3">Categoria</th>
+                      <th class="px-4 py-3">Descrição / Histórico</th>
+                      <th class="px-4 py-3">Vínculo Contrato RM</th>
+                      <th class="px-4 py-3">Vencimento</th>
+                      <th class="px-4 py-3">Pagamento</th>
+                      <th class="px-4 py-3 text-right">Valor (R$)</th>
+                      <th class="px-4 py-3 text-center">Status</th>
+                      <th class="px-4 py-3 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="datagrid-transacoes-financeiras" class="divide-y divide-slate-100">
+                    <tr><td colspan="10" class="text-center py-8 text-slate-400">Carregando livro caixa financeiro...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- SUB-ABA 2: EDbrain OFICIAL (FORMULÁRIO INDIRETO + TETO DE ALÇADA + TABELA CONSOLIDADA) -->
+          <div id="fin-sub-edbrain" class="hidden space-y-6">
             
             <!-- 1. FORMULÁRIO DE LANÇAMENTO INDIRETO -->
             <div class="glass-card rounded-xl p-5 border-t-4 border-emerald-600 space-y-4">
@@ -5093,6 +5228,99 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
         <div class="pt-3 border-t border-slate-200 flex justify-end gap-2">
           <button type="button" onclick="fecharModalNovoContrato()" class="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer">Cancelar</button>
           <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md transition cursor-pointer">Formalizar Contrato</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVO LANÇAMENTO FINANCEIRO -->
+  <div id="modal-nova-transacao" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-gradient-to-r from-emerald-800 to-teal-950 text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center font-bold text-white shadow-md text-base">
+            💰
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Novo Lançamento Financeiro</h3>
+            <span class="text-[10px] text-emerald-200 font-mono">Controle de Fluxo & Contratos RM</span>
+          </div>
+        </div>
+        <button onclick="fecharModalNovaTransacao()" class="text-slate-400 hover:text-white text-lg font-bold p-1 cursor-pointer">✕</button>
+      </div>
+
+      <form id="form-nova-transacao" onsubmit="salvarNovaTransacaoFinanceira(event)" class="p-6 overflow-y-auto space-y-3.5 text-xs">
+        
+        <!-- Tipo de Movimentação (Rádios Estilizados) -->
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Tipo de Movimentação *</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="flex items-center justify-center gap-2 p-2.5 border rounded-lg cursor-pointer transition text-xs font-bold has-[:checked]:bg-emerald-50 has-[:checked]:border-emerald-500 has-[:checked]:text-emerald-800 border-slate-300 text-slate-600 bg-white">
+              <input type="radio" name="modal_tx_tipo" value="receita" checked class="hidden">
+              <i class="fa-solid fa-arrow-down-left text-emerald-600"></i>
+              <span>Receita (+)</span>
+            </label>
+            <label class="flex items-center justify-center gap-2 p-2.5 border rounded-lg cursor-pointer transition text-xs font-bold has-[:checked]:bg-rose-50 has-[:checked]:border-rose-500 has-[:checked]:text-rose-800 border-slate-300 text-slate-600 bg-white">
+              <input type="radio" name="modal_tx_tipo" value="despesa" class="hidden">
+              <i class="fa-solid fa-arrow-up-right text-rose-600"></i>
+              <span>Despesa (-)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Categoria Contábil -->
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Categoria Contábil *</label>
+          <select id="modal_tx_categoria" required class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+            <option value="consultoria_rm">🛡️ Consultoria / Registro de Marca (RM)</option>
+            <option value="taxa_federativa">🏛️ Taxa Federativa (Brasil Júnior / Núcleo / Federação)</option>
+            <option value="infraestrutura">💻 Infraestrutura, Servidores & Domínios</option>
+            <option value="capacitacao">📚 Capacitação, Cursos & Treinamento</option>
+            <option value="administrativo">📑 Despesas Administrativas & Cartório</option>
+            <option value="marketing">📣 Marketing & Aquisição Comercial</option>
+            <option value="impostos">⚖️ Impostos & Encargos Legais</option>
+            <option value="outros">📦 Outras Despesas / Receitas</option>
+          </select>
+        </div>
+
+        <!-- Descrição -->
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Descrição do Lançamento *</label>
+          <input type="text" id="modal_tx_descricao" required placeholder="Ex: Parcela 1/2 Consultoria Registro de Marca INPI Padaria Dourada" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+        </div>
+
+        <!-- Valor e Data de Vencimento -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Valor (R$) *</label>
+            <input type="number" id="modal_tx_valor" step="0.01" min="0.01" required placeholder="0.00" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono font-bold">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Data de Vencimento *</label>
+            <input type="date" id="modal_tx_vencimento" required class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono">
+          </div>
+        </div>
+
+        <!-- Status Inicial e Vínculo com Contrato RM -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Status Inicial</label>
+            <select id="modal_tx_status" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+              <option value="pendente" selected>Pendente</option>
+              <option value="pago">Já Quitado (Pago Hoje)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Vincular a Contrato RM (Opcional)</label>
+            <select id="modal_tx_contrato_id" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+              <option value="">Nenhum Contrato (Avulso)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-200 flex justify-end gap-2">
+          <button type="button" onclick="fecharModalNovaTransacao()" class="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer">Cancelar</button>
+          <button type="submit" class="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-md transition cursor-pointer">Salvar Lançamento</button>
         </div>
       </form>
     </div>

@@ -259,6 +259,7 @@ function applyUserSession(user) {
     carregarStagingRMs();
     carregarPipelineCRM();
     carregarPainelContratos();
+    carregarModuloFinanceiro2();
     iniciarPollingNotificacoes();
   }
 }
@@ -517,6 +518,7 @@ function switchTab(tabId) {
   // Atualizar dados ao vivo do EDbrain ao alternar abas
   if (tabId === 'financeiro') {
     carregarTransacoesEDbrain();
+    carregarModuloFinanceiro2();
   } else if (tabId === 'dashboard') {
     carregarAvisosInstitucionais();
     carregarMetasPE();
@@ -656,21 +658,32 @@ function switchVPGGSubtab(subtab) {
 }
 
 function switchFinanceiroSubtab(subtab) {
-  const edbrainView = document.getElementById('fin-sub-edbrain');
+  const caixaView = document.getElementById('fin-sub-caixa');
   const legadoView = document.getElementById('fin-sub-legado');
-  const btnEdbrain = document.getElementById('subtab-fin-edbrain');
-  const btnLegado = document.getElementById('subtab-fin-legado');
+  const edbrainView = document.getElementById('fin-sub-edbrain');
 
-  if (subtab === 'edbrain') {
+  const btnCaixa = document.getElementById('subtab-fin-caixa');
+  const btnLegado = document.getElementById('subtab-fin-legado');
+  const btnEdbrain = document.getElementById('subtab-fin-edbrain');
+
+  [caixaView, legadoView, edbrainView].forEach(el => el && el.classList.add('hidden'));
+  [btnCaixa, btnLegado, btnEdbrain].forEach(btn => {
+    if (btn) {
+      btn.classList.remove('subtab-active');
+      btn.classList.add('subtab-inactive');
+    }
+  });
+
+  if (subtab === 'caixa' || subtab === 'dashboard') {
+    if (caixaView) caixaView.classList.remove('hidden');
+    if (btnCaixa) { btnCaixa.classList.add('subtab-active'); btnCaixa.classList.remove('subtab-inactive'); }
+    carregarModuloFinanceiro2();
+  } else if (subtab === 'edbrain') {
     if (edbrainView) edbrainView.classList.remove('hidden');
-    if (legadoView) legadoView.classList.add('hidden');
     if (btnEdbrain) { btnEdbrain.classList.add('subtab-active'); btnEdbrain.classList.remove('subtab-inactive'); }
-    if (btnLegado) { btnLegado.classList.remove('subtab-active'); btnLegado.classList.add('subtab-inactive'); }
     carregarTransacoesEDbrain();
-  } else {
-    if (edbrainView) edbrainView.classList.add('hidden');
+  } else if (subtab === 'legado') {
     if (legadoView) legadoView.classList.remove('hidden');
-    if (btnEdbrain) { btnEdbrain.classList.remove('subtab-active'); btnEdbrain.classList.add('subtab-inactive'); }
     if (btnLegado) { btnLegado.classList.add('subtab-active'); btnLegado.classList.remove('subtab-inactive'); }
     if (typeof filtrarFluxoDataGrid === 'function') filtrarFluxoDataGrid();
   }
@@ -9381,6 +9394,360 @@ function imprimirMinutaContrato() {
 }
 
 // ==============================================================================
+// 7.4 SUBSISTEMA FINANCEIRO E CONTROLE DE CAIXA 2.0 (TRANSAÇÕES, KPIS E RMs)
+// ==============================================================================
+
+window.transacoesFinanceirasLista = [];
+window.kpisFinanceirosData = {};
+
+async function carregarModuloFinanceiro2() {
+  await Promise.all([
+    carregarKPIsFinanceiros(),
+    carregarTransacoesFinanceiras()
+  ]);
+}
+
+async function carregarKPIsFinanceiros() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/financeiro/kpis`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      credentials: 'include'
+    });
+
+    if (!res.ok) {
+      console.warn("[Financeiro 2.0] Falha ao carregar KPIs:", res.status);
+      return;
+    }
+
+    const kpis = await res.json();
+    window.kpisFinanceirosData = kpis;
+
+    const elSaldo = document.getElementById('kpi-fin-saldo');
+    const elReceber = document.getElementById('kpi-fin-receber');
+    const elPagar = document.getElementById('kpi-fin-pagar');
+    const elInadimp = document.getElementById('kpi-fin-inadimplencia');
+    const elInadimpBadge = document.getElementById('kpi-fin-inadimplencia-badge');
+    const elAtrasoVal = document.getElementById('kpi-fin-atrasadas-val');
+
+    if (elSaldo) elSaldo.innerText = formatarMoedaBRL(kpis.saldo_caixa || 0);
+    if (elReceber) elReceber.innerText = formatarMoedaBRL(kpis.total_receber_mes || 0);
+    if (elPagar) elPagar.innerText = formatarMoedaBRL(kpis.total_pagar_mes || 0);
+
+    const taxa = kpis.taxa_inadimplencia || 0;
+    if (elInadimp) elInadimp.innerText = `${taxa.toFixed(1)}%`;
+    if (elAtrasoVal) elAtrasoVal.innerText = `${formatarMoedaBRL(kpis.total_receitas_atrasadas || 0)} em atraso (${kpis.qtd_faturas_atrasadas || 0} tit.)`;
+
+    if (elInadimpBadge) {
+      if (taxa === 0) {
+        elInadimpBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-emerald-100 text-emerald-800';
+        elInadimpBadge.innerText = 'Excelente (0%)';
+      } else if (taxa < 10) {
+        elInadimpBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-blue-100 text-blue-800';
+        elInadimpBadge.innerText = 'Controlada';
+      } else if (taxa < 25) {
+        elInadimpBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-100 text-amber-800';
+        elInadimpBadge.innerText = 'Alerta';
+      } else {
+        elInadimpBadge.className = 'px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-rose-100 text-rose-800 animate-pulse';
+        elInadimpBadge.innerText = 'Crítica';
+      }
+    }
+
+  } catch (err) {
+    console.error("[Financeiro 2.0] Erro ao carregar KPIs:", err);
+  }
+}
+
+async function carregarTransacoesFinanceiras() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const tipoFiltro = document.getElementById('filtro-fin-tipo')?.value || '';
+  const statusFiltro = document.getElementById('filtro-fin-status')?.value || '';
+
+  const params = new URLSearchParams();
+  if (tipoFiltro) params.append('tipo', tipoFiltro);
+  if (statusFiltro) params.append('status', statusFiltro);
+
+  const url = `${API_BASE_URL}/api/financeiro/transacoes${params.toString() ? '?' + params.toString() : ''}`;
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      credentials: 'include'
+    });
+
+    if (!res.ok) {
+      console.warn("[Financeiro 2.0] Falha ao carregar transações:", res.status);
+      return;
+    }
+
+    const data = await res.json();
+    window.transacoesFinanceirasLista = data || [];
+    filtrarTransacoesFinanceirasClient();
+
+  } catch (err) {
+    console.error("[Financeiro 2.0] Erro ao carregar transações:", err);
+  }
+}
+
+function filtrarTransacoesFinanceirasClient() {
+  const termo = (document.getElementById('filtro-fin-busca')?.value || '').toLowerCase().trim();
+  if (!termo) {
+    renderTransacoesFinanceiras(window.transacoesFinanceirasLista);
+    return;
+  }
+
+  const filtrados = window.transacoesFinanceirasLista.filter(tx => {
+    return (
+      (tx.descricao || '').toLowerCase().includes(termo) ||
+      (tx.categoria || '').toLowerCase().includes(termo) ||
+      (tx.contrato_brand_name || '').toLowerCase().includes(termo) ||
+      (tx.contrato_client_name || '').toLowerCase().includes(termo) ||
+      String(tx.id || '').includes(termo)
+    );
+  });
+
+  renderTransacoesFinanceiras(filtrados);
+}
+
+function renderTransacoesFinanceiras(lista) {
+  const tbody = document.getElementById('datagrid-transacoes-financeiras');
+  if (!tbody) return;
+
+  if (!lista || lista.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="10" class="text-center py-10 text-slate-400">
+          <i class="fa-solid fa-receipt text-3xl mb-2 text-slate-300 block"></i>
+          Nenhuma movimentação financeira encontrada com os filtros selecionados.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = lista.map(tx => {
+    const ehReceita = tx.tipo === 'receita';
+    const tipoBadge = ehReceita
+      ? '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200"><i class="fa-solid fa-arrow-down-left"></i> Receita</span>'
+      : '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200"><i class="fa-solid fa-arrow-up-right"></i> Despesa</span>';
+
+    const valorColor = ehReceita ? 'text-emerald-700' : 'text-rose-700';
+    const sinal = ehReceita ? '+' : '-';
+    const valorFmt = `${sinal} ${formatarMoedaBRL(tx.valor)}`;
+
+    let statusBadge = '';
+    if (tx.status === 'pago') {
+      statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Quitado</span>';
+    } else if (tx.status === 'atrasado') {
+      statusBadge = '<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full font-bold text-[10px] animate-pulse">Atrasado</span>';
+    } else if (tx.status === 'cancelado') {
+      statusBadge = '<span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold text-[10px]">Cancelado</span>';
+    } else {
+      statusBadge = '<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Pendente</span>';
+    }
+
+    let vinculoRM = '<span class="text-slate-400 text-[10px]">Avulso</span>';
+    if (tx.contrato_id) {
+      const brand = tx.contrato_brand_name || 'RM #' + tx.contrato_id;
+      vinculoRM = `
+        <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200" title="${escaparHTMLSeguro(tx.contrato_client_name || '')}">
+          <i class="fa-solid fa-file-contract text-emerald-600 text-[9px]"></i>
+          ${escaparHTMLSeguro(brand)}
+        </span>
+      `;
+    }
+
+    // Ações na linha
+    let botoesAcao = '';
+    if (tx.status !== 'pago' && tx.status !== 'cancelado') {
+      botoesAcao = `
+        <button type="button" onclick="quitarTransacaoFinanceira(${tx.id})" title="Marcar como Quitado" class="px-2 py-1 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded transition cursor-pointer flex items-center gap-1 shadow-2xs">
+          <i class="fa-solid fa-check"></i> Quitar
+        </button>
+      `;
+    } else if (tx.status === 'pago') {
+      botoesAcao = `
+        <button type="button" onclick="alterarStatusTransacao(${tx.id}, 'pendente')" title="Reverter para pendente" class="px-2 py-1 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded transition cursor-pointer">
+          <i class="fa-solid fa-rotate-left"></i> Reverter
+        </button>
+      `;
+    }
+
+    return `
+      <tr class="hover:bg-slate-50 transition border-b border-slate-100 text-xs">
+        <td class="px-4 py-3 font-mono font-bold text-slate-700 whitespace-nowrap">
+          #${tx.id}
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap">
+          ${tipoBadge}
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap">
+          <span class="font-mono text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded uppercase">
+            ${escaparHTMLSeguro(tx.categoria)}
+          </span>
+        </td>
+        <td class="px-4 py-3">
+          <div class="font-semibold text-slate-800 line-clamp-2 max-w-xs" title="${escaparHTMLSeguro(tx.descricao)}">
+            ${escaparHTMLSeguro(tx.descricao)}
+          </div>
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap">
+          ${vinculoRM}
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap font-mono text-slate-600 text-[11px]">
+          ${formatarDataSimplesBR(tx.data_vencimento)}
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap font-mono text-slate-500 text-[11px]">
+          ${tx.data_pagamento ? formatarDataSimplesBR(tx.data_pagamento) : '<span class="text-slate-400">—</span>'}
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap text-right font-mono font-bold ${valorColor}">
+          ${valorFmt}
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap text-center">
+          ${statusBadge}
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap text-center">
+          <div class="flex items-center justify-center gap-1">
+            ${botoesAcao}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function quitarTransacaoFinanceira(txId) {
+  await alterarStatusTransacao(txId, 'pago');
+}
+
+async function alterarStatusTransacao(txId, novoStatus) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/financeiro/transacoes/${txId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      credentials: 'include',
+      body: JSON.stringify({ status: novoStatus })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(`⚠️ ${err.detail || 'Não foi possível alterar status da transação.'}`);
+      return;
+    }
+
+    showToast(`✅ Movimentação #${txId} marcada como ${novoStatus.toUpperCase()}!`);
+    await carregarModuloFinanceiro2();
+
+  } catch (err) {
+    console.error("[Financeiro 2.0] Falha ao atualizar transação:", err);
+    showToast("⚠️ Servidor offline.");
+  }
+}
+
+function abrirModalNovaTransacao() {
+  const selectContrato = document.getElementById('modal_tx_contrato_id');
+  if (selectContrato) {
+    selectContrato.innerHTML = '<option value="">Nenhum Contrato (Avulso)</option>' +
+      (window.contratosRMLista || []).map(c => `
+        <option value="${c.id}">
+          #${c.id} - ${escaparHTMLSeguro(c.brand_name)} (${escaparHTMLSeguro(c.client_name)})
+        </option>
+      `).join('');
+  }
+
+  const inputVencimento = document.getElementById('modal_tx_vencimento');
+  if (inputVencimento && !inputVencimento.value) {
+    inputVencimento.value = new Date().toISOString().split('T')[0];
+  }
+
+  const modal = document.getElementById('modal-nova-transacao');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function fecharModalNovaTransacao() {
+  const modal = document.getElementById('modal-nova-transacao');
+  if (modal) modal.classList.add('hidden');
+  const form = document.getElementById('form-nova-transacao');
+  if (form) form.reset();
+}
+
+async function salvarNovaTransacaoFinanceira(event) {
+  if (event) event.preventDefault();
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  const tipo = document.querySelector('input[name="modal_tx_tipo"]:checked')?.value || 'receita';
+  const categoria = (document.getElementById('modal_tx_categoria')?.value || 'consultoria_rm').trim();
+  const descricao = (document.getElementById('modal_tx_descricao')?.value || '').trim();
+  const valor = parseFloat(document.getElementById('modal_tx_valor')?.value) || 0.0;
+  const dataVencimento = (document.getElementById('modal_tx_vencimento')?.value || '').trim();
+  const status = document.getElementById('modal_tx_status')?.value || 'pendente';
+  const contratoVal = document.getElementById('modal_tx_contrato_id')?.value;
+  const contratoId = contratoVal ? parseInt(contratoVal) : undefined;
+
+  if (!descricao) {
+    showToast("⚠️ A descrição do lançamento é obrigatória.");
+    return;
+  }
+
+  if (valor <= 0) {
+    showToast("⚠️ O valor deve ser superior a R$ 0,00.");
+    return;
+  }
+
+  if (!dataVencimento) {
+    showToast("⚠️ A data de vencimento é obrigatória.");
+    return;
+  }
+
+  const payload = {
+    tipo: tipo,
+    categoria: categoria,
+    descricao: descricao,
+    valor: valor,
+    data_vencimento: dataVencimento,
+    status: status,
+    contrato_id: contratoId
+  };
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/financeiro/transacoes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(`⚠️ ${err.detail || 'Falha ao registrar movimentação financeira.'}`);
+      return;
+    }
+
+    fecharModalNovaTransacao();
+    showToast("✅ Lançamento financeiro registrado com sucesso!");
+    await carregarModuloFinanceiro2();
+
+  } catch (err) {
+    console.error("[Financeiro 2.0] Falha ao cadastrar movimentação:", err);
+    showToast("⚠️ Servidor offline ao registrar movimentação.");
+  }
+}
+
+// ==============================================================================
 // 8. INICIALIZAÇÃO DEFINITIVA DO ECOSSISTEMA
 // ==============================================================================
 function initApp() {
@@ -9406,10 +9773,12 @@ function initApp() {
   carregarStagingRMs();
   carregarPipelineCRM();
   carregarPainelContratos();
+  carregarModuloFinanceiro2();
   iniciarPollingNotificacoes();
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
 if (document.readyState === 'interactive' || document.readyState === 'complete') {
   initApp();
-}
+}
+

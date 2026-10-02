@@ -124,7 +124,12 @@ try:
         create_contrato_rm,
         list_contratos_rm,
         get_contrato_rm_by_id,
-        update_contrato_rm_status
+        update_contrato_rm_status,
+        create_transacao_financeira,
+        get_transacao_financeira_by_id,
+        list_transacoes_financeiras,
+        update_transacao_financeira_status,
+        get_financeiro_kpis
     )
     from backend.auth import (
         verify_password,
@@ -227,7 +232,12 @@ except ImportError:
         create_contrato_rm,
         list_contratos_rm,
         get_contrato_rm_by_id,
-        update_contrato_rm_status
+        update_contrato_rm_status,
+        create_transacao_financeira,
+        get_transacao_financeira_by_id,
+        list_transacoes_financeiras,
+        update_transacao_financeira_status,
+        get_financeiro_kpis
     )
     from auth import (
         verify_password,
@@ -1019,6 +1029,20 @@ class GerarContratoRequest(BaseModel):
     condicoes_pagamento: Optional[str] = None
     prazo_dias: Optional[int] = None
     responsavel_tecnico: Optional[str] = None
+
+class TransacaoFinanceiraCreate(BaseModel):
+    tipo: str = Field(..., description="Tipo de movimentação: receita ou despesa")
+    categoria: str = Field(..., description="Categoria contábil ou operacional")
+    descricao: str = Field(..., min_length=2, description="Detalhamento da movimentação")
+    valor: float = Field(..., gt=0.0, description="Valor monetário superior a R$ 0,00")
+    data_vencimento: str = Field(..., description="Data limite de liquidação (YYYY-MM-DD)")
+    data_pagamento: Optional[str] = Field(None, description="Data efetiva do pagamento (YYYY-MM-DD)")
+    status: Optional[str] = Field("pendente", description="Status: pendente, pago, atrasado, cancelado")
+    contrato_id: Optional[int] = Field(None, description="ID do contrato_rm vinculado")
+
+class TransacaoFinanceiraStatusUpdate(BaseModel):
+    status: str = Field(..., description="Novo status: pendente, pago, atrasado, cancelado")
+    data_pagamento: Optional[str] = Field(None, description="Data de quitação opcional (YYYY-MM-DD)")
 
 def parse_csv_leads(csv_text: str) -> List[LeadIngestItem]:
     """Interpreta texto CSV delimitado por vírgula ou ponto-e-vírgula em objetos LeadIngestItem."""
@@ -2396,6 +2420,110 @@ async def gerar_contrato_juridico_endpoint(
         raise
     except ValueError as ve:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+# ==============================================================================
+# 5.B MÓDULO FINANCEIRO CORPORATIVO E CONTROLE DE CAIXA 2.0 (TRANSAÇÕES & KPIS)
+# ==============================================================================
+
+@app.post(
+    "/api/financeiro/transacoes",
+    status_code=status.HTTP_201_CREATED,
+    summary="Lançar nova receita ou despesa no fluxo de caixa corporativo"
+)
+async def criar_transacao_financeira_endpoint(
+    payload: TransacaoFinanceiraCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+        tx = create_transacao_financeira(data)
+        return {
+            "status": "success",
+            "message": "Transação financeira registrada com sucesso.",
+            "data": tx
+        }
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        err_msg = str(ve)
+        if "não encontrado" in err_msg.lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=err_msg)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err_msg)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@app.get(
+    "/api/financeiro/transacoes",
+    summary="Listar transações financeiras com filtros avançados"
+)
+async def listar_transacoes_financeiras_endpoint(
+    tipo: Optional[str] = Query(None, description="Filtrar por receita ou despesa"),
+    status_filter: Optional[str] = Query(None, alias="status", description="Filtrar por status: pendente, pago, atrasado, cancelado"),
+    categoria: Optional[str] = Query(None, description="Filtrar por categoria contábil"),
+    contrato_id: Optional[int] = Query(None, description="Filtrar por ID do contrato_rm"),
+    data_inicio: Optional[str] = Query(None, description="Data de vencimento inicial (YYYY-MM-DD)"),
+    data_fim: Optional[str] = Query(None, description="Data de vencimento final (YYYY-MM-DD)"),
+    busca: Optional[str] = Query(None, description="Busca textual na descrição, categoria ou cliente"),
+    current_user: dict = Depends(get_current_user)
+):
+    filtros = {
+        "tipo": tipo,
+        "status": status_filter,
+        "categoria": categoria,
+        "contrato_id": contrato_id,
+        "data_inicio": data_inicio,
+        "data_fim": data_fim,
+        "busca": busca
+    }
+    filtros = {k: v for k, v in filtros.items() if v is not None}
+    return list_transacoes_financeiras(filtros)
+
+
+@app.patch(
+    "/api/financeiro/transacoes/{tx_id}/status",
+    summary="Atualizar status de liquidação de uma transação financeira"
+)
+async def atualizar_status_transacao_endpoint(
+    tx_id: int,
+    payload: TransacaoFinanceiraStatusUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        updated = update_transacao_financeira_status(
+            tx_id=tx_id,
+            novo_status=payload.status,
+            data_pagamento=payload.data_pagamento
+        )
+        return {
+            "status": "success",
+            "message": f"Transação #{tx_id} atualizada para '{payload.status}'.",
+            "data": updated
+        }
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        err_msg = str(ve)
+        if "não encontrada" in err_msg.lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=err_msg)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err_msg)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@app.get(
+    "/api/financeiro/kpis",
+    summary="Obter indicadores consolidados de caixa, projeção e inadimplência em tempo real"
+)
+async def obter_kpis_financeiros_endpoint(
+    mes_referencia: Optional[str] = Query(None, description="Mês de referência (YYYY-MM)"),
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        return get_financeiro_kpis(mes_referencia=mes_referencia)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 

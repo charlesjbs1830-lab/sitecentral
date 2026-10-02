@@ -335,6 +335,22 @@ class ContratoRMORM(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     lead = relationship("LeadORM", back_populates="contratos")
+    transacoes = relationship("TransacaoFinanceiraORM", back_populates="contrato")
+
+
+class TransacaoFinanceiraORM(Base):
+    __tablename__ = "transacoes_financeiras"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tipo = Column(String(20), nullable=False)
+    categoria = Column(String(50), nullable=False)
+    descricao = Column(Text, nullable=False)
+    valor = Column(Float, nullable=False)
+    data_vencimento = Column(String(20), nullable=False)
+    data_pagamento = Column(String(20), nullable=True)
+    status = Column(String(20), nullable=False, default="pendente")
+    contrato_id = Column(Integer, ForeignKey("contratos_rm.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at = Column(DateTime, server_default=func.now())
+    contrato = relationship("ContratoRMORM", back_populates="transacoes")
 
 
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
@@ -1497,6 +1513,47 @@ def init_db():
                 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0'
             );
             """, (lead_row["id"], lead_row["client_name"], lead_row["cnpj"], marcos))
+
+    # 23. Tabela de Transações Financeiras Corporativas (Módulo Financeiro e Controle de Caixa 2.0)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS transacoes_financeiras (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tipo TEXT NOT NULL CHECK(tipo IN ('receita', 'despesa')),
+        categoria TEXT NOT NULL,
+        descricao TEXT NOT NULL,
+        valor REAL NOT NULL CHECK(valor > 0),
+        data_vencimento TEXT NOT NULL,
+        data_pagamento TEXT,
+        status TEXT NOT NULL DEFAULT 'pendente' CHECK(status IN ('pendente', 'pago', 'atrasado', 'cancelado')),
+        contrato_id INTEGER REFERENCES contratos_rm(id) ON DELETE SET NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_transacoes_fin_tipo ON transacoes_financeiras(tipo);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_transacoes_fin_status ON transacoes_financeiras(status);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_transacoes_fin_vencimento ON transacoes_financeiras(data_vencimento);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_transacoes_fin_contrato ON transacoes_financeiras(contrato_id);")
+
+    # Seeding inicial de Transações Financeiras vinculadas a contratos
+    cursor.execute("SELECT COUNT(*) FROM transacoes_financeiras;")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("SELECT id FROM contratos_rm LIMIT 1;")
+        c_row = cursor.fetchone()
+        cid = c_row[0] if c_row else None
+        curr_month = datetime.now().strftime("%Y-%m")
+        initial_txs = [
+            ("receita", "consultoria_rm", "1ª Parcela - Consultoria Registro de Marca INPI (Sucos da Mata)", 1220.0, f"{curr_month}-05", f"{curr_month}-05", "pago", cid),
+            ("receita", "consultoria_rm", "2ª Parcela - Protocolo e Acompanhamento INPI (Sucos da Mata)", 1220.0, f"{curr_month}-28", None, "pendente", cid),
+            ("receita", "consultoria_rm", "Diagnóstico de Anterioridade Marcária - Parcela Única", 800.0, "2026-08-10", None, "atrasado", None),
+            ("despesa", "consultoria_rm", "Custas Federais INPI - Emissão de GRU Guia 389", 142.0, f"{curr_month}-06", f"{curr_month}-06", "pago", cid),
+            ("despesa", "taxa_federativa", "Taxa Federativa Anual Brasil Júnior / FEJERS 2026", 450.0, f"{curr_month}-10", f"{curr_month}-10", "pago", None),
+            ("despesa", "infraestrutura", "Servidor Cloud EDbrain & Hospedagem Render", 250.0, f"{curr_month}-25", None, "pendente", None),
+            ("despesa", "capacitacao", "Treinamento Metodologia Ágil Scrum & OKRs para Assessores", 300.0, f"{curr_month}-30", None, "pendente", None),
+        ]
+        cursor.executemany("""
+        INSERT INTO transacoes_financeiras (tipo, categoria, descricao, valor, data_vencimento, data_pagamento, status, contrato_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        """, initial_txs)
 
     ensure_learning_microblocks(conn)
     conn.commit()
@@ -4676,6 +4733,260 @@ def update_contrato_rm_status(contrato_id: int, status: str, current_user: Optio
     updated = dict(cursor.fetchone())
     conn.close()
     return updated
+
+
+# ==============================================================================
+# 21. SUBSISTEMA FINANCEIRO E CONTROLE DE CAIXA 2.0 (TRANSAÇÕES & KPIS)
+# ==============================================================================
+
+VALID_TX_TIPO = {"receita", "despesa"}
+VALID_TX_STATUS = {"pendente", "pago", "atrasado", "cancelado"}
+
+def create_transacao_financeira(data: dict) -> dict:
+    """Cria uma nova transação financeira no fluxo de caixa corporativo."""
+    tipo = (data.get("tipo") or "").lower().strip()
+    if tipo not in VALID_TX_TIPO:
+        raise ValueError(f"Tipo de transação inválido '{tipo}'. Deve ser 'receita' ou 'despesa'.")
+        
+    valor = float(data.get("valor") or 0.0)
+    if valor <= 0:
+        raise ValueError("O valor da movimentação financeira deve ser superior a R$ 0,00.")
+        
+    categoria = (data.get("categoria") or "").strip()
+    if not categoria:
+        raise ValueError("A categoria contábil é obrigatória.")
+        
+    descricao = (data.get("descricao") or "").strip()
+    if not descricao:
+        raise ValueError("A descrição da movimentação é obrigatória.")
+        
+    data_vencimento = (data.get("data_vencimento") or "").strip()
+    if not data_vencimento:
+        raise ValueError("A data de vencimento da movimentação é obrigatória (YYYY-MM-DD).")
+        
+    status = (data.get("status") or "pendente").lower().strip()
+    if status not in VALID_TX_STATUS:
+        raise ValueError(f"Status inválido '{status}'. Deve ser: {', '.join(sorted(VALID_TX_STATUS))}.")
+        
+    data_pagamento = data.get("data_pagamento")
+    if status == "pago" and not data_pagamento:
+        data_pagamento = datetime.now().strftime("%Y-%m-%d")
+        
+    contrato_id = data.get("contrato_id")
+    if contrato_id is not None:
+        try:
+            contrato_id = int(contrato_id)
+        except (ValueError, TypeError):
+            raise ValueError(f"ID do contrato inválido: {data.get('contrato_id')}")
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    if contrato_id is not None:
+        cursor.execute("SELECT id FROM contratos_rm WHERE id = ?;", (contrato_id,))
+        if not cursor.fetchone():
+            conn.close()
+            raise ValueError(f"Contrato de consultoria ID #{contrato_id} não encontrado.")
+
+    cursor.execute("""
+    INSERT INTO transacoes_financeiras (
+        tipo, categoria, descricao, valor, data_vencimento, data_pagamento, status, contrato_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+    """, (tipo, categoria, descricao, valor, data_vencimento, data_pagamento, status, contrato_id))
+    conn.commit()
+    tx_id = cursor.lastrowid
+    conn.close()
+    
+    return get_transacao_financeira_by_id(tx_id)
+
+
+def get_transacao_financeira_by_id(tx_id: int) -> Optional[dict]:
+    """Retorna detalhes de uma transação financeira pelo ID com dados do contrato vinculado."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT t.*, c.brand_name as contrato_brand_name, c.client_name as contrato_client_name, c.status_execucao as contrato_status
+    FROM transacoes_financeiras t
+    LEFT JOIN contratos_rm c ON t.contrato_id = c.id
+    WHERE t.id = ?;
+    """, (tx_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return dict(row)
+
+
+def list_transacoes_financeiras(filtros: Optional[dict] = None) -> List[dict]:
+    """Lista transações financeiras com filtros avançados."""
+    filtros = filtros or {}
+    query = """
+    SELECT t.*, c.brand_name as contrato_brand_name, c.client_name as contrato_client_name, c.status_execucao as contrato_status
+    FROM transacoes_financeiras t
+    LEFT JOIN contratos_rm c ON t.contrato_id = c.id
+    WHERE 1=1
+    """
+    params = []
+    
+    if filtros.get("tipo"):
+        query += " AND t.tipo = ?"
+        params.append(filtros["tipo"].lower().strip())
+        
+    if filtros.get("status"):
+        query += " AND t.status = ?"
+        params.append(filtros["status"].lower().strip())
+        
+    if filtros.get("categoria"):
+        query += " AND t.categoria = ?"
+        params.append(filtros["categoria"].strip())
+        
+    if filtros.get("contrato_id"):
+        query += " AND t.contrato_id = ?"
+        params.append(int(filtros["contrato_id"]))
+        
+    if filtros.get("data_inicio"):
+        query += " AND t.data_vencimento >= ?"
+        params.append(filtros["data_inicio"].strip())
+        
+    if filtros.get("data_fim"):
+        query += " AND t.data_vencimento <= ?"
+        params.append(filtros["data_fim"].strip())
+        
+    if filtros.get("busca"):
+        busca = f"%{filtros['busca'].strip()}%"
+        query += " AND (t.descricao LIKE ? OR t.categoria LIKE ? OR c.brand_name LIKE ? OR c.client_name LIKE ?)"
+        params.extend([busca, busca, busca, busca])
+        
+    query += " ORDER BY t.data_vencimento ASC, t.id DESC;"
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def update_transacao_financeira_status(tx_id: int, novo_status: str, data_pagamento: Optional[str] = None) -> Optional[dict]:
+    """Atualiza o status de liquidação de uma transação financeira."""
+    st_clean = novo_status.lower().strip()
+    if st_clean not in VALID_TX_STATUS:
+        raise ValueError(f"Status inválido '{novo_status}'. Deve ser: {', '.join(sorted(VALID_TX_STATUS))}.")
+        
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM transacoes_financeiras WHERE id = ?;", (tx_id,))
+    existing = cursor.fetchone()
+    if not existing:
+        conn.close()
+        raise ValueError(f"Transação financeira ID #{tx_id} não encontrada.")
+        
+    if st_clean == "pago":
+        if not data_pagamento:
+            data_pagamento = datetime.now().strftime("%Y-%m-%d")
+    else:
+        if data_pagamento is None and st_clean != "pago":
+            data_pagamento = None
+            
+    cursor.execute("""
+    UPDATE transacoes_financeiras
+    SET status = ?, data_pagamento = ?
+    WHERE id = ?;
+    """, (st_clean, data_pagamento, tx_id))
+    conn.commit()
+    conn.close()
+    
+    return get_transacao_financeira_by_id(tx_id)
+
+
+def get_financeiro_kpis(mes_referencia: Optional[str] = None) -> dict:
+    """Calcula indicadores consolidados de caixa, projeção e inadimplência em tempo real."""
+    if not mes_referencia:
+        mes_referencia = datetime.now().strftime("%Y-%m")
+        
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # 1. Total Receitas Pagas e Despesas Pagas (Saldo Caixa)
+    cursor.execute("""
+    SELECT 
+        COALESCE(SUM(CASE WHEN tipo = 'receita' AND status = 'pago' THEN valor ELSE 0 END), 0.0) as rec_pagas,
+        COALESCE(SUM(CASE WHEN tipo = 'despesa' AND status = 'pago' THEN valor ELSE 0 END), 0.0) as desp_pagas
+    FROM transacoes_financeiras;
+    """)
+    row_saldo = cursor.fetchone()
+    rec_pagas = float(row_saldo["rec_pagas"])
+    desp_pagas = float(row_saldo["desp_pagas"])
+    saldo_caixa = rec_pagas - desp_pagas
+    
+    # 2. Total a Receber no Mês Corrente (receitas pendentes ou atrasadas com vencimento no mês)
+    cursor.execute("""
+    SELECT COALESCE(SUM(valor), 0.0) as total_receber
+    FROM transacoes_financeiras
+    WHERE tipo = 'receita' 
+      AND status IN ('pendente', 'atrasado')
+      AND strftime('%Y-%m', data_vencimento) = ?;
+    """, (mes_referencia,))
+    total_receber_mes = float(cursor.fetchone()["total_receber"])
+    
+    # 3. Total a Pagar no Mês Corrente (despesas pendentes ou atrasadas com vencimento no mês)
+    cursor.execute("""
+    SELECT COALESCE(SUM(valor), 0.0) as total_pagar
+    FROM transacoes_financeiras
+    WHERE tipo = 'despesa'
+      AND status IN ('pendente', 'atrasado')
+      AND strftime('%Y-%m', data_vencimento) = ?;
+    """, (mes_referencia,))
+    total_pagar_mes = float(cursor.fetchone()["total_pagar"])
+    
+    # 4. Índice de Inadimplência
+    cursor.execute("""
+    SELECT 
+        COALESCE(SUM(valor), 0.0) as total_atrasadas,
+        COUNT(*) as qtd_atrasadas
+    FROM transacoes_financeiras
+    WHERE tipo = 'receita' 
+      AND status NOT IN ('pago', 'cancelado')
+      AND (status = 'atrasado' OR data_vencimento < ?);
+    """, (today_str,))
+    row_atraso = cursor.fetchone()
+    total_atrasadas = float(row_atraso["total_atrasadas"])
+    qtd_atrasadas = int(row_atraso["qtd_atrasadas"])
+    
+    # Base de vencidos: receitas pagas com vencimento <= today_str + receitas atrasadas
+    cursor.execute("""
+    SELECT COALESCE(SUM(valor), 0.0) as total_vencido
+    FROM transacoes_financeiras
+    WHERE tipo = 'receita'
+      AND status != 'cancelado'
+      AND (status = 'pago' OR status = 'atrasado' OR data_vencimento < ?);
+    """, (today_str,))
+    total_vencido = float(cursor.fetchone()["total_vencido"])
+    
+    taxa_inadimplencia = 0.0
+    if total_vencido > 0:
+        taxa_inadimplencia = round((total_atrasadas / total_vencido) * 100, 2)
+        
+    # Contagem geral
+    cursor.execute("SELECT COUNT(*) as total FROM transacoes_financeiras;")
+    total_tx = int(cursor.fetchone()["total"])
+    
+    conn.close()
+    
+    return {
+        "saldo_caixa": round(saldo_caixa, 2),
+        "total_receber_mes": round(total_receber_mes, 2),
+        "total_pagar_mes": round(total_pagar_mes, 2),
+        "taxa_inadimplencia": taxa_inadimplencia,
+        "total_receitas_pagas": round(rec_pagas, 2),
+        "total_despesas_pagas": round(desp_pagas, 2),
+        "total_receitas_atrasadas": round(total_atrasadas, 2),
+        "qtd_faturas_atrasadas": qtd_atrasadas,
+        "total_transacoes": total_tx,
+        "mes_referencia": mes_referencia
+    }
 
 
 if __name__ == "__main__":

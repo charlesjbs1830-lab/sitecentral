@@ -39,6 +39,7 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         conn.execute("DELETE FROM member_pdi_blocks;")
         conn.execute("DELETE FROM forum_respostas;")
         conn.execute("DELETE FROM forum_duvidas;")
+        conn.execute("DELETE FROM transacoes_financeiras;")
         conn.execute("DELETE FROM contratos_rm;")
         conn.execute("DELETE FROM leads;")
         conn.commit()
@@ -2183,6 +2184,225 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         self.assertIn(hash_integ, marca_dagua)
         self.assertIn(hash_integ, md_text)
         self.assertIn(hash_integ, html_text)
+
+    def test_59_financeiro_transacoes_creation_and_contract_link(self):
+        """Valida lançamento de receitas e despesas com validações e vínculo relacional com contratos_rm"""
+        token = self.tokens["presidente"]
+
+        # 1. Obter um contrato de RM existente ou criar um
+        res_contratos = self.client.get("/api/crm/contratos", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_contratos.status_code, 200)
+        contratos = res_contratos.json().get("contratos", [])
+        if not contratos:
+            res_lead = self.client.post("/api/crm/leads", headers={"Authorization": f"Bearer {token}"}, json={
+                "client_name": "Empresa Teste RM",
+                "estimated_value": 2440.0,
+                "etapa": "fechado"
+            })
+            lead_id = res_lead.json()["lead"]["id"]
+            res_c = self.client.post("/api/crm/contratos", headers={"Authorization": f"Bearer {token}"}, json={
+                "lead_id": lead_id,
+                "brand_name": "MARCA TESTE",
+                "consultoria_escopo": "Registro de Marca INPI",
+                "valor_total": 2440.0
+            })
+            contrato_id = res_c.json()["contrato"]["id"]
+        else:
+            contrato_id = contratos[0]["id"]
+
+        # 2. Lançar Receita vinculada ao contrato
+        payload_rec = {
+            "tipo": "receita",
+            "categoria": "consultoria_rm",
+            "descricao": "Parcela 1/2 Consultoria Registro de Marca INPI",
+            "valor": 1220.0,
+            "data_vencimento": "2026-10-15",
+            "status": "pago",
+            "contrato_id": contrato_id
+        }
+        res_rec = self.client.post("/api/financeiro/transacoes", headers={"Authorization": f"Bearer {token}"}, json=payload_rec)
+        self.assertEqual(res_rec.status_code, 201)
+        data_rec = res_rec.json()
+        self.assertEqual(data_rec["status"], "success")
+        self.assertEqual(data_rec["data"]["tipo"], "receita")
+        self.assertEqual(data_rec["data"]["valor"], 1220.0)
+        self.assertEqual(data_rec["data"]["contrato_id"], contrato_id)
+        self.assertEqual(data_rec["data"]["status"], "pago")
+        self.assertIsNotNone(data_rec["data"]["data_pagamento"])
+
+        # 3. Lançar Despesa avulsa sem contrato
+        payload_desp = {
+            "tipo": "despesa",
+            "categoria": "infraestrutura",
+            "descricao": "Renovação Servidor Cloud EDbrain",
+            "valor": 250.0,
+            "data_vencimento": "2026-10-25",
+            "status": "pendente"
+        }
+        res_desp = self.client.post("/api/financeiro/transacoes", headers={"Authorization": f"Bearer {token}"}, json=payload_desp)
+        self.assertEqual(res_desp.status_code, 201)
+        data_desp = res_desp.json()["data"]
+        self.assertEqual(data_desp["tipo"], "despesa")
+        self.assertEqual(data_desp["valor"], 250.0)
+        self.assertIsNone(data_desp["contrato_id"])
+        self.assertEqual(data_desp["status"], "pendente")
+
+        # 4. Validações Impeditivas:
+        # 4.1 Valor negativo ou zero
+        res_invalid_val = self.client.post("/api/financeiro/transacoes", headers={"Authorization": f"Bearer {token}"}, json={
+            "tipo": "receita",
+            "categoria": "consultoria_rm",
+            "descricao": "Valor zero inválido",
+            "valor": 0.0,
+            "data_vencimento": "2026-10-15"
+        })
+        self.assertIn(res_invalid_val.status_code, [400, 422])
+
+        # 4.2 Tipo inválido
+        res_invalid_type = self.client.post("/api/financeiro/transacoes", headers={"Authorization": f"Bearer {token}"}, json={
+            "tipo": "emprestimo",
+            "categoria": "consultoria_rm",
+            "descricao": "Tipo inválido",
+            "valor": 100.0,
+            "data_vencimento": "2026-10-15"
+        })
+        self.assertEqual(res_invalid_type.status_code, 400)
+
+        # 4.3 Contrato ID inexistente
+        res_invalid_contrato = self.client.post("/api/financeiro/transacoes", headers={"Authorization": f"Bearer {token}"}, json={
+            "tipo": "receita",
+            "categoria": "consultoria_rm",
+            "descricao": "Contrato inexistente",
+            "valor": 500.0,
+            "data_vencimento": "2026-10-15",
+            "contrato_id": 99999
+        })
+        self.assertEqual(res_invalid_contrato.status_code, 404)
+
+    def test_60_financeiro_transacoes_listing_and_filters(self):
+        """Valida listagem de transações financeiras e filtros por tipo, status, categoria e período"""
+        token = self.tokens["presidente"]
+
+        # Listagem completa
+        res = self.client.get("/api/financeiro/transacoes", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res.status_code, 200)
+        todas = res.json()
+        self.assertIsInstance(todas, list)
+        if len(todas) < 2:
+            self.client.post("/api/financeiro/transacoes", headers={"Authorization": f"Bearer {token}"}, json={
+                "tipo": "receita", "categoria": "consultoria_rm", "descricao": "Rec Test 60 EDbrain", "valor": 500.0, "data_vencimento": "2026-10-10", "status": "pago"
+            })
+            self.client.post("/api/financeiro/transacoes", headers={"Authorization": f"Bearer {token}"}, json={
+                "tipo": "despesa", "categoria": "infraestrutura", "descricao": "Desp Test 60 EDbrain", "valor": 150.0, "data_vencimento": "2026-10-15", "status": "pendente"
+            })
+            res = self.client.get("/api/financeiro/transacoes", headers={"Authorization": f"Bearer {token}"})
+            todas = res.json()
+        self.assertGreaterEqual(len(todas), 2)
+
+        # Filtro por tipo=receita
+        res_rec = self.client.get("/api/financeiro/transacoes?tipo=receita", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_rec.status_code, 200)
+        for r in res_rec.json():
+            self.assertEqual(r["tipo"], "receita")
+
+        # Filtro por tipo=despesa
+        res_desp = self.client.get("/api/financeiro/transacoes?tipo=despesa", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_desp.status_code, 200)
+        for d in res_desp.json():
+            self.assertEqual(d["tipo"], "despesa")
+
+        # Filtro por status=pago
+        res_pagos = self.client.get("/api/financeiro/transacoes?status=pago", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_pagos.status_code, 200)
+        for p in res_pagos.json():
+            self.assertEqual(p["status"], "pago")
+
+        # Filtro por busca textual
+        res_busca = self.client.get("/api/financeiro/transacoes?busca=EDbrain", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_busca.status_code, 200)
+        self.assertGreaterEqual(len(res_busca.json()), 1)
+
+    def test_61_financeiro_transacoes_status_update_quittance(self):
+        """Valida quitação de transações via PATCH, gravação de data de pagamento e erros para IDs inexistentes"""
+        token = self.tokens["presidente"]
+
+        # 1. Criar transação pendente
+        payload = {
+            "tipo": "receita",
+            "categoria": "consultoria_rm",
+            "descricao": "Honorários para teste de quitação",
+            "valor": 1500.0,
+            "data_vencimento": "2026-10-20",
+            "status": "pendente"
+        }
+        res_create = self.client.post("/api/financeiro/transacoes", headers={"Authorization": f"Bearer {token}"}, json=payload)
+        tx_id = res_create.json()["data"]["id"]
+
+        # 2. Dar baixa / quitar
+        res_patch = self.client.patch(f"/api/financeiro/transacoes/{tx_id}/status", headers={"Authorization": f"Bearer {token}"}, json={
+            "status": "pago",
+            "data_pagamento": "2026-10-18"
+        })
+        self.assertEqual(res_patch.status_code, 200)
+        updated = res_patch.json()["data"]
+        self.assertEqual(updated["status"], "pago")
+        self.assertEqual(updated["data_pagamento"], "2026-10-18")
+
+        # 3. Cancelar transação
+        res_cancel = self.client.patch(f"/api/financeiro/transacoes/{tx_id}/status", headers={"Authorization": f"Bearer {token}"}, json={
+            "status": "cancelado"
+        })
+        self.assertEqual(res_cancel.status_code, 200)
+        self.assertEqual(res_cancel.json()["data"]["status"], "cancelado")
+
+        # 4. Transação inexistente retorna 404
+        res_404 = self.client.patch("/api/financeiro/transacoes/99999/status", headers={"Authorization": f"Bearer {token}"}, json={
+            "status": "pago"
+        })
+        self.assertEqual(res_404.status_code, 404)
+
+        # 5. Status inválido retorna 400
+        res_inv = self.client.patch(f"/api/financeiro/transacoes/{tx_id}/status", headers={"Authorization": f"Bearer {token}"}, json={
+            "status": "liquidado_indevido"
+        })
+        self.assertEqual(res_inv.status_code, 400)
+
+    def test_62_financeiro_kpis_realtime_calculation(self):
+        """Valida recálculo dinâmico de KPIs de caixa, valores do mês e índice percentual de inadimplência"""
+        token = self.tokens["presidente"]
+
+        # Obter KPIs atuais
+        res_kpis = self.client.get("/api/financeiro/kpis", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_kpis.status_code, 200)
+        kpis = res_kpis.json()
+
+        # Validar estrutura de chaves exigidas
+        self.assertIn("saldo_caixa", kpis)
+        self.assertIn("total_receber_mes", kpis)
+        self.assertIn("total_pagar_mes", kpis)
+        self.assertIn("taxa_inadimplencia", kpis)
+        self.assertIn("total_receitas_atrasadas", kpis)
+
+        # Criar transação vencida não paga (atrasada) para aferir taxa de inadimplência > 0
+        res_atraso = self.client.post("/api/financeiro/transacoes", headers={"Authorization": f"Bearer {token}"}, json={
+            "tipo": "receita",
+            "categoria": "consultoria_rm",
+            "descricao": "Parcela com atraso proposital para teste de inadimplência",
+            "valor": 1000.0,
+            "data_vencimento": "2026-07-01",
+            "status": "atrasado"
+        })
+        self.assertEqual(res_atraso.status_code, 201)
+
+        # Recalcular KPIs
+        res_kpis2 = self.client.get("/api/financeiro/kpis", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_kpis2.status_code, 200)
+        kpis2 = res_kpis2.json()
+
+        # Inadimplência deve ser positiva e refletir os recebíveis atrasados
+        self.assertGreater(kpis2["taxa_inadimplencia"], 0.0)
+        self.assertGreaterEqual(kpis2["total_receitas_atrasadas"], 1000.0)
+        self.assertEqual(kpis2["saldo_caixa"], round(kpis2["total_receitas_pagas"] - kpis2["total_despesas_pagas"], 2))
 
 
 if __name__ == "__main__":
