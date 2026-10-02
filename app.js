@@ -257,6 +257,8 @@ function applyUserSession(user) {
     carregarNotificacoesUsuario();
     carregarEstatutosCompliance();
     carregarStagingRMs();
+    carregarPipelineCRM();
+    carregarPainelContratos();
     iniciarPollingNotificacoes();
   }
 }
@@ -559,14 +561,18 @@ function switchComercialSubtab(subtab) {
   const radarView = document.getElementById('comercial-sub-radar');
   const fuView = document.getElementById('comercial-sub-followups');
   const kanbanView = document.getElementById('comercial-sub-kanban');
+  const contratosView = document.getElementById('comercial-sub-contratos');
+  const juridicoView = document.getElementById('comercial-sub-juridico');
 
   const btnPipe = document.getElementById('subtab-com-pipeline');
   const btnRadar = document.getElementById('subtab-com-radar');
   const btnFu = document.getElementById('subtab-com-followups');
   const btnKanban = document.getElementById('subtab-com-kanban');
+  const btnContratos = document.getElementById('subtab-com-contratos');
+  const btnJuridico = document.getElementById('subtab-com-juridico');
 
-  [pipeView, radarView, fuView, kanbanView].forEach(el => el && el.classList.add('hidden'));
-  [btnPipe, btnRadar, btnFu, btnKanban].forEach(btn => {
+  [pipeView, radarView, fuView, kanbanView, contratosView, juridicoView].forEach(el => el && el.classList.add('hidden'));
+  [btnPipe, btnRadar, btnFu, btnKanban, btnContratos, btnJuridico].forEach(btn => {
     if (btn) {
       btn.classList.remove('subtab-active');
       btn.classList.add('subtab-inactive');
@@ -576,6 +582,18 @@ function switchComercialSubtab(subtab) {
   if (subtab === 'pipeline') {
     if (pipeView) pipeView.classList.remove('hidden');
     if (btnPipe) { btnPipe.classList.add('subtab-active'); btnPipe.classList.remove('subtab-inactive'); }
+  } else if (subtab === 'kanban') {
+    if (kanbanView) kanbanView.classList.remove('hidden');
+    if (btnKanban) { btnKanban.classList.add('subtab-active'); btnKanban.classList.remove('subtab-inactive'); }
+    carregarPipelineCRM();
+  } else if (subtab === 'contratos') {
+    if (contratosView) contratosView.classList.remove('hidden');
+    if (btnContratos) { btnContratos.classList.add('subtab-active'); btnContratos.classList.remove('subtab-inactive'); }
+    carregarPainelContratos();
+  } else if (subtab === 'juridico') {
+    if (juridicoView) juridicoView.classList.remove('hidden');
+    if (btnJuridico) { btnJuridico.classList.add('subtab-active'); btnJuridico.classList.remove('subtab-inactive'); }
+    carregarModuloJuridico();
   } else if (subtab === 'radar') {
     if (radarView) radarView.classList.remove('hidden');
     if (btnRadar) { btnRadar.classList.add('subtab-active'); btnRadar.classList.remove('subtab-inactive'); }
@@ -583,10 +601,6 @@ function switchComercialSubtab(subtab) {
     if (fuView) fuView.classList.remove('hidden');
     if (btnFu) { btnFu.classList.add('subtab-active'); btnFu.classList.remove('subtab-inactive'); }
     carregarFollowupsCRM();
-  } else if (subtab === 'kanban') {
-    if (kanbanView) kanbanView.classList.remove('hidden');
-    if (btnKanban) { btnKanban.classList.add('subtab-active'); btnKanban.classList.remove('subtab-inactive'); }
-    renderKanbanBoard(crmFollowupsList);
   }
 }
 
@@ -8553,6 +8567,820 @@ async function alternarStatusDuvida(duvidaId, novoStatus) {
 }
 
 // ==============================================================================
+// 7. SUBSISTEMA COMERCIAL, GESTÃO DE RMS E AUTOMAÇÃO JURÍDICA (CRM 2.0)
+// ==============================================================================
+
+window.crmPipelineData = { summary: {}, stages: {} };
+window.leadsCRMLista = [];
+window.contratosRMLista = [];
+window.minutaAtualGerada = { markdown: '', html: '', hash: '', watermark: '' };
+
+function formatarMoedaBRL(val) {
+  const num = parseFloat(val) || 0;
+  return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function formatarDataSimplesBR(dataIso) {
+  if (!dataIso) return '--';
+  try {
+    const d = new Date(dataIso);
+    if (isNaN(d.getTime())) return dataIso;
+    return d.toLocaleDateString('pt-BR');
+  } catch (e) {
+    return dataIso;
+  }
+}
+
+function escaparHTMLSeguro(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// ------------------------------------------------------------------------------
+// 7.1 PIPELINE E QUADRO KANBAN (6 ETAPAS)
+// ------------------------------------------------------------------------------
+async function carregarPipelineCRM() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/crm/pipeline`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      credentials: 'include'
+    });
+
+    if (!res.ok) {
+      console.warn("[CRM] Falha ao carregar pipeline via API:", res.status);
+      return;
+    }
+
+    const data = await res.json();
+    window.crmPipelineData = data;
+
+    // Atualizar lista achatada de leads para busca rápida e preenchimento
+    window.leadsCRMLista = [];
+    if (data.stages) {
+      Object.keys(data.stages).forEach(stage => {
+        if (Array.isArray(data.stages[stage])) {
+          window.leadsCRMLista.push(...data.stages[stage]);
+        }
+      });
+    }
+
+    // Atualizar Indicadores Principais (KPIs)
+    const summary = data.summary || {};
+    const kpiAberto = document.getElementById('kpi-pipeline-aberto');
+    const kpiFechado = document.getElementById('kpi-pipeline-fechado');
+    const kpiTotal = document.getElementById('kpi-total-leads');
+    const kpiConversao = document.getElementById('kpi-pipeline-conversao');
+    const badgeKanban = document.getElementById('badge-crm-kanban');
+
+    if (kpiAberto) kpiAberto.innerText = formatarMoedaBRL(summary.valor_em_aberto || 0);
+    if (kpiFechado) kpiFechado.innerText = formatarMoedaBRL(summary.valor_fechado || 0);
+    if (kpiTotal) kpiTotal.innerText = summary.total_leads || 0;
+    if (kpiConversao) kpiConversao.innerText = `${(summary.taxa_conversao || 0).toFixed(1)}%`;
+    if (badgeKanban) badgeKanban.innerText = summary.total_leads || 0;
+
+    // Renderizar colunas do Kanban
+    renderKanbanCRM(data.stages || {});
+
+    // Atualizar selects dependentes em outros módulos (Contratos e Jurídico)
+    popularSelectsLeadsCRM();
+
+  } catch (err) {
+    console.error("[CRM] Erro ao sincronizar pipeline:", err);
+  }
+}
+
+function renderKanbanCRM(stages) {
+  const etapasDef = [
+    { key: 'prospeccao', label: 'Prospecção', next: 'diagnostico', prev: null, color: 'blue' },
+    { key: 'diagnostico', label: 'Diagnóstico', next: 'proposta', prev: 'prospeccao', color: 'cyan' },
+    { key: 'proposta', label: 'Proposta', next: 'negociacao', prev: 'diagnostico', color: 'indigo' },
+    { key: 'negociacao', label: 'Negociação', next: 'fechado', prev: 'proposta', color: 'amber' },
+    { key: 'fechado', label: 'Fechado', next: null, prev: 'negociacao', color: 'emerald' },
+    { key: 'perdido', label: 'Perdido', next: null, prev: null, color: 'rose' }
+  ];
+
+  etapasDef.forEach(etapa => {
+    const leads = stages[etapa.key] || [];
+    const countEl = document.getElementById(`kanban-count-${etapa.key}`);
+    const valEl = document.getElementById(`kanban-val-${etapa.key}`);
+    const colEl = document.getElementById(`kanban-col-${etapa.key}`);
+
+    if (countEl) countEl.innerText = leads.length;
+
+    const totalVal = leads.reduce((acc, l) => acc + (parseFloat(l.estimated_value) || 0), 0);
+    if (valEl) valEl.innerText = formatarMoedaBRL(totalVal);
+
+    if (!colEl) return;
+
+    if (leads.length === 0) {
+      colEl.innerHTML = `
+        <div class="p-3 text-center text-slate-400 text-[11px] italic bg-white/60 rounded-lg border border-dashed border-slate-200">
+          Nenhum lead nesta etapa
+        </div>
+      `;
+      return;
+    }
+
+    colEl.innerHTML = leads.map(lead => {
+      const valorFmt = formatarMoedaBRL(lead.estimated_value);
+      const leadIdStr = lead.id;
+      const respNome = lead.responsible || 'Sem responsável';
+      const contatoNome = lead.contact_person || 'Contato não inf.';
+      const contatoFone = lead.contact_phone || '';
+
+      // Botões de transição
+      let botoesTransicao = '';
+      if (etapa.prev) {
+        botoesTransicao += `
+          <button type="button" onclick="transicionarEtapaLead('${leadIdStr}', '${etapa.prev}')" title="Voltar para etapa anterior" class="px-1.5 py-1 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 rounded transition cursor-pointer">
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
+        `;
+      }
+
+      if (etapa.key === 'negociacao') {
+        botoesTransicao += `
+          <button type="button" onclick="transicionarEtapaLead('${leadIdStr}', 'fechado')" title="Marcar como Fechado" class="px-2 py-1 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded transition cursor-pointer flex items-center gap-1">
+            <i class="fa-solid fa-check"></i> Fechar
+          </button>
+          <button type="button" onclick="transicionarEtapaLead('${leadIdStr}', 'perdido')" title="Marcar como Perdido" class="px-1.5 py-1 text-[10px] bg-rose-100 hover:bg-rose-200 text-rose-700 rounded transition cursor-pointer">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        `;
+      } else if (etapa.next) {
+        botoesTransicao += `
+          <button type="button" onclick="transicionarEtapaLead('${leadIdStr}', '${etapa.next}')" title="Avançar etapa" class="px-2 py-1 text-[10px] bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded transition cursor-pointer flex items-center gap-1">
+            Avançar <i class="fa-solid fa-arrow-right"></i>
+          </button>
+        `;
+      } else if (etapa.key === 'perdido') {
+        botoesTransicao += `
+          <button type="button" onclick="transicionarEtapaLead('${leadIdStr}', 'prospeccao')" title="Reativar Lead" class="px-2 py-1 text-[10px] bg-blue-100 hover:bg-blue-200 text-blue-800 font-bold rounded transition cursor-pointer flex items-center gap-1">
+            <i class="fa-solid fa-rotate-left"></i> Reativar
+          </button>
+        `;
+      }
+
+      // Botões especiais para etapa FECHADO
+      let botoesEspeciais = '';
+      if (etapa.key === 'fechado') {
+        botoesEspeciais = `
+          <div class="mt-2 pt-2 border-t border-emerald-100 flex flex-col gap-1">
+            <button type="button" onclick="abrirFormalizacaoParaLead('${leadIdStr}')" class="w-full text-center px-2 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-[10px] font-bold rounded transition cursor-pointer flex items-center justify-center gap-1">
+              <i class="fa-solid fa-file-contract"></i> Formalizar RM
+            </button>
+            <button type="button" onclick="iniciarMinutaParaLead('${leadIdStr}')" class="w-full text-center px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-semibold rounded transition cursor-pointer flex items-center justify-center gap-1">
+              <i class="fa-solid fa-stamp"></i> Emitir Minuta
+            </button>
+          </div>
+        `;
+      } else if (etapa.key === 'proposta' || etapa.key === 'negociacao') {
+        botoesEspeciais = `
+          <div class="mt-2 pt-2 border-t border-slate-100">
+            <button type="button" onclick="iniciarMinutaParaLead('${leadIdStr}')" class="w-full text-center px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-semibold rounded transition cursor-pointer flex items-center justify-center gap-1">
+              <i class="fa-solid fa-file-lines text-blue-600"></i> Gerar Proposta / Minuta
+            </button>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="bg-white rounded-xl p-3 border border-slate-200 shadow-2xs hover:shadow-md transition">
+          <div class="flex items-start justify-between gap-1 mb-1">
+            <div class="font-bold text-xs text-slate-900 leading-snug break-words">
+              ${escaparHTMLSeguro(lead.client_name)}
+            </div>
+            <span class="text-[9px] bg-slate-100 text-slate-600 font-mono px-1 rounded">#${lead.id.substring(0, 4)}</span>
+          </div>
+
+          ${lead.cnpj ? `<div class="text-[10px] text-slate-400 font-mono mb-1.5">${escaparHTMLSeguro(lead.cnpj)}</div>` : ''}
+
+          <div class="flex items-baseline justify-between mb-2">
+            <span class="text-[10px] text-slate-500 font-medium">Estimado:</span>
+            <span class="text-xs font-mono font-bold text-indigo-700">${valorFmt}</span>
+          </div>
+
+          <div class="space-y-0.5 text-[10px] text-slate-600 pb-2 border-b border-slate-100">
+            <div class="flex items-center gap-1">
+              <i class="fa-solid fa-user text-slate-400 text-[9px]"></i>
+              <span class="truncate">${escaparHTMLSeguro(contatoNome)}</span>
+            </div>
+            ${contatoFone ? `
+              <div class="flex items-center gap-1">
+                <i class="fa-solid fa-phone text-slate-400 text-[9px]"></i>
+                <span class="truncate font-mono">${escaparHTMLSeguro(contatoFone)}</span>
+              </div>
+            ` : ''}
+            <div class="flex items-center gap-1">
+              <i class="fa-solid fa-id-badge text-indigo-400 text-[9px]"></i>
+              <span class="truncate text-slate-500">${escaparHTMLSeguro(respNome)}</span>
+            </div>
+          </div>
+
+          <div class="mt-2 flex items-center justify-between gap-1">
+            <div class="flex items-center gap-1">
+              ${botoesTransicao}
+            </div>
+          </div>
+
+          ${botoesEspeciais}
+        </div>
+      `;
+    }).join('');
+  });
+}
+
+async function transicionarEtapaLead(leadId, novaEtapa) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/crm/leads/${leadId}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      credentials: 'include',
+      body: JSON.stringify({ etapa: novaEtapa })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(`⚠️ ${err.detail || 'Não foi possível mover o lead.'}`);
+      return;
+    }
+
+    showToast(`✅ Lead movido para ${novaEtapa.toUpperCase()}!`);
+    await carregarPipelineCRM();
+
+  } catch (err) {
+    console.error("[CRM] Falha ao transicionar etapa:", err);
+    showToast("⚠️ Servidor offline.");
+  }
+}
+
+function abrirModalNovoLead() {
+  const modal = document.getElementById('modal-novo-lead');
+  if (modal) {
+    modal.classList.remove('hidden');
+    const inputNome = document.getElementById('lead_client_name');
+    if (inputNome) setTimeout(() => inputNome.focus(), 100);
+  }
+}
+
+function fecharModalNovoLead() {
+  const modal = document.getElementById('modal-novo-lead');
+  if (modal) modal.classList.add('hidden');
+  const form = document.getElementById('form-novo-lead');
+  if (form) form.reset();
+}
+
+async function salvarNovoLead(event) {
+  if (event) event.preventDefault();
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  const clientName = (document.getElementById('lead_client_name')?.value || '').trim();
+  if (!clientName) {
+    showToast("⚠️ O nome do cliente / empresa é obrigatório.");
+    return;
+  }
+
+  const payload = {
+    client_name: clientName,
+    cnpj: (document.getElementById('lead_cnpj')?.value || '').trim() || undefined,
+    estimated_value: parseFloat(document.getElementById('lead_estimated_value')?.value) || 0,
+    contact_person: (document.getElementById('lead_contact_person')?.value || '').trim() || undefined,
+    contact_phone: (document.getElementById('lead_contact_phone')?.value || '').trim() || undefined,
+    contact_email: (document.getElementById('lead_contact_email')?.value || '').trim() || undefined,
+    etapa: document.getElementById('lead_etapa')?.value || 'prospeccao',
+    responsible: (document.getElementById('lead_responsible')?.value || '').trim() || undefined,
+    notes: (document.getElementById('lead_notes')?.value || '').trim() || undefined
+  };
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/crm/leads`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(`⚠️ ${err.detail || 'Falha ao cadastrar lead no CRM.'}`);
+      return;
+    }
+
+    fecharModalNovoLead();
+    showToast("✅ Oportunidade comercial cadastrada com sucesso!");
+    await carregarPipelineCRM();
+
+  } catch (err) {
+    console.error("[CRM] Falha ao cadastrar lead:", err);
+    showToast("⚠️ Servidor offline ao salvar lead.");
+  }
+}
+
+// ------------------------------------------------------------------------------
+// 7.2 GESTÃO DE CONTRATOS & RMS DE CONSULTORIA
+// ------------------------------------------------------------------------------
+async function carregarPainelContratos() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const statusFiltro = document.getElementById('filtro-contrato-status')?.value || '';
+  const url = `${API_BASE_URL}/api/crm/contratos${statusFiltro ? '?status=' + encodeURIComponent(statusFiltro) : ''}`;
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      credentials: 'include'
+    });
+
+    if (!res.ok) {
+      console.warn("[CRM Contratos] Falha na consulta:", res.status);
+      return;
+    }
+
+    const data = await res.json();
+    window.contratosRMLista = data || [];
+
+    const badgeTotal = document.getElementById('contratos-total-badge');
+    const badgeSubtab = document.getElementById('badge-crm-contratos');
+    if (badgeTotal) badgeTotal.innerText = window.contratosRMLista.length;
+    if (badgeSubtab) badgeSubtab.innerText = window.contratosRMLista.length;
+
+    renderPainelContratos(window.contratosRMLista);
+
+  } catch (err) {
+    console.error("[CRM Contratos] Erro ao carregar contratos:", err);
+  }
+}
+
+function renderPainelContratos(contratos) {
+  const tbody = document.getElementById('datagrid-contratos-rm');
+  if (!tbody) return;
+
+  if (!contratos || contratos.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="text-center py-8 text-slate-400">
+          <i class="fa-solid fa-folder-open text-2xl mb-2 text-slate-300 block"></i>
+          Nenhum contrato de consultoria ou RM registrado.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = contratos.map(c => {
+    let statusBadge = '';
+    if (c.status_execucao === 'ativo') {
+      statusBadge = '<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Ativo</span>';
+    } else if (c.status_execucao === 'suspenso') {
+      statusBadge = '<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Suspenso</span>';
+    } else {
+      statusBadge = '<span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold text-[10px]">Concluído</span>';
+    }
+
+    const valorFmt = formatarMoedaBRL(c.valor_total);
+    const dataEntregaFmt = formatarDataSimplesBR(c.prazo_entrega);
+
+    return `
+      <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+        <td class="px-4 py-3 font-mono font-bold text-emerald-700 whitespace-nowrap">
+          #${c.id.substring(0, 8)}
+        </td>
+        <td class="px-4 py-3">
+          <div class="font-bold text-slate-900">${escaparHTMLSeguro(c.brand_name)}</div>
+          <div class="text-[10px] text-slate-500 font-mono">Resp: ${escaparHTMLSeguro(c.responsavel_tecnico || 'Equipe')}</div>
+        </td>
+        <td class="px-4 py-3">
+          <div class="font-medium text-slate-800">${escaparHTMLSeguro(c.client_name)}</div>
+          <div class="text-[10px] text-slate-400 font-mono">${escaparHTMLSeguro(c.cnpj || 'Sem CNPJ')}</div>
+        </td>
+        <td class="px-4 py-3 max-w-xs">
+          <div class="text-[11px] text-slate-600 line-clamp-2" title="${escaparHTMLSeguro(c.consultoria_escopo)}">
+            ${escaparHTMLSeguro(c.consultoria_escopo)}
+          </div>
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap">
+          <div class="font-bold text-slate-800">${c.prazo_dias} dias</div>
+          <div class="text-[10px] text-slate-500 font-mono">Entrega: ${dataEntregaFmt}</div>
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap">
+          <div class="font-bold font-mono text-emerald-700">${valorFmt}</div>
+          <div class="text-[10px] text-slate-400">${escaparHTMLSeguro(c.marcos_financeiros || 'Integral')}</div>
+        </td>
+        <td class="px-4 py-3 whitespace-nowrap">
+          ${statusBadge}
+        </td>
+        <td class="px-4 py-3 text-center whitespace-nowrap">
+          <div class="flex items-center justify-center gap-1.5">
+            ${c.status_execucao === 'ativo' ? `
+              <button type="button" onclick="atualizarStatusContrato('${c.id}', 'suspenso')" title="Suspender execução" class="px-2 py-1 text-[10px] bg-amber-50 hover:bg-amber-100 text-amber-700 rounded border border-amber-200 transition cursor-pointer">
+                Suspender
+              </button>
+              <button type="button" onclick="atualizarStatusContrato('${c.id}', 'concluido')" title="Concluir consultoria" class="px-2 py-1 text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-700 rounded border border-blue-200 transition cursor-pointer font-bold">
+                Concluir
+              </button>
+            ` : c.status_execucao === 'suspenso' ? `
+              <button type="button" onclick="atualizarStatusContrato('${c.id}', 'ativo')" title="Reativar contrato" class="px-2 py-1 text-[10px] bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded border border-emerald-200 transition cursor-pointer font-bold">
+                Reativar
+              </button>
+            ` : `
+              <button type="button" onclick="atualizarStatusContrato('${c.id}', 'ativo')" title="Reabrir consultoria" class="px-2 py-1 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 rounded border border-slate-300 transition cursor-pointer">
+                Reabrir
+              </button>
+            `}
+            <button type="button" onclick="iniciarMinutaParaContrato('${c.id}')" title="Emitir Minuta Oficial" class="px-2 py-1 text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded border border-indigo-200 transition cursor-pointer">
+              <i class="fa-solid fa-stamp"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function atualizarStatusContrato(contratoId, novoStatus) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/crm/contratos/${contratoId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      credentials: 'include',
+      body: JSON.stringify({ status_execucao: novoStatus })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(`⚠️ ${err.detail || 'Não foi possível alterar status do contrato.'}`);
+      return;
+    }
+
+    showToast(`✅ Contrato alterado para status ${novoStatus.toUpperCase()}!`);
+    await carregarPainelContratos();
+
+  } catch (err) {
+    console.error("[CRM Contratos] Falha ao alterar status:", err);
+    showToast("⚠️ Servidor offline.");
+  }
+}
+
+function popularSelectsLeadsCRM() {
+  // 1. Select do modal de novo contrato
+  const selectContrato = document.getElementById('contrato_lead_id');
+  if (selectContrato) {
+    const valAtual = selectContrato.value;
+    selectContrato.innerHTML = '<option value="">Selecione um Lead Fechado...</option>' +
+      window.leadsCRMLista.map(lead => `
+        <option value="${lead.id}">
+          [${lead.etapa.toUpperCase()}] ${escaparHTMLSeguro(lead.client_name)} (${formatarMoedaBRL(lead.estimated_value)})
+        </option>
+      `).join('');
+    if (valAtual) selectContrato.value = valAtual;
+  }
+
+  // 2. Select do módulo jurídico
+  const selectJuridico = document.getElementById('juridico-lead-select');
+  if (selectJuridico) {
+    const valAtual = selectJuridico.value;
+    selectJuridico.innerHTML = '<option value="">Selecione um Lead para Injetar Dados...</option>' +
+      window.leadsCRMLista.map(lead => `
+        <option value="${lead.id}">
+          ${escaparHTMLSeguro(lead.client_name)} - ${formatarMoedaBRL(lead.estimated_value)} (${lead.etapa})
+        </option>
+      `).join('');
+    if (valAtual) selectJuridico.value = valAtual;
+  }
+}
+
+function abrirModalNovoContrato(leadIdPreselecionado = null) {
+  popularSelectsLeadsCRM();
+  const modal = document.getElementById('modal-novo-contrato');
+  if (modal) {
+    modal.classList.remove('hidden');
+    if (leadIdPreselecionado) {
+      const selectLead = document.getElementById('contrato_lead_id');
+      if (selectLead) {
+        selectLead.value = leadIdPreselecionado;
+        carregarDadosLeadParaContrato();
+      }
+    }
+  }
+}
+
+function fecharModalNovoContrato() {
+  const modal = document.getElementById('modal-novo-contrato');
+  if (modal) modal.classList.add('hidden');
+  const form = document.getElementById('form-novo-contrato');
+  if (form) form.reset();
+}
+
+function abrirFormalizacaoParaLead(leadId) {
+  abrirModalNovoContrato(leadId);
+}
+
+function carregarDadosLeadParaContrato() {
+  const selectLead = document.getElementById('contrato_lead_id');
+  if (!selectLead) return;
+  const leadId = selectLead.value;
+  const lead = window.leadsCRMLista.find(l => l.id === leadId);
+  if (!lead) return;
+
+  const inputBrand = document.getElementById('contrato_brand_name');
+  const inputValor = document.getElementById('contrato_valor_total');
+  const inputResp = document.getElementById('contrato_responsavel');
+  const textareaEscopo = document.getElementById('contrato_escopo');
+
+  if (inputBrand) inputBrand.value = lead.client_name || '';
+  if (inputValor && lead.estimated_value) inputValor.value = lead.estimated_value;
+  if (inputResp && lead.responsible) inputResp.value = lead.responsible;
+  if (textareaEscopo && !textareaEscopo.value) {
+    textareaEscopo.value = `Consultoria técnica de registro de marca perante o INPI para ${lead.client_name}, compreendendo busca prévia de anterioridade marcária, parecer de viabilidade registral e protocolo oficial sob a égide da Lei nº 9.279/1996.`;
+  }
+}
+
+async function salvarNovoContrato(event) {
+  if (event) event.preventDefault();
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  const leadId = document.getElementById('contrato_lead_id')?.value;
+  const brandName = (document.getElementById('contrato_brand_name')?.value || '').trim();
+  const escopo = (document.getElementById('contrato_escopo')?.value || '').trim();
+
+  if (!leadId) {
+    showToast("⚠️ Selecione o lead comercial vinculado ao contrato.");
+    return;
+  }
+  if (!brandName || !escopo) {
+    showToast("⚠️ Marca / Projeto e Escopo Técnico são obrigatórios.");
+    return;
+  }
+
+  const payload = {
+    lead_id: leadId,
+    brand_name: brandName,
+    consultoria_escopo: escopo,
+    prazo_dias: parseInt(document.getElementById('contrato_prazo_dias')?.value) || 60,
+    valor_total: parseFloat(document.getElementById('contrato_valor_total')?.value) || 2440.00,
+    responsavel_tecnico: (document.getElementById('contrato_responsavel')?.value || '').trim() || undefined,
+    status_execucao: document.getElementById('contrato_status')?.value || 'ativo'
+  };
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/crm/contratos`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(`⚠️ ${err.detail || 'Falha ao formalizar contrato.'}`);
+      return;
+    }
+
+    fecharModalNovoContrato();
+    showToast("✅ Contrato formalizado com sucesso no painel de RMs!");
+    await carregarPainelContratos();
+    await carregarPipelineCRM();
+
+  } catch (err) {
+    console.error("[CRM Contratos] Falha ao cadastrar contrato:", err);
+    showToast("⚠️ Servidor offline ao formalizar contrato.");
+  }
+}
+
+// ------------------------------------------------------------------------------
+// 7.3 AUTOMAÇÃO JURÍDICA E EMISSÃO DE MINUTAS (SHA-256)
+// ------------------------------------------------------------------------------
+async function carregarModuloJuridico() {
+  if (window.leadsCRMLista.length === 0) {
+    await carregarPipelineCRM();
+  } else {
+    popularSelectsLeadsCRM();
+  }
+}
+
+function autoPreencherDadosJuridicos() {
+  const selectLead = document.getElementById('juridico-lead-select');
+  if (!selectLead) return;
+  const leadId = selectLead.value;
+  const lead = window.leadsCRMLista.find(l => l.id === leadId);
+  if (!lead) return;
+
+  const elNome = document.getElementById('juridico-client-name');
+  const elCnpj = document.getElementById('juridico-cnpj');
+  const elResp = document.getElementById('juridico-contact-person');
+  const elFone = document.getElementById('juridico-contact-phone');
+  const elValor = document.getElementById('juridico-valor');
+
+  if (elNome) elNome.value = lead.client_name || '';
+  if (elCnpj) elCnpj.value = lead.cnpj || '';
+  if (elResp) elResp.value = lead.contact_person || '';
+  if (elFone) elFone.value = lead.contact_phone || '';
+  if (elValor && lead.estimated_value) elValor.value = lead.estimated_value;
+}
+
+function iniciarMinutaParaLead(leadId) {
+  switchComercialSubtab('juridico');
+  const selectLead = document.getElementById('juridico-lead-select');
+  if (selectLead) {
+    selectLead.value = leadId;
+    autoPreencherDadosJuridicos();
+  }
+}
+
+function iniciarMinutaParaContrato(contratoId) {
+  const c = window.contratosRMLista.find(item => item.id === contratoId);
+  switchComercialSubtab('juridico');
+  if (!c) return;
+
+  if (c.lead_id) {
+    const selectLead = document.getElementById('juridico-lead-select');
+    if (selectLead) selectLead.value = c.lead_id;
+  }
+
+  const elNome = document.getElementById('juridico-client-name');
+  const elCnpj = document.getElementById('juridico-cnpj');
+  const elValor = document.getElementById('juridico-valor');
+  const elPrazo = document.getElementById('juridico-prazo');
+  const elEscopo = document.getElementById('juridico-escopo');
+
+  if (elNome) elNome.value = c.client_name || '';
+  if (elCnpj) elCnpj.value = c.cnpj || '';
+  if (elValor) elValor.value = c.valor_total || 2440.00;
+  if (elPrazo) elPrazo.value = c.prazo_dias || 60;
+  if (elEscopo) elEscopo.value = c.consultoria_escopo || '';
+}
+
+async function submeterEmissaoContrato() {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const previewContainer = document.getElementById('container-preview-contrato');
+  const docStatus = document.getElementById('juridico-doc-status');
+  const watermarkBanner = document.getElementById('juridico-watermark-banner');
+  const watermarkText = document.getElementById('juridico-watermark-text');
+  const hashDisplay = document.getElementById('juridico-hash-display');
+
+  const modeloTipo = document.getElementById('juridico-modelo')?.value || 'prestacao_servicos_rm';
+  const leadId = document.getElementById('juridico-lead-select')?.value || undefined;
+  const clientName = (document.getElementById('juridico-client-name')?.value || '').trim() || undefined;
+  const cnpj = (document.getElementById('juridico-cnpj')?.value || '').trim() || undefined;
+  const contactPerson = (document.getElementById('juridico-contact-person')?.value || '').trim() || undefined;
+  const contactPhone = (document.getElementById('juridico-contact-phone')?.value || '').trim() || undefined;
+  const valorTotal = parseFloat(document.getElementById('juridico-valor')?.value) || 2440.00;
+  const prazoDias = parseInt(document.getElementById('juridico-prazo')?.value) || 60;
+  const condicoes = (document.getElementById('juridico-condicoes')?.value || '').trim() || undefined;
+  const escopo = (document.getElementById('juridico-escopo')?.value || '').trim() || undefined;
+
+  const payload = {
+    modelo_tipo: modeloTipo,
+    lead_id: leadId,
+    client_name: clientName,
+    cnpj: cnpj,
+    contact_person: contactPerson,
+    contact_phone: contactPhone,
+    valor_total: valorTotal,
+    prazo_dias: prazoDias,
+    condicoes_pagamento: condicoes,
+    objeto_especifico: escopo
+  };
+
+  if (previewContainer) {
+    previewContainer.innerHTML = `
+      <div class="text-center py-16 text-slate-500">
+        <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-blue-600 block"></i>
+        Compilando minuta contratual, calculando hash SHA-256 e aplicando chancela jurídica...
+      </div>
+    `;
+  }
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/juridico/gerar-contrato`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(`⚠️ ${err.detail || 'Falha ao gerar minuta contratual.'}`);
+      if (previewContainer) {
+        previewContainer.innerHTML = `
+          <div class="text-center py-12 text-rose-500">
+            <i class="fa-solid fa-triangle-exclamation text-3xl mb-2 block"></i>
+            Erro ao gerar minuta: ${escaparHTMLSeguro(err.detail || 'Erro no servidor')}
+          </div>
+        `;
+      }
+      return;
+    }
+
+    const data = await res.json();
+    window.minutaAtualGerada = {
+      markdown: data.documento_markdown,
+      html: data.documento_html,
+      hash: data.hash_integridade,
+      watermark: data.watermark_oficial
+    };
+
+    if (docStatus) {
+      docStatus.innerHTML = '<span class="text-emerald-700 font-bold"><i class="fa-solid fa-shield-halved"></i> Documento Oficial Certificado</span>';
+    }
+
+    if (watermarkBanner) watermarkBanner.classList.remove('hidden');
+    if (watermarkText) watermarkText.innerText = data.watermark_oficial;
+    if (hashDisplay) hashDisplay.innerText = data.hash_integridade;
+
+    if (previewContainer) {
+      previewContainer.innerHTML = data.documento_html;
+    }
+
+    showToast("⚖️ Minuta oficial emitida e chancelada via SHA-256!");
+
+  } catch (err) {
+    console.error("[Jurídico] Falha ao emitir contrato:", err);
+    showToast("⚠️ Servidor offline ao emitir contrato.");
+  }
+}
+
+function copiarMinutaMarkdown() {
+  if (!window.minutaAtualGerada || !window.minutaAtualGerada.markdown) {
+    showToast("⚠️ Nenhuma minuta formal foi gerada ainda.");
+    return;
+  }
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(window.minutaAtualGerada.markdown).then(() => {
+      showToast("📋 Minuta copiada com sucesso em formato Markdown!");
+    }).catch(() => {
+      showToast("⚠️ Não foi possível copiar para a área de transferência.");
+    });
+  } else {
+    showToast("⚠️ API Clipboard não suportada neste navegador.");
+  }
+}
+
+function imprimirMinutaContrato() {
+  if (!window.minutaAtualGerada || !window.minutaAtualGerada.html) {
+    showToast("⚠️ Nenhuma minuta gerada para impressão.");
+    return;
+  }
+
+  const printWindow = window.open('', '_blank', 'width=850,height=900');
+  if (!printWindow) {
+    showToast("⚠️ Pop-up bloqueado pelo navegador.");
+    return;
+  }
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <title>Minuta Oficial - EDV Jr.</title>
+      <style>
+        body { font-family: 'Times New Roman', serif; margin: 40px; color: #111; line-height: 1.5; font-size: 13pt; }
+        @media print { body { margin: 20mm; } }
+      </style>
+    </head>
+    <body>
+      ${window.minutaAtualGerada.html}
+      <script>
+        window.onload = function() { window.print(); }
+      </script>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
+// ==============================================================================
 // 8. INICIALIZAÇÃO DEFINITIVA DO ECOSSISTEMA
 // ==============================================================================
 function initApp() {
@@ -8576,10 +9404,12 @@ function initApp() {
   carregarNotificacoesUsuario();
   carregarEstatutosCompliance();
   carregarStagingRMs();
+  carregarPipelineCRM();
+  carregarPainelContratos();
   iniciarPollingNotificacoes();
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
 if (document.readyState === 'interactive' || document.readyState === 'complete') {
   initApp();
-}
+}

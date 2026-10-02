@@ -679,19 +679,27 @@
           
           <!-- Seletor de Sub-Abas do Módulo Comercial -->
           <div class="flex border-b border-slate-200 gap-4 text-xs font-bold overflow-x-auto">
-            <button onclick="switchComercialSubtab('pipeline')" id="subtab-com-pipeline" class="pb-3 subtab-active flex items-center gap-1.5 whitespace-nowrap">
-              <i class="fa-solid fa-table-list"></i> Pipeline & Base Ativa CRM (693 Leads)
+            <button onclick="switchComercialSubtab('pipeline')" id="subtab-com-pipeline" class="pb-3 subtab-active flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-table-list"></i> DataGrid Geral (693 Leads)
             </button>
-            <button onclick="switchComercialSubtab('radar')" id="subtab-com-radar" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
-              <i class="fa-solid fa-satellite-dish text-blue-600"></i> Radar de Prospecção Ativa (Scraper)
-            </button>
-            <button onclick="switchComercialSubtab('followups')" id="subtab-com-followups" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
-              <i class="fa-solid fa-handshake text-sky-600"></i> Follow-ups & CRM Relacional (SQLite)
-              <span id="badge-crm-followups" class="bg-sky-100 text-sky-800 text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold">0</span>
-            </button>
-            <button onclick="switchComercialSubtab('kanban')" id="subtab-com-kanban" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap">
-              <i class="fa-solid fa-table-columns text-indigo-600"></i> Funil Kanban Interativo (MEJ)
+            <button onclick="switchComercialSubtab('kanban')" id="subtab-com-kanban" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-table-columns text-indigo-600"></i> Funil Kanban (6 Etapas)
               <span id="badge-crm-kanban" class="bg-indigo-100 text-indigo-800 text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold">0</span>
+            </button>
+            <button onclick="switchComercialSubtab('contratos')" id="subtab-com-contratos" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-file-contract text-emerald-600"></i> Gestão de Contratos & RMs
+              <span id="badge-crm-contratos" class="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold">0</span>
+            </button>
+            <button onclick="switchComercialSubtab('juridico')" id="subtab-com-juridico" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-stamp text-blue-600"></i> Emissão de Minutas (SHA-256)
+              <span class="bg-blue-100 text-blue-800 text-[9px] px-1.5 py-0.5 rounded-full font-mono">Lei 13.267</span>
+            </button>
+            <button onclick="switchComercialSubtab('radar')" id="subtab-com-radar" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-satellite-dish text-sky-600"></i> Radar de Prospecção
+            </button>
+            <button onclick="switchComercialSubtab('followups')" id="subtab-com-followups" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-handshake text-slate-600"></i> Histórico Legado
+              <span id="badge-crm-followups" class="bg-slate-100 text-slate-700 text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold">0</span>
             </button>
           </div>
 
@@ -1320,98 +1328,316 @@
 
           </div>
 
-          <!-- SUB-ABA D: FUNIL KANBAN INTERATIVO (BRASIL JÚNIOR / MEJ) -->
+          <!-- SUB-ABA B: FUNIL KANBAN INTERATIVO (6 ETAPAS) -->
           <div id="comercial-sub-kanban" class="hidden space-y-6">
-            <!-- Header do Kanban com Ações -->
+            <!-- Header do Kanban com Métricas & Ações -->
             <div class="glass-card rounded-xl p-5 border-t-4 border-indigo-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <div class="flex items-center gap-2">
-                  <h3 class="text-base font-bold text-slate-800">📋 Quadro Kanban Interativo de Oportunidades</h3>
-                  <span class="text-[10px] bg-indigo-100 text-indigo-800 font-mono font-bold px-2 py-0.5 rounded-full border border-indigo-200">Funil Comercial MEJ</span>
+                  <h3 class="text-base font-bold text-slate-800">📋 Pipeline de Vendas & Funil Comercial (6 Etapas)</h3>
+                  <span class="text-[10px] bg-indigo-100 text-indigo-800 font-mono font-bold px-2 py-0.5 rounded-full border border-indigo-200">CRM 2.0 • MEJ</span>
                 </div>
-                <p class="text-xs text-slate-500 mt-0.5">Visualize a evolução de leads por estágio, monitore tempo de estagnação (&ge; 14d / &ge; 30d) e gere roteiros consultivos com tese jurídica.</p>
+                <p class="text-xs text-slate-500 mt-0.5">Monitore o ciclo comercial completo com 6 etapas padronizadas, avanço ágil de estágios e valores em tempo real.</p>
               </div>
               <div class="flex flex-wrap items-center gap-2">
-                <button type="button" onclick="carregarFollowupsCRM()" class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg border border-slate-300 transition flex items-center gap-1.5 shadow-2xs">
-                  <i class="fa-solid fa-arrows-rotate text-indigo-600"></i> Atualizar Kanban
+                <button type="button" onclick="abrirModalNovoLead()" class="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition flex items-center gap-1.5 shadow-xs cursor-pointer">
+                  <i class="fa-solid fa-plus"></i> Nova Oportunidade
                 </button>
-                <button type="button" onclick="abrirModalIngestaoPublica()" class="px-3 py-1.5 text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-lg border border-emerald-300 transition flex items-center gap-1.5 shadow-2xs">
-                  <i class="fa-solid fa-file-import text-emerald-600"></i> Ingestão de Leads
-                </button>
-                <button type="button" onclick="abrirModalImpactoMEJ()" class="px-3 py-1.5 text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-800 font-bold rounded-lg border border-indigo-300 transition flex items-center gap-1.5 shadow-2xs">
-                  <i class="fa-solid fa-chart-line text-indigo-600"></i> Dossiê de Impacto MEJ (3.5x)
+                <button type="button" onclick="carregarPipelineCRM()" class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg border border-slate-300 transition flex items-center gap-1.5 shadow-2xs cursor-pointer">
+                  <i class="fa-solid fa-arrows-rotate text-indigo-600"></i> Atualizar Funil
                 </button>
               </div>
             </div>
 
-            <!-- Colunas do Kanban -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+            <!-- Painel de Indicadores de Valor do Pipeline -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-indigo-500 bg-white">
+                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Valor em Aberto (Funil)</div>
+                <div id="kpi-pipeline-aberto" class="text-lg font-black text-indigo-700 font-mono mt-1">R$ 0,00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Prospecção até Negociação</div>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-emerald-500 bg-white">
+                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Volume Convertido (Fechado)</div>
+                <div id="kpi-pipeline-fechado" class="text-lg font-black text-emerald-700 font-mono mt-1">R$ 0,00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Contratos homologados</div>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-blue-500 bg-white">
+                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total de Oportunidades</div>
+                <div id="kpi-total-leads" class="text-lg font-black text-slate-800 font-mono mt-1">0</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Leads cadastrados</div>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-purple-500 bg-white">
+                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Taxa de Conversão</div>
+                <div id="kpi-pipeline-conversao" class="text-lg font-black text-purple-700 font-mono mt-1">0.0%</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Fechados / Total</div>
+              </div>
+            </div>
+
+            <!-- Colunas do Funil Kanban (6 Etapas Padronizadas) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-start">
               
-              <!-- Coluna 1: Prospecção -->
-              <div class="bg-slate-100/90 rounded-xl p-3 border border-blue-200 shadow-xs flex flex-col">
+              <!-- 1. Prospecção -->
+              <div class="bg-slate-50/90 rounded-xl p-2.5 border border-blue-200 shadow-2xs flex flex-col min-h-[400px]">
                 <div class="flex items-center justify-between pb-2 mb-2 border-b border-blue-200">
-                  <div class="flex items-center gap-2">
-                    <span class="w-3 h-3 rounded-full bg-blue-500"></span>
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-blue-900">Prospecção</h4>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                    <h4 class="text-[11px] font-bold uppercase tracking-wider text-blue-900">Prospecção</h4>
                   </div>
-                  <div class="flex items-center gap-1 text-[11px] font-mono">
-                    <span id="kanban-count-prospeccao" class="bg-blue-200 text-blue-800 font-bold px-2 py-0.5 rounded-full">0</span>
-                    <span id="kanban-val-prospeccao" class="text-slate-500 text-[10px]">R$ 0</span>
-                  </div>
+                  <span id="kanban-count-prospeccao" class="bg-blue-100 text-blue-800 font-bold font-mono text-[10px] px-1.5 py-0.5 rounded-full">0</span>
                 </div>
-                <div id="kanban-col-prospeccao" class="kanban-col space-y-2.5 p-1">
-                  <!-- Cards de prospecção -->
-                </div>
+                <div id="kanban-val-prospeccao" class="text-[10px] text-slate-500 font-mono mb-2 text-right">R$ 0,00</div>
+                <div id="kanban-col-prospeccao" class="kanban-col space-y-2 flex-1"></div>
               </div>
 
-              <!-- Coluna 2: Negociação -->
-              <div class="bg-slate-100/90 rounded-xl p-3 border border-amber-200 shadow-xs flex flex-col">
+              <!-- 2. Diagnóstico -->
+              <div class="bg-slate-50/90 rounded-xl p-2.5 border border-cyan-200 shadow-2xs flex flex-col min-h-[400px]">
+                <div class="flex items-center justify-between pb-2 mb-2 border-b border-cyan-200">
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-cyan-500"></span>
+                    <h4 class="text-[11px] font-bold uppercase tracking-wider text-cyan-900">Diagnóstico</h4>
+                  </div>
+                  <span id="kanban-count-diagnostico" class="bg-cyan-100 text-cyan-800 font-bold font-mono text-[10px] px-1.5 py-0.5 rounded-full">0</span>
+                </div>
+                <div id="kanban-val-diagnostico" class="text-[10px] text-slate-500 font-mono mb-2 text-right">R$ 0,00</div>
+                <div id="kanban-col-diagnostico" class="kanban-col space-y-2 flex-1"></div>
+              </div>
+
+              <!-- 3. Proposta -->
+              <div class="bg-slate-50/90 rounded-xl p-2.5 border border-indigo-200 shadow-2xs flex flex-col min-h-[400px]">
+                <div class="flex items-center justify-between pb-2 mb-2 border-b border-indigo-200">
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                    <h4 class="text-[11px] font-bold uppercase tracking-wider text-indigo-900">Proposta</h4>
+                  </div>
+                  <span id="kanban-count-proposta" class="bg-indigo-100 text-indigo-800 font-bold font-mono text-[10px] px-1.5 py-0.5 rounded-full">0</span>
+                </div>
+                <div id="kanban-val-proposta" class="text-[10px] text-slate-500 font-mono mb-2 text-right">R$ 0,00</div>
+                <div id="kanban-col-proposta" class="kanban-col space-y-2 flex-1"></div>
+              </div>
+
+              <!-- 4. Negociação -->
+              <div class="bg-slate-50/90 rounded-xl p-2.5 border border-amber-200 shadow-2xs flex flex-col min-h-[400px]">
                 <div class="flex items-center justify-between pb-2 mb-2 border-b border-amber-200">
-                  <div class="flex items-center gap-2">
-                    <span class="w-3 h-3 rounded-full bg-amber-500"></span>
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-amber-900">Negociação</h4>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                    <h4 class="text-[11px] font-bold uppercase tracking-wider text-amber-900">Negociação</h4>
                   </div>
-                  <div class="flex items-center gap-1 text-[11px] font-mono">
-                    <span id="kanban-count-negociacao" class="bg-amber-200 text-amber-800 font-bold px-2 py-0.5 rounded-full">0</span>
-                    <span id="kanban-val-negociacao" class="text-slate-500 text-[10px]">R$ 0</span>
-                  </div>
+                  <span id="kanban-count-negociacao" class="bg-amber-100 text-amber-800 font-bold font-mono text-[10px] px-1.5 py-0.5 rounded-full">0</span>
                 </div>
-                <div id="kanban-col-negociacao" class="kanban-col space-y-2.5 p-1">
-                  <!-- Cards de negociação -->
-                </div>
+                <div id="kanban-val-negociacao" class="text-[10px] text-slate-500 font-mono mb-2 text-right">R$ 0,00</div>
+                <div id="kanban-col-negociacao" class="kanban-col space-y-2 flex-1"></div>
               </div>
 
-              <!-- Coluna 3: Fechado -->
-              <div class="bg-slate-100/90 rounded-xl p-3 border border-emerald-200 shadow-xs flex flex-col">
+              <!-- 5. Fechado -->
+              <div class="bg-slate-50/90 rounded-xl p-2.5 border border-emerald-200 shadow-2xs flex flex-col min-h-[400px]">
                 <div class="flex items-center justify-between pb-2 mb-2 border-b border-emerald-200">
-                  <div class="flex items-center gap-2">
-                    <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-900">Fechado</h4>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <h4 class="text-[11px] font-bold uppercase tracking-wider text-emerald-900">Fechado</h4>
                   </div>
-                  <div class="flex items-center gap-1 text-[11px] font-mono">
-                    <span id="kanban-count-fechado" class="bg-emerald-200 text-emerald-800 font-bold px-2 py-0.5 rounded-full">0</span>
-                    <span id="kanban-val-fechado" class="text-slate-500 text-[10px]">R$ 0</span>
-                  </div>
+                  <span id="kanban-count-fechado" class="bg-emerald-100 text-emerald-800 font-bold font-mono text-[10px] px-1.5 py-0.5 rounded-full">0</span>
                 </div>
-                <div id="kanban-col-fechado" class="kanban-col space-y-2.5 p-1">
-                  <!-- Cards fechados -->
+                <div id="kanban-val-fechado" class="text-[10px] text-slate-500 font-mono mb-2 text-right">R$ 0,00</div>
+                <div id="kanban-col-fechado" class="kanban-col space-y-2 flex-1"></div>
+              </div>
+
+              <!-- 6. Perdido -->
+              <div class="bg-slate-50/90 rounded-xl p-2.5 border border-rose-200 shadow-2xs flex flex-col min-h-[400px]">
+                <div class="flex items-center justify-between pb-2 mb-2 border-b border-rose-200">
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                    <h4 class="text-[11px] font-bold uppercase tracking-wider text-rose-900">Perdido</h4>
+                  </div>
+                  <span id="kanban-count-perdido" class="bg-rose-100 text-rose-800 font-bold font-mono text-[10px] px-1.5 py-0.5 rounded-full">0</span>
+                </div>
+                <div id="kanban-val-perdido" class="text-[10px] text-slate-500 font-mono mb-2 text-right">R$ 0,00</div>
+                <div id="kanban-col-perdido" class="kanban-col space-y-2 flex-1"></div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- SUB-ABA C: GESTÃO DE CONTRATOS & RMS DE CONSULTORIA -->
+          <div id="comercial-sub-contratos" class="hidden space-y-6">
+            <div class="glass-card rounded-xl p-5 border-t-4 border-emerald-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-base font-bold text-slate-800">📑 Gestão de Contratos de Consultoria & RMs Ativas</h3>
+                  <span class="text-[10px] bg-emerald-100 text-emerald-800 font-mono font-bold px-2 py-0.5 rounded-full border border-emerald-200">Operação Legal</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">Acompanhe consultorias em andamento vinculadas aos leads fechados, prazos de entrega, marcos financeiros e minutas emitidas.</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="button" onclick="abrirModalNovoContrato()" class="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition flex items-center gap-1.5 shadow-xs cursor-pointer">
+                  <i class="fa-solid fa-plus"></i> Novo Contrato RM
+                </button>
+                <button type="button" onclick="carregarPainelContratos()" class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg border border-slate-300 transition flex items-center gap-1.5 shadow-2xs cursor-pointer">
+                  <i class="fa-solid fa-arrows-rotate text-emerald-600"></i> Atualizar Contratos
+                </button>
+              </div>
+            </div>
+
+            <!-- Tabela de Contratos e RMs -->
+            <div class="glass-card rounded-xl overflow-hidden shadow-sm">
+              <div class="p-3 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-slate-600">Filtrar Status:</span>
+                  <select id="filtro-contrato-status" onchange="carregarPainelContratos()" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    <option value="">Todos os Status</option>
+                    <option value="ativo">Ativo</option>
+                    <option value="suspenso">Suspenso</option>
+                    <option value="concluido">Concluído</option>
+                  </select>
+                </div>
+                <div class="text-[11px] text-slate-500">
+                  <span id="contratos-total-badge" class="font-bold text-emerald-700">0</span> contratos registrados
                 </div>
               </div>
 
-              <!-- Coluna 4: Perdido -->
-              <div class="bg-slate-100/90 rounded-xl p-3 border border-rose-200 shadow-xs flex flex-col">
-                <div class="flex items-center justify-between pb-2 mb-2 border-b border-rose-200">
-                  <div class="flex items-center gap-2">
-                    <span class="w-3 h-3 rounded-full bg-rose-500"></span>
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-rose-900">Perdido</h4>
+              <div class="overflow-x-auto max-h-[550px]">
+                <table class="w-full text-xs text-left datagrid-table responsive-card-table">
+                  <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                    <tr>
+                      <th class="px-4 py-3">Código</th>
+                      <th class="px-4 py-3">Marca / Projeto</th>
+                      <th class="px-4 py-3">Cliente / CNPJ</th>
+                      <th class="px-4 py-3">Escopo da Consultoria</th>
+                      <th class="px-4 py-3">SLA / Entrega</th>
+                      <th class="px-4 py-3">Valor & Marcos</th>
+                      <th class="px-4 py-3">Status</th>
+                      <th class="px-4 py-3 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="datagrid-contratos-rm" class="divide-y divide-slate-100">
+                    <tr><td colspan="8" class="text-center py-6 text-slate-400">Carregando contratos de consultoria...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-ABA D: EMISSÃO DE MINUTAS CONTRATUAIS (AUTOMAÇÃO JURÍDICA) -->
+          <div id="comercial-sub-juridico" class="hidden space-y-6">
+            <div class="glass-card rounded-xl p-5 border-t-4 border-blue-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-base font-bold text-slate-800">⚖️ Gerador Automatizado de Minutas Contratuais</h3>
+                  <span class="text-[10px] bg-blue-100 text-blue-800 font-mono font-bold px-2 py-0.5 rounded-full border border-blue-200">Lei Federal nº 13.267/2016</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">Emissão de minutas formais com auto-preenchimento cadastral do CRM, cláusulas técnicas padronizadas e marca d'água SHA-256.</p>
+              </div>
+            </div>
+
+            <!-- Interface de Geração Contratual: Formulário & Preview -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              
+              <!-- Formulário de Parametrização -->
+              <div class="lg:col-span-5 glass-card rounded-xl p-5 space-y-4">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 pb-2 border-b border-slate-200 flex items-center gap-2">
+                  <i class="fa-solid fa-sliders text-blue-600"></i> Parâmetros da Minuta
+                </h4>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">Modelo de Contrato</label>
+                  <select id="juridico-modelo" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="prestacao_servicos_rm">Registro de Marca INPI (LPI Lei 9.279/96)</option>
+                    <option value="consultoria_juridica_preventiva">Consultoria Jurídica Preventiva & Governança</option>
+                    <option value="acordo_confidencialidade_nda">Acordo de Confidencialidade (NDA)</option>
+                  </select>
+                </div>
+
+                <div class="p-3 bg-blue-50/70 border border-blue-200 rounded-lg space-y-2">
+                  <label class="block text-[11px] font-bold text-blue-900 uppercase">Preenchimento Automático via CRM</label>
+                  <select id="juridico-lead-select" onchange="autoPreencherDadosJuridicos()" class="w-full text-xs border border-blue-300 rounded-lg p-2 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="">Selecione um Lead para Injetar Dados...</option>
+                  </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[11px] font-medium text-slate-600 mb-1">Razão Social / Cliente</label>
+                    <input type="text" id="juridico-client-name" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:ring-1 focus:ring-blue-500" placeholder="Ex: Padaria Dourada Ltda">
                   </div>
-                  <div class="flex items-center gap-1 text-[11px] font-mono">
-                    <span id="kanban-count-perdido" class="bg-rose-200 text-rose-800 font-bold px-2 py-0.5 rounded-full">0</span>
-                    <span id="kanban-val-perdido" class="text-slate-500 text-[10px]">R$ 0</span>
+                  <div>
+                    <label class="block text-[11px] font-medium text-slate-600 mb-1">CNPJ / CPF</label>
+                    <input type="text" id="juridico-cnpj" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:ring-1 focus:ring-blue-500" placeholder="00.000.000/0001-00">
                   </div>
                 </div>
-                <div id="kanban-col-perdido" class="kanban-col space-y-2.5 p-1">
-                  <!-- Cards perdidos -->
+
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[11px] font-medium text-slate-600 mb-1">Representante Legal</label>
+                    <input type="text" id="juridico-contact-person" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:ring-1 focus:ring-blue-500" placeholder="Nome do responsável">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-medium text-slate-600 mb-1">Telefone / WhatsApp</label>
+                    <input type="text" id="juridico-contact-phone" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:ring-1 focus:ring-blue-500" placeholder="(27) 99999-0000">
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[11px] font-medium text-slate-600 mb-1">Valor Total (R$)</label>
+                    <input type="number" id="juridico-valor" step="0.01" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:ring-1 focus:ring-blue-500" placeholder="2440.00">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-medium text-slate-600 mb-1">Prazo SLA (Dias)</label>
+                    <input type="number" id="juridico-prazo" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:ring-1 focus:ring-blue-500" value="60">
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-600 mb-1">Condições de Pagamento</label>
+                  <input type="text" id="juridico-condicoes" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:ring-1 focus:ring-blue-500" placeholder="Ex: 50% na assinatura e 50% no protocolo">
+                </div>
+
+                <div>
+                  <label class="block text-[11px] font-medium text-slate-600 mb-1">Objeto / Escopo Específico</label>
+                  <textarea id="juridico-escopo" rows="3" class="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white focus:ring-1 focus:ring-blue-500" placeholder="Deixe em branco para usar o escopo padrão do modelo selecionado..."></textarea>
+                </div>
+
+                <button type="button" onclick="submeterEmissaoContrato()" class="w-full bg-[#0b1d3a] hover:bg-[#162a4d] text-white font-bold py-2.5 px-4 rounded-lg text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer">
+                  <i class="fa-solid fa-stamp text-blue-400"></i>
+                  <span>Gerar Minuta Oficial com SHA-256</span>
+                </button>
+              </div>
+
+              <!-- Prévia Formal do Documento -->
+              <div class="lg:col-span-7 glass-card rounded-xl p-5 space-y-4">
+                <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+                  <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                      <i class="fa-solid fa-file-lines text-emerald-600"></i> Prévia da Minuta Formal
+                    </h4>
+                    <span id="juridico-doc-status" class="text-[10px] text-slate-500">Pronto para visualização formal</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button type="button" onclick="copiarMinutaMarkdown()" class="px-2.5 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded border border-slate-300 transition flex items-center gap-1 cursor-pointer" title="Copiar texto em Markdown">
+                      <i class="fa-regular fa-copy"></i> Copiar MD
+                    </button>
+                    <button type="button" onclick="imprimirMinutaContrato()" class="px-2.5 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold rounded border border-blue-200 transition flex items-center gap-1 cursor-pointer" title="Imprimir ou Salvar PDF">
+                      <i class="fa-solid fa-print"></i> Imprimir / PDF
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Banner da Marca D'água & Hash SHA-256 -->
+                <div id="juridico-watermark-banner" class="hidden p-3 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-mono text-slate-600 space-y-1">
+                  <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span id="juridico-watermark-text">DOCUMENTO OFICIAL EDV JR.</span>
+                  </div>
+                  <div class="text-[9px] text-slate-500 break-all">
+                    Chave SHA-256: <span id="juridico-hash-display" class="font-bold text-blue-700">--</span>
+                  </div>
+                </div>
+
+                <!-- Container do Papel Timbrado Digital -->
+                <div id="container-preview-contrato" class="overflow-y-auto max-h-[600px] border border-slate-200 rounded-lg p-2 bg-slate-100">
+                  <div class="text-center py-12 text-slate-400 text-xs">
+                    <i class="fa-solid fa-file-contract text-3xl mb-2 text-slate-300 block"></i>
+                    Selecione os parâmetros e clique em <strong>"Gerar Minuta Oficial"</strong> para visualizar o documento formal formatado sob as diretrizes da Lei 13.267/2016.
+                  </div>
                 </div>
               </div>
 
@@ -4721,6 +4947,154 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
           Fechar
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVO LEAD / OPORTUNIDADE COMERCIAL -->
+  <div id="modal-novo-lead" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-gradient-to-r from-indigo-700 to-indigo-900 text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-indigo-500 flex items-center justify-center font-bold text-white shadow-md text-base">
+            💼
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Nova Oportunidade Comercial (CRM)</h3>
+            <span class="text-[10px] text-indigo-200 font-mono">Funil de Vendas • EDV Jr.</span>
+          </div>
+        </div>
+        <button onclick="fecharModalNovoLead()" class="text-slate-400 hover:text-white text-lg font-bold p-1 cursor-pointer">✕</button>
+      </div>
+
+      <form id="form-novo-lead" onsubmit="salvarNovoLead(event)" class="p-6 overflow-y-auto space-y-3.5 text-xs">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Razão Social / Nome do Cliente *</label>
+          <input type="text" id="lead_client_name" required placeholder="Ex: Café Especial Pedra Azul Eireli" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">CNPJ / CPF</label>
+            <input type="text" id="lead_cnpj" placeholder="00.000.000/0001-00" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Valor Estimado (R$)</label>
+            <input type="number" id="lead_estimated_value" step="0.01" value="2440.00" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono font-bold">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Contato Responsável</label>
+            <input type="text" id="lead_contact_person" placeholder="Nome do decisor / diretor" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Telefone / WhatsApp</label>
+            <input type="text" id="lead_contact_phone" placeholder="(27) 99999-0000" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">E-mail Corporativo</label>
+            <input type="email" id="lead_contact_email" placeholder="contato@empresa.com.br" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Etapa Inicial do Funil</label>
+            <select id="lead_etapa" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
+              <option value="prospeccao" selected>1. Prospecção</option>
+              <option value="diagnostico">2. Diagnóstico</option>
+              <option value="proposta">3. Proposta</option>
+              <option value="negociacao">4. Negociação</option>
+              <option value="fechado">5. Fechado</option>
+              <option value="perdido">6. Perdido</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Assessor Responsável</label>
+          <input type="text" id="lead_responsible" placeholder="Ex: estevao.coutinho@edvjr.com.br" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Anotações Comerciais</label>
+          <textarea id="lead_notes" rows="2" placeholder="Histórico da conversa, canal de captação, classe no INPI..." class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+        </div>
+
+        <div class="pt-3 border-t border-slate-200 flex justify-end gap-2">
+          <button type="button" onclick="fecharModalNovoLead()" class="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer">Cancelar</button>
+          <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-md transition cursor-pointer">Cadastrar Lead</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVO CONTRATO DE CONSULTORIA / RM -->
+  <div id="modal-novo-contrato" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay">
+    <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div class="bg-gradient-to-r from-emerald-700 to-emerald-900 text-white p-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center font-bold text-white shadow-md text-base">
+            📑
+          </div>
+          <div>
+            <h3 class="font-bold text-sm text-white">Formalizar Contrato de Consultoria / RM</h3>
+            <span class="text-[10px] text-emerald-200 font-mono">Vínculo Direto com Lead Fechado</span>
+          </div>
+        </div>
+        <button onclick="fecharModalNovoContrato()" class="text-slate-400 hover:text-white text-lg font-bold p-1 cursor-pointer">✕</button>
+      </div>
+
+      <form id="form-novo-contrato" onsubmit="salvarNovoContrato(event)" class="p-6 overflow-y-auto space-y-3.5 text-xs">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Vincular a Lead Fechado *</label>
+          <select id="contrato_lead_id" required onchange="carregarDadosLeadParaContrato()" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+            <option value="">Selecione um Lead Fechado...</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Marca / Título do Projeto *</label>
+          <input type="text" id="contrato_brand_name" required placeholder="Ex: SUCOS DA MATA" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Escopo Técnico da Consultoria *</label>
+          <textarea id="contrato_escopo" required rows="2.5" placeholder="Ex: Consultoria técnica de registro de marca perante o INPI com busca preliminar de anterioridade..." class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Valor Total (R$)</label>
+            <input type="number" id="contrato_valor_total" step="0.01" value="2440.00" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono font-bold">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Prazo de SLA (Dias)</label>
+            <input type="number" id="contrato_prazo_dias" value="60" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Responsável Técnico</label>
+            <input type="text" id="contrato_responsavel" placeholder="Ex: thais.junger@edvjr.com.br" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          </div>
+          <div>
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Status Operacional</label>
+            <select id="contrato_status" class="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+              <option value="ativo" selected>Ativo</option>
+              <option value="suspenso">Suspenso</option>
+              <option value="concluido">Concluído</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-200 flex justify-end gap-2">
+          <button type="button" onclick="fecharModalNovoContrato()" class="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-100 transition cursor-pointer">Cancelar</button>
+          <button type="submit" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md transition cursor-pointer">Formalizar Contrato</button>
+        </div>
+      </form>
     </div>
   </div>
 

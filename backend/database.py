@@ -299,6 +299,43 @@ class ForumRespostaORM(Base):
     created_at = Column(DateTime, server_default=func.now())
     duvida = relationship("ForumDuvidaORM", back_populates="respostas")
 
+class LeadORM(Base):
+    __tablename__ = "leads"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, default="edv_jr")
+    client_name = Column(String(200), nullable=False)
+    cnpj = Column(String(30), nullable=True)
+    contact_person = Column(String(150), nullable=True)
+    contact_email = Column(String(150), nullable=True)
+    contact_phone = Column(String(50), nullable=True)
+    estimated_value = Column(Float, nullable=False, default=0.0)
+    etapa = Column(String(50), nullable=False, default="prospeccao")
+    responsible = Column(String(150), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    contratos = relationship("ContratoRMORM", back_populates="lead", cascade="all, delete-orphan")
+
+class ContratoRMORM(Base):
+    __tablename__ = "contratos_rm"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), nullable=False, default="edv_jr")
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=False, index=True)
+    brand_name = Column(String(200), nullable=False)
+    client_name = Column(String(200), nullable=False)
+    cnpj = Column(String(30), nullable=True)
+    consultoria_escopo = Column(Text, nullable=False)
+    prazo_dias = Column(Integer, default=60)
+    prazo_entrega = Column(String(50), nullable=True)
+    marcos_financeiros = Column(Text, nullable=True)
+    valor_total = Column(Float, default=0.0)
+    status_execucao = Column(String(50), nullable=False, default="ativo")
+    responsavel_tecnico = Column(String(150), nullable=True)
+    hash_integridade = Column(String(64), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    lead = relationship("LeadORM", back_populates="contratos")
+
 
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
 if DATABASE_URL.startswith("postgres://"):
@@ -1376,6 +1413,90 @@ def init_db():
     );
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_forum_respostas_duvida ON forum_respostas(duvida_id);")
+
+    # 21. Tabela de Leads do Funil Comercial (CRM & Pipeline de Vendas)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS leads (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        client_name TEXT NOT NULL,
+        cnpj TEXT,
+        contact_person TEXT,
+        contact_email TEXT,
+        contact_phone TEXT,
+        estimated_value REAL NOT NULL DEFAULT 0.0,
+        etapa TEXT NOT NULL DEFAULT 'prospeccao' CHECK(etapa IN ('prospeccao', 'diagnostico', 'proposta', 'negociacao', 'fechado', 'perdido')),
+        responsible TEXT,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_etapa ON leads(etapa);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_client_name ON leads(client_name);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_cnpj ON leads(cnpj);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_leads_updated_at ON leads(updated_at);")
+
+    # 22. Tabela de Contratos de Consultoria e Gestão de RMs Ativas
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS contratos_rm (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        lead_id INTEGER NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+        brand_name TEXT NOT NULL,
+        client_name TEXT NOT NULL,
+        cnpj TEXT,
+        consultoria_escopo TEXT NOT NULL,
+        prazo_dias INTEGER NOT NULL DEFAULT 60,
+        prazo_entrega TEXT,
+        marcos_financeiros TEXT,
+        valor_total REAL NOT NULL DEFAULT 0.0,
+        status_execucao TEXT NOT NULL DEFAULT 'ativo' CHECK(status_execucao IN ('ativo', 'suspenso', 'concluido')),
+        responsavel_tecnico TEXT,
+        hash_integridade TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_contratos_rm_lead ON contratos_rm(lead_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_contratos_rm_status ON contratos_rm(status_execucao);")
+
+    # Seeding inicial de Leads e Contratos de Consultoria
+    cursor.execute("SELECT COUNT(*) FROM leads;")
+    if cursor.fetchone()[0] == 0:
+        initial_leads = [
+            ("edv_jr", "Padaria & Confeitaria Pão Dourado Ltda", "12.345.678/0001-90", "Antônio Carlos", "antonio@paodourado.com.br", "(27) 99812-4433", 2440.0, "prospeccao", "estevao.coutinho@edvjr.com.br", "Identificada necessidade de registro de marca mista na classe 30 (panificação)."),
+            ("edv_jr", "Café Especial Pedra Azul Eireli", "98.765.432/0001-11", "Mariana Siqueira", "mariana@pedraazulcafe.com.br", "(27) 99755-6677", 3200.0, "diagnostico", "samuel.garcia@edvjr.com.br", "Diagnóstico prévio no INPI: sem colidências fonéticas na classe 30."),
+            ("edv_jr", "TechVix Soluções em Software S.A.", "45.123.890/0001-55", "Rodrigo Mendes", "rodrigo@techvix.io", "(27) 99234-8899", 4800.0, "proposta", "isadora.epichin@edvjr.com.br", "Proposta enviada para registro de marca nominativa classe 42 e adequação contratual."),
+            ("edv_jr", "Clínica Odontológica Sorriso Real", "33.222.111/0001-44", "Dra. Camila Prado", "camila@sorrisoreal.com.br", "(27) 98111-2233", 2440.0, "negociacao", "pedro.barros@edvjr.com.br", "Reunião de alinhamento de cláusulas de pagamento em 2x sem juros."),
+            ("edv_jr", "Indústria de Sucos da Mata Ltda", "22.333.444/0001-66", "Fernando Silveira", "fernando@sucosdamata.ind.br", "(27) 99988-7766", 2440.0, "fechado", "marialice.bacelar@edvjr.com.br", "Contrato assinado perante a EDV Jr. Registro de marca na classe 32."),
+            ("edv_jr", "Restaurante e Chopperia Vila Velha", "77.888.999/0001-00", "Jorge Amaral", "jorge@restaurantevilavelha.com.br", "(27) 99677-1122", 1800.0, "perdido", "estevao.coutinho@edvjr.com.br", "Cliente optou por adiar o investimento para o próximo semestre.")
+        ]
+        cursor.executemany("""
+        INSERT INTO leads (tenant_id, client_name, cnpj, contact_person, contact_email, contact_phone, estimated_value, etapa, responsible, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """, initial_leads)
+
+        # Seeding inicial de contratos_rm para o lead fechado
+        cursor.execute("SELECT id, client_name, cnpj FROM leads WHERE etapa = 'fechado' LIMIT 1;")
+        lead_row = cursor.fetchone()
+        if lead_row:
+            marcos = json.dumps([
+                {"parcela": 1, "valor": 1220.0, "vencimento": "2026-10-15", "status": "pago", "descricao": "Entrada na assinatura"},
+                {"parcela": 2, "valor": 1220.0, "vencimento": "2026-11-15", "status": "pendente", "descricao": "Protocolo inicial perante o INPI"}
+            ], ensure_ascii=False)
+            cursor.execute("""
+            INSERT INTO contratos_rm (
+                tenant_id, lead_id, brand_name, client_name, cnpj, consultoria_escopo,
+                prazo_dias, prazo_entrega, marcos_financeiros, valor_total, status_execucao,
+                responsavel_tecnico, hash_integridade
+            ) VALUES (
+                'edv_jr', ?, 'SUCOS DA MATA', ?, ?,
+                'Consultoria técnica de registro de marca perante o INPI na classe 32 (bebidas não alcoólicas), com busca preliminar de anterioridade, elaboração do pedido e acompanhamento de despachos na RPI.',
+                60, '2026-12-05', ?, 2440.0, 'ativo', 'thais.junger@edvjr.com.br',
+                'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0'
+            );
+            """, (lead_row["id"], lead_row["client_name"], lead_row["cnpj"], marcos))
 
     ensure_learning_microblocks(conn)
     conn.commit()
@@ -4237,6 +4358,321 @@ def resolve_forum_duvida(duvida_id: int, current_user: dict, new_status: str = "
     cursor.execute("UPDATE forum_duvidas SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?;", (st_clean, duvida_id))
     conn.commit()
     cursor.execute("SELECT * FROM forum_duvidas WHERE id = ?;", (duvida_id,))
+    updated = dict(cursor.fetchone())
+    conn.close()
+    return updated
+
+
+# ==============================================================================
+# 20. SUBSISTEMA DE CRM, GESTÃO DE RMS & CONTRATOS DE CONSULTORIA
+# ==============================================================================
+
+VALID_ETAPAS = {"prospeccao", "diagnostico", "proposta", "negociacao", "fechado", "perdido"}
+VALID_CONTRATO_STATUS = {"ativo", "suspenso", "concluido"}
+
+def create_lead(data: dict, current_user: Optional[dict] = None) -> dict:
+    """Cadastra nova oportunidade comercial no pipeline de vendas."""
+    client_name = data.get("client_name")
+    if not client_name or not client_name.strip():
+        raise ValueError("O nome do cliente/empresa é obrigatório.")
+        
+    etapa = data.get("etapa", "prospeccao").lower().strip()
+    if etapa not in VALID_ETAPAS:
+        raise ValueError(f"Etapa inválida '{etapa}'. Deve ser uma de: {', '.join(sorted(VALID_ETAPAS))}.")
+        
+    estimated_value = float(data.get("estimated_value", 0.0) or 0.0)
+    responsible = data.get("responsible")
+    if not responsible and current_user:
+        responsible = current_user.get("email")
+        
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    INSERT INTO leads (
+        tenant_id, client_name, cnpj, contact_person, contact_email,
+        contact_phone, estimated_value, etapa, responsible, notes
+    ) VALUES (
+        'edv_jr', ?, ?, ?, ?, ?, ?, ?, ?, ?
+    );
+    """, (
+        client_name.strip(),
+        (data.get("cnpj") or "").strip() or None,
+        (data.get("contact_person") or "").strip() or None,
+        (data.get("contact_email") or "").strip() or None,
+        (data.get("contact_phone") or "").strip() or None,
+        estimated_value,
+        etapa,
+        (responsible or "").strip() or None,
+        (data.get("notes") or "").strip() or None
+    ))
+    new_id = cursor.lastrowid
+    conn.commit()
+    cursor.execute("SELECT * FROM leads WHERE id = ?;", (new_id,))
+    lead = dict(cursor.fetchone())
+    conn.close()
+    return lead
+
+
+def get_lead_by_id(lead_id: int) -> Optional[dict]:
+    """Retorna detalhes do lead pelo ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM leads WHERE id = ?;", (lead_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_lead(lead_id: int, updates: dict, current_user: Optional[dict] = None) -> Optional[dict]:
+    """Atualiza dados e/ou transiciona a etapa do lead no funil."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM leads WHERE id = ?;", (lead_id,))
+    existing = cursor.fetchone()
+    if not existing:
+        conn.close()
+        raise ValueError(f"Lead ID #{lead_id} não encontrado.")
+        
+    allowed_fields = [
+        "client_name", "cnpj", "contact_person", "contact_email",
+        "contact_phone", "estimated_value", "etapa", "responsible", "notes"
+    ]
+    set_clauses = []
+    params = []
+    
+    for f in allowed_fields:
+        if f in updates and updates[f] is not None:
+            val = updates[f]
+            if f == "etapa":
+                val = str(val).lower().strip()
+                if val not in VALID_ETAPAS:
+                    conn.close()
+                    raise ValueError(f"Etapa inválida '{val}'. Deve ser uma de: {', '.join(sorted(VALID_ETAPAS))}.")
+            elif f == "estimated_value":
+                val = float(val)
+            set_clauses.append(f"{f} = ?")
+            params.append(val)
+            
+    if not set_clauses:
+        conn.close()
+        return dict(existing)
+        
+    set_clauses.append("updated_at = CURRENT_TIMESTAMP")
+    params.append(lead_id)
+    query = f"UPDATE leads SET {', '.join(set_clauses)} WHERE id = ?;"
+    cursor.execute(query, tuple(params))
+    conn.commit()
+    cursor.execute("SELECT * FROM leads WHERE id = ?;", (lead_id,))
+    updated = dict(cursor.fetchone())
+    conn.close()
+    return updated
+
+
+def get_crm_pipeline() -> dict:
+    """Retorna o panorama completo do funil de vendas segmentado pelas 6 etapas e métricas consolidadas."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM leads ORDER BY updated_at DESC, id DESC;")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    pipeline = {
+        "prospeccao": [],
+        "diagnostico": [],
+        "proposta": [],
+        "negociacao": [],
+        "fechado": [],
+        "perdido": []
+    }
+    
+    total_pipeline_val = 0.0
+    total_fechado_val = 0.0
+    
+    for r in rows:
+        lead_dict = dict(r)
+        st = lead_dict.get("etapa", "prospeccao")
+        if st in pipeline:
+            pipeline[st].append(lead_dict)
+        else:
+            pipeline["prospeccao"].append(lead_dict)
+            
+        val = float(lead_dict.get("estimated_value", 0.0) or 0.0)
+        if st in ["prospeccao", "diagnostico", "proposta", "negociacao"]:
+            total_pipeline_val += val
+        elif st == "fechado":
+            total_fechado_val += val
+            
+    total_leads = len(rows)
+    total_fechados = len(pipeline["fechado"])
+    conversion_rate = round((total_fechados / total_leads * 100.0), 1) if total_leads > 0 else 0.0
+    
+    resumo_etapas = {
+        k: {
+            "count": len(pipeline[k]),
+            "total_value": round(sum(float(x.get("estimated_value", 0.0) or 0.0) for x in pipeline[k]), 2)
+        }
+        for k in pipeline
+    }
+    
+    return {
+        "status": "success",
+        "etapas": pipeline,
+        "resumo_etapas": resumo_etapas,
+        "total_leads_count": total_leads,
+        "total_pipeline_value": round(total_pipeline_val, 2),
+        "total_fechado_value": round(total_fechado_val, 2),
+        "conversion_rate": conversion_rate
+    }
+
+
+def create_contrato_rm(data: dict, current_user: Optional[dict] = None) -> dict:
+    """Cria e vincula um contrato de consultoria / RM a um lead existente."""
+    lead_id = data.get("lead_id")
+    if not lead_id:
+        raise ValueError("O campo 'lead_id' é obrigatório para formalizar o contrato de consultoria.")
+        
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM leads WHERE id = ?;", (lead_id,))
+    lead = cursor.fetchone()
+    if not lead:
+        conn.close()
+        raise ValueError(f"Lead ID #{lead_id} não encontrado no CRM.")
+        
+    brand_name = data.get("brand_name") or data.get("client_name") or lead["client_name"]
+    client_name = data.get("client_name") or lead["client_name"]
+    cnpj = data.get("cnpj") or lead["cnpj"]
+    consultoria_escopo = data.get("consultoria_escopo")
+    if not consultoria_escopo or not consultoria_escopo.strip():
+        consultoria_escopo = "Consultoria técnica de registro de marca e proteção marcária perante o INPI."
+        
+    status_exec = data.get("status_execucao", "ativo").lower().strip()
+    if status_exec not in VALID_CONTRATO_STATUS:
+        conn.close()
+        raise ValueError(f"Status de execução inválido '{status_exec}'. Deve ser: {', '.join(sorted(VALID_CONTRATO_STATUS))}.")
+        
+    marcos = data.get("marcos_financeiros")
+    if isinstance(marcos, (list, dict)):
+        marcos_str = json.dumps(marcos, ensure_ascii=False)
+    else:
+        marcos_str = str(marcos) if marcos else None
+        
+    valor_total = float(data.get("valor_total", lead["estimated_value"]) or 0.0)
+    prazo_dias = int(data.get("prazo_dias", 60) or 60)
+    prazo_entrega = data.get("prazo_entrega")
+    if not prazo_entrega:
+        prazo_entrega = (datetime.now() + timedelta(days=prazo_dias)).strftime("%Y-%m-%d")
+        
+    resp_tec = data.get("responsavel_tecnico")
+    if not resp_tec and current_user:
+        resp_tec = current_user.get("email")
+        
+    hash_integ = data.get("hash_integridade")
+    
+    cursor.execute("""
+    INSERT INTO contratos_rm (
+        tenant_id, lead_id, brand_name, client_name, cnpj, consultoria_escopo,
+        prazo_dias, prazo_entrega, marcos_financeiros, valor_total, status_execucao,
+        responsavel_tecnico, hash_integridade
+    ) VALUES (
+        'edv_jr', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+    );
+    """, (
+        lead_id,
+        brand_name.strip(),
+        client_name.strip(),
+        cnpj,
+        consultoria_escopo.strip(),
+        prazo_dias,
+        prazo_entrega,
+        marcos_str,
+        valor_total,
+        status_exec,
+        resp_tec,
+        hash_integ
+    ))
+    new_id = cursor.lastrowid
+    conn.commit()
+    cursor.execute("SELECT * FROM contratos_rm WHERE id = ?;", (new_id,))
+    contrato = dict(cursor.fetchone())
+    conn.close()
+    return contrato
+
+
+def list_contratos_rm(status_filter: Optional[str] = None) -> List[dict]:
+    """Lista contratos de consultoria / RMs ativas com metadados do lead."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    query = """
+    SELECT c.*, l.contact_person, l.contact_email, l.contact_phone
+    FROM contratos_rm c
+    LEFT JOIN leads l ON c.lead_id = l.id
+    """
+    params = []
+    if status_filter and status_filter.strip():
+        query += " WHERE c.status_execucao = ?"
+        params.append(status_filter.lower().strip())
+    query += " ORDER BY c.id DESC;"
+    cursor.execute(query, tuple(params))
+    rows = cursor.fetchall()
+    conn.close()
+    
+    results = []
+    for r in rows:
+        d = dict(r)
+        if d.get("marcos_financeiros"):
+            try:
+                d["marcos_financeiros_parsed"] = json.loads(d["marcos_financeiros"])
+            except Exception:
+                d["marcos_financeiros_parsed"] = []
+        results.append(d)
+    return results
+
+
+def get_contrato_rm_by_id(contrato_id: int) -> Optional[dict]:
+    """Retorna detalhes de um contrato de RM pelo ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT c.*, l.contact_person, l.contact_email, l.contact_phone
+    FROM contratos_rm c
+    LEFT JOIN leads l ON c.lead_id = l.id
+    WHERE c.id = ?;
+    """, (contrato_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    d = dict(row)
+    if d.get("marcos_financeiros"):
+        try:
+            d["marcos_financeiros_parsed"] = json.loads(d["marcos_financeiros"])
+        except Exception:
+            d["marcos_financeiros_parsed"] = []
+    return d
+
+
+def update_contrato_rm_status(contrato_id: int, status: str, current_user: Optional[dict] = None) -> Optional[dict]:
+    """Atualiza o status de execução de um contrato de consultoria."""
+    st_clean = status.lower().strip()
+    if st_clean not in VALID_CONTRATO_STATUS:
+        raise ValueError(f"Status inválido '{status}'. Deve ser: {', '.join(sorted(VALID_CONTRATO_STATUS))}.")
+        
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM contratos_rm WHERE id = ?;", (contrato_id,))
+    existing = cursor.fetchone()
+    if not existing:
+        conn.close()
+        raise ValueError(f"Contrato ID #{contrato_id} não encontrado.")
+        
+    cursor.execute("""
+    UPDATE contratos_rm 
+    SET status_execucao = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?;
+    """, (st_clean, contrato_id))
+    conn.commit()
+    cursor.execute("SELECT * FROM contratos_rm WHERE id = ?;", (contrato_id,))
     updated = dict(cursor.fetchone())
     conn.close()
     return updated

@@ -39,6 +39,8 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         conn.execute("DELETE FROM member_pdi_blocks;")
         conn.execute("DELETE FROM forum_respostas;")
         conn.execute("DELETE FROM forum_duvidas;")
+        conn.execute("DELETE FROM contratos_rm;")
+        conn.execute("DELETE FROM leads;")
         conn.commit()
         conn.close()
         cls.client = TestClient(app)
@@ -1930,6 +1932,257 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         )
         self.assertEqual(res_resolvida.status_code, 200)
         self.assertEqual(res_resolvida.json()["duvida"]["status"], "resolvida")
+
+    def test_54_crm_leads_creation_and_validation(self):
+        """Valida POST /api/crm/leads para cadastro de oportunidades comerciais com atributos corporativos e CNPJ"""
+        token_com = self.tokens["assessor_comercial"]
+
+        # 1. Cadastro com dados válidos
+        payload = {
+            "client_name": "Cervejaria Artesanal Mestre Álvaro Ltda",
+            "cnpj": "14.285.714/0001-99",
+            "contact_person": "Bernardo Furtado",
+            "contact_email": "bernardo@mestrealvaro.com.br",
+            "contact_phone": "(27) 99888-1234",
+            "estimated_value": 2800.0,
+            "etapa": "prospeccao",
+            "responsible": "estevao.coutinho@edvjr.com.br",
+            "notes": "Cliente busca proteção de marca de cerveja artesanal na classe 32."
+        }
+        res = self.client.post("/api/crm/leads", headers={"Authorization": f"Bearer {token_com}"}, json=payload)
+        self.assertEqual(res.status_code, 201)
+        data = res.json()
+        self.assertEqual(data["status"], "success")
+        lead = data["lead"]
+        self.assertEqual(lead["client_name"], payload["client_name"])
+        self.assertEqual(lead["cnpj"], payload["cnpj"])
+        self.assertEqual(lead["estimated_value"], 2800.0)
+        self.assertEqual(lead["etapa"], "prospeccao")
+        self.assertIsNotNone(lead["id"])
+
+        # 2. Validação: rejeição de etapa inválida (400)
+        payload_invalid_etapa = payload.copy()
+        payload_invalid_etapa["client_name"] = "Outra Empresa"
+        payload_invalid_etapa["etapa"] = "etapa_inexistente"
+        res_inv = self.client.post("/api/crm/leads", headers={"Authorization": f"Bearer {token_com}"}, json=payload_invalid_etapa)
+        self.assertEqual(res_inv.status_code, 400)
+
+        # 3. Validação: client_name em branco ou ausente (422 ou 400)
+        payload_no_name = payload.copy()
+        payload_no_name["client_name"] = ""
+        res_no_name = self.client.post("/api/crm/leads", headers={"Authorization": f"Bearer {token_com}"}, json=payload_no_name)
+        self.assertIn(res_no_name.status_code, [400, 422])
+
+    def test_55_crm_pipeline_panoramic_view_and_metrics(self):
+        """Valida GET /api/crm/pipeline retornando o panorama completo do funil nas 6 etapas padronizadas"""
+        token_com = self.tokens["assessor_comercial"]
+
+        # Cadastrar leads em diferentes etapas para conferência matemática
+        etapas_amostra = [
+            ("Alpha Diagnóstico ME", "diagnostico", 2000.0),
+            ("Beta Proposta S.A.", "proposta", 3500.0),
+            ("Gama Negociação Eireli", "negociacao", 4000.0),
+            ("Delta Fechado Ltda", "fechado", 2440.0),
+            ("Epsilon Perdido ME", "perdido", 1500.0)
+        ]
+        for c_name, st, val in etapas_amostra:
+            self.client.post(
+                "/api/crm/leads",
+                headers={"Authorization": f"Bearer {token_com}"},
+                json={"client_name": c_name, "etapa": st, "estimated_value": val}
+            )
+
+        res = self.client.get("/api/crm/pipeline", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        self.assertEqual(data["status"], "success")
+
+        # Assegurar que as 6 etapas exigidas estão presentes no retorno estruturado
+        etapas = data["etapas"]
+        for etapa_esperada in ["prospeccao", "diagnostico", "proposta", "negociacao", "fechado", "perdido"]:
+            self.assertIn(etapa_esperada, etapas)
+            self.assertIsInstance(etapas[etapa_esperada], list)
+
+        # Conferir métricas agregadas
+        self.assertGreaterEqual(data["total_leads_count"], 5)
+        self.assertGreater(data["total_pipeline_value"], 0.0)
+        self.assertGreater(data["total_fechado_value"], 0.0)
+        self.assertIn("conversion_rate", data)
+        self.assertGreater(data["conversion_rate"], 0.0)
+
+    def test_56_crm_lead_stage_transition_and_patch(self):
+        """Valida PATCH /api/crm/leads/{lead_id} para transição ágil de estágios no funil e regras de integridade"""
+        token_com = self.tokens["assessor_comercial"]
+
+        # Criar lead inicial em 'prospeccao'
+        res_post = self.client.post(
+            "/api/crm/leads",
+            headers={"Authorization": f"Bearer {token_com}"},
+            json={"client_name": "Startup Logix Tech", "estimated_value": 3000.0, "etapa": "prospeccao"}
+        )
+        lead_id = res_post.json()["lead"]["id"]
+
+        # 1. Transicionar de prospeccao para diagnostico
+        res_patch1 = self.client.patch(
+            f"/api/crm/leads/{lead_id}",
+            headers={"Authorization": f"Bearer {token_com}"},
+            json={"etapa": "diagnostico"}
+        )
+        self.assertEqual(res_patch1.status_code, 200)
+        self.assertEqual(res_patch1.json()["lead"]["etapa"], "diagnostico")
+
+        # 2. Transicionar para proposta com ajuste de valor
+        res_patch2 = self.client.patch(
+            f"/api/crm/leads/{lead_id}",
+            headers={"Authorization": f"Bearer {token_com}"},
+            json={"etapa": "proposta", "estimated_value": 3200.0}
+        )
+        self.assertEqual(res_patch2.status_code, 200)
+        self.assertEqual(res_patch2.json()["lead"]["etapa"], "proposta")
+        self.assertEqual(res_patch2.json()["lead"]["estimated_value"], 3200.0)
+
+        # 3. Transicionar para negociacao e depois fechado
+        self.client.patch(f"/api/crm/leads/{lead_id}", headers={"Authorization": f"Bearer {token_com}"}, json={"etapa": "negociacao"})
+        res_fechado = self.client.patch(f"/api/crm/leads/{lead_id}", headers={"Authorization": f"Bearer {token_com}"}, json={"etapa": "fechado"})
+        self.assertEqual(res_fechado.status_code, 200)
+        self.assertEqual(res_fechado.json()["lead"]["etapa"], "fechado")
+
+        # 4. Transição inválida -> 400
+        res_inv = self.client.patch(f"/api/crm/leads/{lead_id}", headers={"Authorization": f"Bearer {token_com}"}, json={"etapa": "etapa_falsa"})
+        self.assertEqual(res_inv.status_code, 400)
+
+        # 5. Lead inexistente -> 404
+        res_404 = self.client.patch("/api/crm/leads/999999", headers={"Authorization": f"Bearer {token_com}"}, json={"etapa": "diagnostico"})
+        self.assertEqual(res_404.status_code, 404)
+
+    def test_57_crm_contratos_rm_foreign_key_and_tracking(self):
+        """Valida integridade de chave estrangeira entre leads e contratos_rm, marcos financeiros e status de execução"""
+        token_com = self.tokens["assessor_comercial"]
+        token_pres = self.tokens["presidente"]
+
+        # Criar lead fechado
+        res_lead = self.client.post(
+            "/api/crm/leads",
+            headers={"Authorization": f"Bearer {token_com}"},
+            json={
+                "client_name": "BioNatur Cosméticos Sustentáveis Ltda",
+                "cnpj": "23.456.789/0001-01",
+                "contact_person": "Gisela Duarte",
+                "estimated_value": 3660.0,
+                "etapa": "fechado"
+            }
+        )
+        lead_id = res_lead.json()["lead"]["id"]
+
+        # 1. Tentar criar contrato com lead_id inexistente -> 404/400
+        res_fk_invalida = self.client.post(
+            "/api/crm/contratos",
+            headers={"Authorization": f"Bearer {token_pres}"},
+            json={
+                "lead_id": 888888,
+                "brand_name": "BIONATUR",
+                "consultoria_escopo": "Registro de Marca INPI"
+            }
+        )
+        self.assertEqual(res_fk_invalida.status_code, 404)
+
+        # 2. Criar contrato válido vinculado ao lead fechado
+        contrato_payload = {
+            "lead_id": lead_id,
+            "brand_name": "BIONATUR ORGÂNICOS",
+            "client_name": "BioNatur Cosméticos Sustentáveis Ltda",
+            "cnpj": "23.456.789/0001-01",
+            "consultoria_escopo": "Assessoria e depósito de pedido de registro de marca mista perante o INPI na classe 03 (cosméticos e perfumaria).",
+            "prazo_dias": 60,
+            "valor_total": 3660.0,
+            "marcos_financeiros": [
+                {"parcela": 1, "valor": 1830.0, "vencimento": "2026-10-20", "status": "pago"},
+                {"parcela": 2, "valor": 1830.0, "vencimento": "2026-11-20", "status": "pendente"}
+            ],
+            "status_execucao": "ativo",
+            "responsavel_tecnico": "thais.junger@edvjr.com.br"
+        }
+        res_contrato = self.client.post(
+            "/api/crm/contratos",
+            headers={"Authorization": f"Bearer {token_pres}"},
+            json=contrato_payload
+        )
+        self.assertEqual(res_contrato.status_code, 201)
+        contrato_data = res_contrato.json()["contrato"]
+        contrato_id = contrato_data["id"]
+        self.assertEqual(contrato_data["lead_id"], lead_id)
+        self.assertEqual(contrato_data["brand_name"], "BIONATUR ORGÂNICOS")
+        self.assertEqual(contrato_data["status_execucao"], "ativo")
+
+        # 3. Listagem do Painel de Contratos
+        res_list = self.client.get("/api/crm/contratos", headers={"Authorization": f"Bearer {token_com}"})
+        self.assertEqual(res_list.status_code, 200)
+        contratos_lista = res_list.json()["contratos"]
+        self.assertTrue(any(c["id"] == contrato_id for c in contratos_lista))
+
+        # 4. Atualizar status de execução do contrato (ativo -> concluido)
+        res_st = self.client.patch(
+            f"/api/crm/contratos/{contrato_id}/status",
+            headers={"Authorization": f"Bearer {token_pres}"},
+            json={"status": "concluido"}
+        )
+        self.assertEqual(res_st.status_code, 200)
+        self.assertEqual(res_st.json()["contrato"]["status_execucao"], "concluido")
+
+    def test_58_juridico_gerar_contrato_data_injection_and_hash_watermark(self):
+        """Valida POST /api/juridico/gerar-contrato com injeção automática de dados cadastrais, Lei 13.267/2016 e marca d'água SHA-256"""
+        token_com = self.tokens["assessor_comercial"]
+
+        # Criar lead corporativo
+        res_lead = self.client.post(
+            "/api/crm/leads",
+            headers={"Authorization": f"Bearer {token_com}"},
+            json={
+                "client_name": "Mundial Logística & Transportes S.A.",
+                "cnpj": "11.222.333/0001-44",
+                "contact_person": "Dra. Renata Vasconcelos",
+                "contact_email": "renata@mundiallog.com.br",
+                "contact_phone": "(27) 99876-5432",
+                "estimated_value": 4880.0,
+                "etapa": "negociacao"
+            }
+        )
+        lead_id = res_lead.json()["lead"]["id"]
+
+        # 1. Gerar contrato a partir do lead
+        req_body = {
+            "lead_id": lead_id,
+            "modelo": "prestacao_servicos_rm",
+            "condicoes_pagamento": "Entrada de 50% no ato e 50% após o protocolo inicial perante o INPI."
+        }
+        res_doc = self.client.post("/api/juridico/gerar-contrato", headers={"Authorization": f"Bearer {token_com}"}, json=req_body)
+        self.assertEqual(res_doc.status_code, 200)
+        doc = res_doc.json()
+
+        # Validações estruturais e cadastrais
+        self.assertEqual(doc["status"], "success")
+        self.assertEqual(doc["client_name"], "Mundial Logística & Transportes S.A.")
+        self.assertEqual(doc["cnpj"], "11.222.333/0001-44")
+        self.assertEqual(doc["valor_total"], 4880.0)
+
+        # Exatidão da injeção de dados no corpo do documento
+        md_text = doc["documento_markdown"]
+        html_text = doc["documento_html"]
+        self.assertIn("MUNDIAL LOGÍSTICA & TRANSPORTES S.A.", md_text)
+        self.assertIn("11.222.333/0001-44", md_text)
+        self.assertIn("Dra. Renata Vasconcelos", md_text)
+        self.assertIn("Lei Federal nº 13.267/2016", md_text)
+        self.assertIn("Vitória, Estado do Espírito Santo", md_text)
+
+        # Marca d'água formal e hash SHA-256 de integridade
+        marca_dagua = doc["marca_dagua"]
+        hash_integ = doc["hash_integridade"]
+        self.assertIn("DOCUMENTO OFICIAL EDV JR.", marca_dagua)
+        self.assertIn("REGISTRADO SOB LEI 13.267/2016", marca_dagua)
+        self.assertEqual(len(hash_integ), 64)
+        self.assertIn(hash_integ, marca_dagua)
+        self.assertIn(hash_integ, md_text)
+        self.assertIn(hash_integ, html_text)
 
 
 if __name__ == "__main__":

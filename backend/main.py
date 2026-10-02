@@ -116,7 +116,15 @@ try:
         create_forum_duvida,
         list_forum_duvidas,
         add_forum_resposta,
-        resolve_forum_duvida
+        resolve_forum_duvida,
+        create_lead,
+        get_lead_by_id,
+        update_lead,
+        get_crm_pipeline,
+        create_contrato_rm,
+        list_contratos_rm,
+        get_contrato_rm_by_id,
+        update_contrato_rm_status
     )
     from backend.auth import (
         verify_password,
@@ -211,7 +219,15 @@ except ImportError:
         create_forum_duvida,
         list_forum_duvidas,
         add_forum_resposta,
-        resolve_forum_duvida
+        resolve_forum_duvida,
+        create_lead,
+        get_lead_by_id,
+        update_lead,
+        get_crm_pipeline,
+        create_contrato_rm,
+        list_contratos_rm,
+        get_contrato_rm_by_id,
+        update_contrato_rm_status
     )
     from auth import (
         verify_password,
@@ -232,6 +248,11 @@ except ImportError:
         verify_rm_staging_approval_access,
         login_rate_limiter
     )
+
+try:
+    from backend.legal_engine import gerar_minuta_contratual
+except ImportError:
+    from legal_engine import gerar_minuta_contratual
 
 try:
     from semantic_nlp import (
@@ -938,6 +959,66 @@ class Evaluation360Create(BaseModel):
 class GapPlanCreate(BaseModel):
     user_email: str
     role_target: Optional[str] = "diretoria"
+
+# ==============================================================================
+# SCHEMAS DO PIPELINE DE VENDAS CRM, CONTRATOS DE CONSULTORIA & JURÍDICO
+# ==============================================================================
+
+class LeadCreate(BaseModel):
+    client_name: str = Field(..., min_length=2, description="Razão Social, Nome Fantasia ou Nome do Cliente")
+    cnpj: Optional[str] = Field(None, description="CNPJ ou CPF do cliente")
+    contact_person: Optional[str] = Field(None, description="Contato responsável no cliente")
+    contact_email: Optional[str] = Field(None, description="E-mail corporativo de contato")
+    contact_phone: Optional[str] = Field(None, description="Telefone ou WhatsApp de contato")
+    estimated_value: Optional[float] = Field(0.0, ge=0.0, description="Valor estimado da oportunidade")
+    etapa: Optional[str] = Field("prospeccao", description="Etapa do funil: prospeccao, diagnostico, proposta, negociacao, fechado, perdido")
+    responsible: Optional[str] = Field(None, description="E-mail ou nome do assessor responsável")
+    notes: Optional[str] = Field(None, description="Anotações comerciais ou histórico de contato")
+
+class LeadUpdate(BaseModel):
+    client_name: Optional[str] = None
+    cnpj: Optional[str] = None
+    contact_person: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    estimated_value: Optional[float] = None
+    etapa: Optional[str] = None
+    responsible: Optional[str] = None
+    notes: Optional[str] = None
+
+class ContratoRMCreate(BaseModel):
+    lead_id: int = Field(..., description="ID do lead convertido no CRM")
+    brand_name: Optional[str] = Field(None, description="Nome da marca ou título da consultoria")
+    client_name: Optional[str] = Field(None, description="Nome do cliente ou razão social")
+    cnpj: Optional[str] = Field(None, description="CNPJ ou CPF do contratante")
+    consultoria_escopo: Optional[str] = Field(None, description="Escopo técnico detalhado da consultoria")
+    prazo_dias: Optional[int] = Field(60, ge=1, description="SLA de entrega em dias")
+    prazo_entrega: Optional[str] = Field(None, description="Data estimada de entrega")
+    marcos_financeiros: Optional[Any] = Field(None, description="Parcelas ou marcos financeiros (lista ou JSON)")
+    valor_total: Optional[float] = Field(None, ge=0.0, description="Valor global da consultoria")
+    status_execucao: Optional[str] = Field("ativo", description="Status operacional: ativo, suspenso, concluido")
+    responsavel_tecnico: Optional[str] = Field(None, description="Consultor ou gerente técnico responsável")
+
+class ContratoRMStatusUpdate(BaseModel):
+    status: str = Field(..., description="Novo status de execução: ativo, suspenso, concluido")
+
+class GerarContratoRequest(BaseModel):
+    lead_id: Optional[int] = Field(None, description="ID do lead para preenchimento automático")
+    contrato_rm_id: Optional[int] = Field(None, description="ID do contrato para preenchimento automático")
+    modelo: Optional[str] = Field("prestacao_servicos_rm", description="prestacao_servicos_rm, consultoria_juridica_preventiva, acordo_confidencialidade_nda")
+    client_name: Optional[str] = None
+    cnpj: Optional[str] = None
+    contact_person: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+    brand_name: Optional[str] = None
+    objeto_detalhado: Optional[str] = None
+    consultoria_escopo: Optional[str] = None
+    valor: Optional[float] = None
+    valor_total: Optional[float] = None
+    condicoes_pagamento: Optional[str] = None
+    prazo_dias: Optional[int] = None
+    responsavel_tecnico: Optional[str] = None
 
 def parse_csv_leads(csv_text: str) -> List[LeadIngestItem]:
     """Interpreta texto CSV delimitado por vírgula ou ponto-e-vírgula em objetos LeadIngestItem."""
@@ -2098,6 +2179,225 @@ async def update_duvida_status_endpoint(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ve))
     except PermissionError as pe:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(pe))
+
+
+# ==============================================================================
+# 5.2 CRM PIPELINE DE VENDAS, GESTÃO DE RMS & AUTOMAÇÃO JURÍDICA
+# ==============================================================================
+
+@app.post(
+    "/api/crm/leads",
+    status_code=status.HTTP_201_CREATED,
+    summary="Cadastrar nova oportunidade comercial no funil de vendas (CRM)"
+)
+async def create_crm_lead_endpoint(
+    payload: LeadCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        lead = create_lead(payload.model_dump(), current_user=current_user)
+        return {
+            "status": "success",
+            "message": "Lead cadastrado com sucesso no funil de vendas.",
+            "lead": lead
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@app.get(
+    "/api/crm/pipeline",
+    summary="Retornar panorama completo do funil de vendas segmentado por etapa"
+)
+async def get_crm_pipeline_endpoint(
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        pipeline = get_crm_pipeline()
+        return pipeline
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@app.patch(
+    "/api/crm/leads/{lead_id}",
+    summary="Atualizar dados ou transicionar a etapa do lead no funil"
+)
+async def update_crm_lead_endpoint(
+    lead_id: int,
+    payload: LeadUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        updated = update_lead(
+            lead_id=lead_id,
+            updates=payload.model_dump(exclude_unset=True),
+            current_user=current_user
+        )
+        return {
+            "status": "success",
+            "message": f"Lead #{lead_id} atualizado com sucesso.",
+            "lead": updated
+        }
+    except ValueError as ve:
+        status_code = status.HTTP_404_NOT_FOUND if "não encontrado" in str(ve) else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@app.get(
+    "/api/crm/contratos",
+    summary="Listar contratos de consultoria e RMs ativas"
+)
+async def list_crm_contratos_endpoint(
+    status_execucao: Optional[str] = Query(None, description="Filtrar por status: ativo, suspenso, concluido"),
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        contratos = list_contratos_rm(status_filter=status_execucao)
+        return {
+            "status": "success",
+            "total": len(contratos),
+            "contratos": contratos
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@app.post(
+    "/api/crm/contratos",
+    status_code=status.HTTP_201_CREATED,
+    summary="Vincular novo contrato de consultoria / RM a um lead existente"
+)
+async def create_crm_contrato_endpoint(
+    payload: ContratoRMCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        contrato = create_contrato_rm(payload.model_dump(), current_user=current_user)
+        return {
+            "status": "success",
+            "message": "Contrato de consultoria registrado com sucesso.",
+            "contrato": contrato
+        }
+    except ValueError as ve:
+        status_code = status.HTTP_404_NOT_FOUND if "não encontrado" in str(ve) else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@app.patch(
+    "/api/crm/contratos/{contrato_id}/status",
+    summary="Atualizar status operacional de um contrato de consultoria"
+)
+async def update_crm_contrato_status_endpoint(
+    contrato_id: int,
+    payload: ContratoRMStatusUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        updated = update_contrato_rm_status(
+            contrato_id=contrato_id,
+            status=payload.status,
+            current_user=current_user
+        )
+        return {
+            "status": "success",
+            "message": f"Status do contrato #{contrato_id} atualizado para '{payload.status}'.",
+            "contrato": updated
+        }
+    except ValueError as ve:
+        status_code = status.HTTP_404_NOT_FOUND if "não encontrado" in str(ve) else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@app.post(
+    "/api/juridico/gerar-contrato",
+    summary="Automação documental jurídica: gera minuta com preenchimento via CRM e marca d'água SHA-256"
+)
+async def gerar_contrato_juridico_endpoint(
+    payload: GerarContratoRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        dados_contrato = payload.model_dump(exclude_unset=True)
+        
+        # 1. Enriquecimento via Lead se especificado
+        if payload.lead_id:
+            lead = get_lead_by_id(payload.lead_id)
+            if not lead:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Lead ID #{payload.lead_id} não encontrado no CRM.")
+            if not dados_contrato.get("client_name"):
+                dados_contrato["client_name"] = lead["client_name"]
+            if not dados_contrato.get("cnpj"):
+                dados_contrato["cnpj"] = lead["cnpj"]
+            if not dados_contrato.get("contact_person"):
+                dados_contrato["contact_person"] = lead["contact_person"]
+            if not dados_contrato.get("contact_email"):
+                dados_contrato["contact_email"] = lead["contact_email"]
+            if not dados_contrato.get("contact_phone"):
+                dados_contrato["contact_phone"] = lead["contact_phone"]
+            if not dados_contrato.get("valor_total") and not dados_contrato.get("valor"):
+                dados_contrato["valor_total"] = lead["estimated_value"]
+            if not dados_contrato.get("brand_name"):
+                dados_contrato["brand_name"] = lead["client_name"]
+                
+        # 2. Enriquecimento via Contrato RM se especificado
+        if payload.contrato_rm_id:
+            contrato = get_contrato_rm_by_id(payload.contrato_rm_id)
+            if not contrato:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Contrato ID #{payload.contrato_rm_id} não encontrado.")
+            if not dados_contrato.get("client_name"):
+                dados_contrato["client_name"] = contrato["client_name"]
+            if not dados_contrato.get("cnpj"):
+                dados_contrato["cnpj"] = contrato["cnpj"]
+            if not dados_contrato.get("brand_name"):
+                dados_contrato["brand_name"] = contrato["brand_name"]
+            if not dados_contrato.get("consultoria_escopo") and not dados_contrato.get("objeto_detalhado"):
+                dados_contrato["consultoria_escopo"] = contrato["consultoria_escopo"]
+            if not dados_contrato.get("valor_total") and not dados_contrato.get("valor"):
+                dados_contrato["valor_total"] = contrato["valor_total"]
+            if not dados_contrato.get("prazo_dias"):
+                dados_contrato["prazo_dias"] = contrato["prazo_dias"]
+            if not dados_contrato.get("prazo_entrega"):
+                dados_contrato["prazo_entrega"] = contrato["prazo_entrega"]
+            if not dados_contrato.get("marcos_financeiros") and contrato.get("marcos_financeiros"):
+                dados_contrato["marcos_financeiros"] = contrato["marcos_financeiros"]
+
+        # Se nenhum lead ou cliente informado
+        if not dados_contrato.get("client_name"):
+            dados_contrato["client_name"] = "Empresa Contratante S.A."
+
+        # Gerar documento via motor jurídico
+        resultado = gerar_minuta_contratual(dados_contrato)
+
+        # Se contrato_rm_id estiver presente, atualiza o hash no banco
+        if payload.contrato_rm_id and resultado.get("hash_integridade"):
+            try:
+                conn = get_connection()
+                cur = conn.cursor()
+                cur.execute(
+                    "UPDATE contratos_rm SET hash_integridade = ? WHERE id = ?;",
+                    (resultado["hash_integridade"], payload.contrato_rm_id)
+                )
+                conn.commit()
+                conn.close()
+            except Exception:
+                pass
+
+        return resultado
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 # ==============================================================================
