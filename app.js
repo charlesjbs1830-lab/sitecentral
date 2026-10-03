@@ -531,6 +531,7 @@ function switchTab(tabId) {
     renderPlanilhasDrive();
     verificarStatusDrive();
   } else if (tabId === 'tutoriais') {
+    carregarKBArtigos();
     renderTutoriaisDrive();
   } else if (tabId === 'auditoria') {
     if (isLeadership) {
@@ -5802,6 +5803,7 @@ function renderTutoriaisDrive() {
   containerCap.innerHTML = caps.map(c => {
     const isVideo = c.tipo && c.tipo.includes('Vídeo');
     const icon = isVideo ? 'fa-video text-rose-500' : 'fa-file-lines text-blue-500';
+    const driveUrl = c.drive_url || c.link || (c.arquivo ? `https://drive.google.com/drive/search?q=${encodeURIComponent(c.arquivo)}` : 'https://drive.google.com');
     return `
       <div class="glass-card rounded-xl p-4 border-l-4 ${isVideo ? 'border-rose-500' : 'border-blue-500'} flex flex-col justify-between space-y-2 shadow-2xs hover:shadow-xs transition">
         <div>
@@ -5816,9 +5818,9 @@ function renderTutoriaisDrive() {
           <span class="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
             <i class="fa-solid fa-cloud-arrow-down"></i> Sincronizado
           </span>
-          <span class="text-[11px] text-blue-600 font-bold hover:underline cursor-pointer">
-            Acessar no Drive &rarr;
-          </span>
+          <a href="${driveUrl}" target="_blank" rel="noopener noreferrer" class="text-[11px] text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-1 cursor-pointer" title="Abrir material no Google Drive em nova aba">
+            <i class="fa-brands fa-google-drive text-emerald-600"></i> Acessar no Drive &rarr;
+          </a>
         </div>
       </div>
     `;
@@ -10003,6 +10005,701 @@ function renderDashboardExecutivoBI(dados) {
 }
 
 // ==============================================================================
+// 7.6 BASE DE CONHECIMENTO & POPs (WIKI CORPORATIVA & LINKS SEGUROS DO DRIVE)
+// ==============================================================================
+window.kbArtigosLista = [];
+window.kbArtigoSelecionadoId = null;
+window.kbCategoriaAtiva = 'todos';
+
+function formatarLinksSeguros(texto) {
+  if (!texto) return '';
+  // 1. Links no formato Markdown [label](url)
+  let formatado = texto.replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g, (match, label, url) => {
+    const isDrive = /drive\.google\.com|docs\.google\.com/.test(url);
+    if (isDrive) {
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-emerald-700 hover:text-emerald-900 font-bold underline inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200 transition cursor-pointer" title="Abrir no Google Drive"><i class="fa-brands fa-google-drive text-emerald-600"></i> ${label} ↗</a>`;
+    }
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 font-semibold underline inline-flex items-center gap-1 cursor-pointer" title="Abrir link externo">${label} ↗</a>`;
+  });
+
+  // 2. URLs puras de Google Drive ou Google Docs fora de tags HTML
+  formatado = formatado.replace(/(^|[^"'>])(https?:\/\/(?:drive|docs)\.google\.com\/[^\s<"')]+)/g, (match, prefix, url) => {
+    return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-emerald-700 hover:text-emerald-900 font-bold underline inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200 transition cursor-pointer" title="Abrir arquivo oficial no Google Drive"><i class="fa-brands fa-google-drive text-emerald-600"></i> ${url} ↗</a>`;
+  });
+
+  return formatado;
+}
+
+function renderMarkdownKB(md) {
+  if (!md) return '<p class="text-slate-400 italic">Sem conteúdo disponível.</p>';
+
+  // 1. Proteger blocos de código
+  const codeBlocks = [];
+  let processed = md.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+    const idx = codeBlocks.length;
+    const safeCode = escaparHTMLSeguro(code);
+    codeBlocks.push(
+      `<div class="my-3 rounded-lg overflow-hidden border border-slate-700 bg-slate-900 text-slate-100 font-mono text-[11px]">` +
+        (lang ? `<div class="bg-slate-800 px-3 py-1 text-[10px] text-slate-400 font-bold uppercase tracking-wider">${lang}</div>` : '') +
+        `<pre class="p-3 overflow-x-auto"><code>${safeCode}</code></pre>` +
+      `</div>`
+    );
+    return `%%%CODEBLOCK_${idx}%%%`;
+  });
+
+  // 2. Proteger código inline
+  const inlineCodes = [];
+  processed = processed.replace(/`([^`\n]+)`/g, (match, code) => {
+    const idx = inlineCodes.length;
+    const safe = escaparHTMLSeguro(code);
+    inlineCodes.push(`<code class="px-1.5 py-0.5 bg-slate-100 text-emerald-800 rounded font-mono text-[11px] font-semibold border border-slate-200">${safe}</code>`);
+    return `%%%INLINECODE_${idx}%%%`;
+  });
+
+  // 3. Processar linhas
+  const lines = processed.split('\n');
+  const htmlLines = [];
+  let inUl = false;
+  let inOl = false;
+  let inBlockquote = false;
+  let quoteBuffer = [];
+
+  function flushQuote() {
+    if (inBlockquote) {
+      htmlLines.push(`<blockquote class="border-l-4 border-emerald-500 bg-emerald-50/60 p-3 my-2 rounded-r-lg text-xs text-slate-700 italic space-y-1">${quoteBuffer.join('<br>')}</blockquote>`);
+      quoteBuffer = [];
+      inBlockquote = false;
+    }
+  }
+
+  function flushList() {
+    if (inUl) {
+      htmlLines.push('</ul>');
+      inUl = false;
+    }
+    if (inOl) {
+      htmlLines.push('</ol>');
+      inOl = false;
+    }
+  }
+
+  for (let line of lines) {
+    const trimmed = line.trim();
+
+    // Citações (> citação)
+    if (trimmed.startsWith('>')) {
+      flushList();
+      inBlockquote = true;
+      quoteBuffer.push(trimmed.replace(/^>\s*/, ''));
+      continue;
+    } else {
+      flushQuote();
+    }
+
+    // Linha horizontal
+    if (/^(\*{3,}|-{3,}|_{3,})$/.test(trimmed)) {
+      flushList();
+      htmlLines.push('<hr class="my-4 border-slate-200">');
+      continue;
+    }
+
+    // Títulos
+    if (trimmed.startsWith('#### ')) {
+      flushList();
+      htmlLines.push(`<h4 class="text-xs font-bold text-slate-800 mt-4 mb-1.5 flex items-center gap-1.5">${trimmed.substring(5)}</h4>`);
+      continue;
+    }
+    if (trimmed.startsWith('### ')) {
+      flushList();
+      htmlLines.push(`<h3 class="text-sm font-bold text-slate-900 mt-4 mb-2 flex items-center gap-2 text-emerald-950 pb-1 border-b border-slate-100">${trimmed.substring(4)}</h3>`);
+      continue;
+    }
+    if (trimmed.startsWith('## ')) {
+      flushList();
+      htmlLines.push(`<h2 class="text-base font-bold text-slate-900 mt-5 mb-2.5 flex items-center gap-2 pb-1.5 border-b border-slate-200">${trimmed.substring(3)}</h2>`);
+      continue;
+    }
+    if (trimmed.startsWith('# ')) {
+      flushList();
+      htmlLines.push(`<h1 class="text-lg font-extrabold text-slate-900 mt-6 mb-3 pb-2 border-b-2 border-emerald-500">${trimmed.substring(2)}</h1>`);
+      continue;
+    }
+
+    // Listas com marcadores: - item ou * item
+    const ulMatch = trimmed.match(/^[-*]\s+(.*)$/);
+    if (ulMatch) {
+      if (inOl) { htmlLines.push('</ol>'); inOl = false; }
+      if (!inUl) { htmlLines.push('<ul class="list-disc list-inside space-y-1 my-2 text-slate-700 pl-1">'); inUl = true; }
+      htmlLines.push(`<li class="text-xs">${ulMatch[1]}</li>`);
+      continue;
+    }
+
+    // Listas numeradas: 1. item
+    const olMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
+    if (olMatch) {
+      if (inUl) { htmlLines.push('</ul>'); inUl = false; }
+      if (!inOl) { htmlLines.push('<ol class="list-decimal list-inside space-y-1 my-2 text-slate-700 pl-1">'); inOl = true; }
+      htmlLines.push(`<li class="text-xs">${olMatch[2]}</li>`);
+      continue;
+    }
+
+    // Linha em branco
+    if (trimmed === '') {
+      flushList();
+      continue;
+    }
+
+    // Parágrafo regular
+    flushList();
+    htmlLines.push(`<p class="text-xs text-slate-700 leading-relaxed mb-2">${trimmed}</p>`);
+  }
+
+  flushQuote();
+  flushList();
+
+  let resultHtml = htmlLines.join('\n');
+
+  // Negrito e Itálico
+  resultHtml = resultHtml.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-bold text-slate-900">$1</strong>');
+  resultHtml = resultHtml.replace(/__([^_]+)__/g, '<strong class="font-bold text-slate-900">$1</strong>');
+  resultHtml = resultHtml.replace(/(^|[^*])\*([^*]+)\*/g, '$1<em class="italic text-slate-600">$2</em>');
+
+  // Links seguros com diretivas para o Google Drive
+  resultHtml = formatarLinksSeguros(resultHtml);
+
+  // Restaurar códigos inline e blocos
+  resultHtml = resultHtml.replace(/%%%INLINECODE_(\d+)%%%/g, (match, idx) => inlineCodes[idx] || '');
+  resultHtml = resultHtml.replace(/%%%CODEBLOCK_(\d+)%%%/g, (match, idx) => codeBlocks[idx] || '');
+
+  return resultHtml;
+}
+
+function switchTutoriaisSubtab(subtab) {
+  const btnKb = document.getElementById('subtab-tut-kb');
+  const btnCap = document.getElementById('subtab-tut-capacitacoes');
+  const secKb = document.getElementById('tut-sub-kb');
+  const secCap = document.getElementById('tut-sub-capacitacoes');
+
+  if (subtab === 'kb') {
+    if (btnKb) {
+      btnKb.classList.remove('subtab-inactive');
+      btnKb.classList.add('subtab-active');
+    }
+    if (btnCap) {
+      btnCap.classList.remove('subtab-active');
+      btnCap.classList.add('subtab-inactive');
+    }
+    if (secKb) secKb.classList.remove('hidden');
+    if (secCap) secCap.classList.add('hidden');
+    if (!window.kbArtigosLista || window.kbArtigosLista.length === 0) {
+      carregarKBArtigos();
+    }
+  } else {
+    if (btnKb) {
+      btnKb.classList.remove('subtab-active');
+      btnKb.classList.add('subtab-inactive');
+    }
+    if (btnCap) {
+      btnCap.classList.remove('subtab-inactive');
+      btnCap.classList.add('subtab-active');
+    }
+    if (secKb) secKb.classList.add('hidden');
+    if (secCap) secCap.classList.remove('hidden');
+    renderTutoriaisDrive();
+  }
+}
+
+function getCategoriaBadgeConfig(cat) {
+  const c = (cat || 'geral').toLowerCase();
+  switch (c) {
+    case 'projetos':
+      return {
+        label: '🛡️ Projetos & RM',
+        colorClass: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+        icon: 'fa-shield-halved'
+      };
+    case 'financeiro':
+      return {
+        label: '💰 Financeiro',
+        colorClass: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        icon: 'fa-sack-dollar'
+      };
+    case 'juridico':
+      return {
+        label: '⚖️ Jurídico & Compliance',
+        colorClass: 'bg-purple-100 text-purple-800 border-purple-200',
+        icon: 'fa-scale-balanced'
+      };
+    case 'gestao_gente':
+      return {
+        label: '👥 Gestão de Gente & PDI',
+        colorClass: 'bg-amber-100 text-amber-800 border-amber-200',
+        icon: 'fa-users-gear'
+      };
+    case 'comercial':
+      return {
+        label: '🎯 Comercial',
+        colorClass: 'bg-rose-100 text-rose-800 border-rose-200',
+        icon: 'fa-bullseye'
+      };
+    case 'ti':
+      return {
+        label: '💻 Tecnologia',
+        colorClass: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+        icon: 'fa-laptop-code'
+      };
+    case 'geral':
+    default:
+      return {
+        label: '📦 Geral',
+        colorClass: 'bg-slate-100 text-slate-800 border-slate-200',
+        icon: 'fa-box-archive'
+      };
+  }
+}
+
+async function carregarKBArtigos(categoriaFiltro, buscaTexto) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const container = document.getElementById('kb-cards-container');
+  if (container) {
+    container.innerHTML = `
+      <div class="p-6 text-center text-slate-400 text-xs">
+        <i class="fa-solid fa-circle-notch fa-spin text-emerald-600 text-lg mb-2"></i>
+        <div>Carregando Base de Conhecimento...</div>
+      </div>
+    `;
+  }
+
+  try {
+    const params = new URLSearchParams();
+    const cat = categoriaFiltro || window.kbCategoriaAtiva;
+    if (cat && cat !== 'todos') {
+      params.append('categoria', cat);
+    }
+    const q = buscaTexto !== undefined ? buscaTexto : (document.getElementById('kb-search-input')?.value || '');
+    if (q && q.trim()) {
+      params.append('q', q.trim());
+    }
+
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const headers = {};
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    const res = await fetch(`${API_BASE_URL}/api/kb/artigos${qs}`, {
+      headers,
+      credentials: 'include'
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      window.kbArtigosLista = data || [];
+      const countEl = document.getElementById('kb-total-count');
+      if (countEl) {
+        countEl.textContent = `${window.kbArtigosLista.length} artigo${window.kbArtigosLista.length === 1 ? '' : 's'}`;
+      }
+      renderKBArtigosList(window.kbArtigosLista);
+
+      // Se há artigos, selecionar o que estava selecionado ou o primeiro
+      if (window.kbArtigosLista.length > 0) {
+        const jaSelecionado = window.kbArtigosLista.some(a => a.id === window.kbArtigoSelecionadoId);
+        if (jaSelecionado) {
+          selecionarKBArtigo(window.kbArtigoSelecionadoId);
+        } else {
+          selecionarKBArtigo(window.kbArtigosLista[0].id);
+        }
+      } else {
+        limparLeitorKB();
+      }
+    } else {
+      console.warn('Falha ao carregar artigos KB:', res.status);
+      if (container) {
+        container.innerHTML = '<div class="p-6 text-center text-red-500 text-xs">Erro ao carregar os artigos da Base de Conhecimento.</div>';
+      }
+    }
+  } catch (err) {
+    console.error('Erro de rede ao carregar KB artigos:', err);
+    if (container) {
+      container.innerHTML = '<div class="p-6 text-center text-red-500 text-xs">Falha na conexão com o servidor.</div>';
+    }
+  }
+}
+
+function renderKBArtigosList(artigos) {
+  const container = document.getElementById('kb-cards-container');
+  if (!container) return;
+
+  if (!artigos || artigos.length === 0) {
+    container.innerHTML = `
+      <div class="glass-card rounded-xl p-6 text-center text-slate-400 text-xs border border-dashed border-slate-300">
+        <i class="fa-solid fa-book-open text-2xl text-slate-300 mb-2 block"></i>
+        Nenhum procedimento encontrado nesta categoria ou busca.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = artigos.map(a => {
+    const isSelected = a.id === window.kbArtigoSelecionadoId;
+    const catCfg = getCategoriaBadgeConfig(a.categoria);
+    const dataFmt = formatarDataSimplesBR(a.created_at || a.updated_at);
+    // Limpar markdown simples para o snippet
+    const snippet = (a.conteudo || '')
+      .replace(/[#*`_>\[\]]/g, '')
+      .replace(/\n+/g, ' ')
+      .trim()
+      .substring(0, 110);
+
+    const activeClasses = isSelected
+      ? 'border-emerald-500 bg-emerald-50/50 shadow-sm ring-1 ring-emerald-400'
+      : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70 shadow-2xs';
+
+    return `
+      <div onclick="selecionarKBArtigo(${a.id})" class="p-3.5 rounded-xl border transition cursor-pointer flex flex-col justify-between space-y-2 ${activeClasses}">
+        <div>
+          <div class="flex items-center justify-between gap-1 mb-1.5">
+            <span class="px-2 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider ${catCfg.colorClass}">
+              <i class="fa-solid ${catCfg.icon} mr-0.5"></i> ${catCfg.label}
+            </span>
+            ${a.drive_url ? `
+              <span class="text-[10px] text-emerald-700 font-bold flex items-center gap-1" title="Contém link oficial para o Google Drive">
+                <i class="fa-brands fa-google-drive"></i> Drive
+              </span>
+            ` : ''}
+          </div>
+          <h4 class="font-bold text-xs text-slate-800 leading-snug line-clamp-2">${escaparHTMLSeguro(a.titulo)}</h4>
+          <p class="text-[11px] text-slate-500 line-clamp-2 mt-1 font-normal leading-relaxed">${escaparHTMLSeguro(snippet)}...</p>
+        </div>
+        <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400 font-mono">
+          <span class="truncate max-w-[150px]"><i class="fa-solid fa-user-pen mr-1"></i> ${escaparHTMLSeguro(a.autor_nome || 'EDV Jr.')}</span>
+          <span>${dataFmt}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function selecionarKBArtigo(id) {
+  window.kbArtigoSelecionadoId = id;
+  // Atualizar visual da lista para refletir seleção
+  const container = document.getElementById('kb-cards-container');
+  if (container) {
+    const cards = container.querySelectorAll('[onclick^="selecionarKBArtigo"]');
+    cards.forEach(card => {
+      if (card.getAttribute('onclick') === `selecionarKBArtigo(${id})`) {
+        card.className = card.className.replace(/border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50\/70 shadow-2xs/g, '');
+        if (!card.className.includes('border-emerald-500')) {
+          card.className += ' border-emerald-500 bg-emerald-50/50 shadow-sm ring-1 ring-emerald-400';
+        }
+      } else {
+        card.className = card.className.replace(/border-emerald-500 bg-emerald-50\/50 shadow-sm ring-1 ring-emerald-400/g, 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/70 shadow-2xs');
+      }
+    });
+  }
+
+  // Tentar encontrar na lista local
+  let artigo = window.kbArtigosLista.find(a => a.id === id);
+
+  // Buscar detalhes completos no backend se necessário
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  try {
+    const headers = {};
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(`${API_BASE_URL}/api/kb/artigos/${id}`, {
+      headers,
+      credentials: 'include'
+    });
+    if (res.ok) {
+      artigo = await res.json();
+    }
+  } catch (e) {
+    console.warn('Erro ao carregar detalhes do artigo, usando cache:', e);
+  }
+
+  if (!artigo) return;
+
+  const catCfg = getCategoriaBadgeConfig(artigo.categoria);
+  const elCat = document.getElementById('kb-leitor-categoria');
+  const elTitulo = document.getElementById('kb-leitor-titulo');
+  const elAutor = document.getElementById('kb-leitor-autor');
+  const elData = document.getElementById('kb-leitor-data');
+  const elConteudo = document.getElementById('kb-leitor-conteudo');
+  const btnDrive = document.getElementById('kb-leitor-drive-btn');
+  const btnDelete = document.getElementById('kb-leitor-delete-btn');
+
+  if (elCat) {
+    elCat.textContent = catCfg.label;
+    elCat.className = `px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider ${catCfg.colorClass}`;
+  }
+  if (elTitulo) {
+    elTitulo.textContent = artigo.titulo;
+  }
+  if (elAutor) {
+    elAutor.innerHTML = `<i class="fa-solid fa-user-pen mr-1"></i> Autor: ${escaparHTMLSeguro(artigo.autor_nome || 'Equipe EDV Jr.')}`;
+  }
+  if (elData) {
+    elData.innerHTML = `<i class="fa-solid fa-calendar mr-1"></i> Data: ${formatarDataSimplesBR(artigo.created_at || artigo.updated_at)}`;
+  }
+  if (elConteudo) {
+    elConteudo.innerHTML = renderMarkdownKB(artigo.conteudo);
+  }
+
+  // Botão do Google Drive
+  if (btnDrive) {
+    if (artigo.drive_url) {
+      btnDrive.href = artigo.drive_url;
+      btnDrive.classList.remove('hidden');
+    } else {
+      btnDrive.classList.add('hidden');
+    }
+  }
+
+  // Botão de Exclusão (restrito a diretoria e presidência)
+  if (btnDelete) {
+    const role = (currentUserSession?.role || '').toLowerCase();
+    if (['presidente', 'diretor'].includes(role)) {
+      btnDelete.classList.remove('hidden');
+    } else {
+      btnDelete.classList.add('hidden');
+    }
+  }
+}
+
+function limparLeitorKB() {
+  const elTitulo = document.getElementById('kb-leitor-titulo');
+  const elConteudo = document.getElementById('kb-leitor-conteudo');
+  const btnDrive = document.getElementById('kb-leitor-drive-btn');
+  const btnDelete = document.getElementById('kb-leitor-delete-btn');
+  const elAutor = document.getElementById('kb-leitor-autor');
+  const elData = document.getElementById('kb-leitor-data');
+  const elCat = document.getElementById('kb-leitor-categoria');
+
+  if (elTitulo) elTitulo.textContent = 'Selecione um Procedimento Operacional Padrão';
+  if (elAutor) elAutor.innerHTML = '<i class="fa-solid fa-user-pen mr-1"></i> Autor: —';
+  if (elData) elData.innerHTML = '<i class="fa-solid fa-calendar mr-1"></i> Data: —';
+  if (elCat) {
+    elCat.textContent = 'Procedimentos';
+    elCat.className = 'px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider bg-slate-100 text-slate-700';
+  }
+  if (btnDrive) btnDrive.classList.add('hidden');
+  if (btnDelete) btnDelete.classList.add('hidden');
+  if (elConteudo) {
+    elConteudo.innerHTML = `
+      <div class="p-8 text-center text-slate-400 italic">
+        <i class="fa-solid fa-book-open-reader text-3xl mb-2 text-slate-300 block"></i>
+        Nenhum procedimento encontrado com os filtros atuais. Selecione outra categoria ou limpe a busca.
+      </div>
+    `;
+  }
+}
+
+function filtrarKBPorCategoria(categoria) {
+  window.kbCategoriaAtiva = categoria || 'todos';
+
+  // Atualizar visual dos chips
+  const chipsContainer = document.getElementById('kb-categorias-chips');
+  if (chipsContainer) {
+    const buttons = chipsContainer.querySelectorAll('button');
+    buttons.forEach(btn => {
+      const btnId = btn.id || '';
+      if (btnId === `chip-kb-${window.kbCategoriaAtiva}`) {
+        btn.className = 'px-2.5 py-1 rounded-full bg-emerald-600 text-white shadow-2xs cursor-pointer';
+      } else {
+        btn.className = 'px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer';
+      }
+    });
+  }
+
+  filtrarKBArtigosClient();
+}
+
+function filtrarKBArtigosClient() {
+  const q = (document.getElementById('kb-search-input')?.value || '').toLowerCase().trim();
+  const cat = window.kbCategoriaAtiva;
+
+  let filtrados = window.kbArtigosLista || [];
+
+  if (cat && cat !== 'todos') {
+    filtrados = filtrados.filter(a => (a.categoria || '').toLowerCase() === cat.toLowerCase());
+  }
+
+  if (q) {
+    filtrados = filtrados.filter(a => {
+      const tit = (a.titulo || '').toLowerCase();
+      const cont = (a.conteudo || '').toLowerCase();
+      const aut = (a.autor_nome || '').toLowerCase();
+      return tit.includes(q) || cont.includes(q) || aut.includes(q);
+    });
+  }
+
+  const countEl = document.getElementById('kb-total-count');
+  if (countEl) {
+    countEl.textContent = `${filtrados.length} artigo${filtrados.length === 1 ? '' : 's'}`;
+  }
+
+  renderKBArtigosList(filtrados);
+
+  if (filtrados.length > 0) {
+    const selecionadoAindaVisivel = filtrados.some(a => a.id === window.kbArtigoSelecionadoId);
+    if (!selecionadoAindaVisivel) {
+      selecionarKBArtigo(filtrados[0].id);
+    }
+  } else {
+    limparLeitorKB();
+  }
+}
+
+function abrirModalNovoKBArtigo() {
+  const form = document.getElementById('form-novo-kb-artigo');
+  if (form) form.reset();
+  const modal = document.getElementById('modal-novo-kb-artigo');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function fecharModalNovoKBArtigo() {
+  const modal = document.getElementById('modal-novo-kb-artigo');
+  if (modal) modal.classList.add('hidden');
+  const form = document.getElementById('form-novo-kb-artigo');
+  if (form) form.reset();
+}
+
+async function salvarNovoKBArtigo(event) {
+  if (event) event.preventDefault();
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  const tituloEl = document.getElementById('modal_kb_titulo');
+  const catEl = document.getElementById('modal_kb_categoria');
+  const driveEl = document.getElementById('modal_kb_drive_url');
+  const contEl = document.getElementById('modal_kb_conteudo');
+
+  const titulo = tituloEl ? tituloEl.value.trim() : '';
+  const categoria = catEl ? catEl.value : 'geral';
+  const drive_url = driveEl ? driveEl.value.trim() : '';
+  const conteudo = contEl ? contEl.value.trim() : '';
+
+  if (!titulo || !conteudo) {
+    alert('Por favor, preencha o título e o conteúdo do procedimento.');
+    return;
+  }
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    const res = await fetch(`${API_BASE_URL}/api/kb/artigos`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({
+        titulo,
+        categoria,
+        drive_url: drive_url || null,
+        conteudo
+      })
+    });
+
+    if (res.status === 201) {
+      const novoArtigo = await res.json();
+      showToast('✅ Artigo / POP salvo com sucesso!');
+      fecharModalNovoKBArtigo();
+      await carregarKBArtigos();
+      if (novoArtigo && novoArtigo.id) {
+        selecionarKBArtigo(novoArtigo.id);
+      }
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert(`⚠️ Erro ao salvar artigo: ${err.detail || 'Falha na requisição.'}`);
+    }
+  } catch (err) {
+    console.error('Erro ao salvar artigo KB:', err);
+    alert('Erro de conexão ao salvar artigo.');
+  }
+}
+
+async function excluirKBArtigoAtual() {
+  if (!window.kbArtigoSelecionadoId) return;
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  const confirmou = confirm('Deseja realmente excluir este artigo/POP da Base de Conhecimento?\nEsta ação é irreversível.');
+  if (!confirmou) return;
+
+  try {
+    const headers = {};
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    const res = await fetch(`${API_BASE_URL}/api/kb/artigos/${window.kbArtigoSelecionadoId}`, {
+      method: 'DELETE',
+      headers,
+      credentials: 'include'
+    });
+
+    if (res.status === 200) {
+      showToast('🗑️ Artigo excluído com sucesso!');
+      window.kbArtigoSelecionadoId = null;
+      await carregarKBArtigos();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert(`⚠️ Não foi possível excluir: ${err.detail || 'Permissão negada (apenas Presidência e Diretoria).'}`);
+    }
+  } catch (err) {
+    console.error('Erro ao excluir artigo KB:', err);
+    alert('Erro de conexão ao excluir o artigo.');
+  }
+}
+
+function imprimirArtigoKB() {
+  const titulo = document.getElementById('kb-leitor-titulo')?.textContent || 'Procedimento Operacional Padrão';
+  const conteudo = document.getElementById('kb-leitor-conteudo')?.innerHTML || '';
+  const autor = document.getElementById('kb-leitor-autor')?.textContent || '';
+  const data = document.getElementById('kb-leitor-data')?.textContent || '';
+  const categoria = document.getElementById('kb-leitor-categoria')?.textContent || '';
+
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    window.print();
+    return;
+  }
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <title>${titulo} - EDV Jr.</title>
+      <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; color: #1e293b; padding: 40px; }
+        .header { border-bottom: 2px solid #059669; padding-bottom: 12px; margin-bottom: 24px; }
+        .badge { background: #d1fae5; color: #065f46; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; }
+        h1 { margin: 8px 0; color: #0f172a; font-size: 22px; }
+        .meta { font-size: 12px; color: #64748b; margin-top: 4px; font-family: monospace; }
+        .content { font-size: 13px; }
+        .content h1, .content h2, .content h3 { color: #065f46; margin-top: 18px; margin-bottom: 8px; }
+        .content ul, .content ol { padding-left: 20px; }
+        .content a { color: #0284c7; text-decoration: underline; }
+        .content blockquote { border-left: 4px solid #059669; background: #f0fdf4; padding: 8px 14px; margin: 12px 0; font-style: italic; }
+        .footer { margin-top: 40px; border-top: 1px solid #cbd5e1; padding-top: 12px; font-size: 11px; color: #94a3b8; font-family: monospace; display: flex; justify-content: space-between; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <span class="badge">${categoria}</span>
+        <h1>${titulo}</h1>
+        <div class="meta">${autor} • ${data}</div>
+      </div>
+      <div class="content">${conteudo}</div>
+      <div class="footer">
+        <span>EDV Jr. • Base de Conhecimento Corporativa</span>
+        <span>Documento emitido em ${new Date().toLocaleDateString('pt-BR')}</span>
+      </div>
+      <script>
+        window.onload = function() { window.print(); }
+      </script>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
+
+// ==============================================================================
 // 8. INICIALIZAÇÃO DEFINITIVA DO ECOSSISTEMA
 // ==============================================================================
 function initApp() {
@@ -10015,6 +10712,7 @@ function initApp() {
   renderPlanilhasDrive();
   renderTutoriaisDrive();
   verificarStatusDrive();
+  carregarKBArtigos();
   updateDashboardKPIs();
   carregarEstado();
   carregarTransacoesEDbrain();

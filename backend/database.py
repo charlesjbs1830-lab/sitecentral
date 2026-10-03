@@ -353,6 +353,21 @@ class TransacaoFinanceiraORM(Base):
     contrato = relationship("ContratoRMORM", back_populates="transacoes")
 
 
+class KBArtigoORM(Base):
+    __tablename__ = "kb_artigos"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(String(50), default="edv_jr", nullable=False)
+    titulo = Column(String(255), nullable=False)
+    categoria = Column(String(50), nullable=False, index=True)
+    conteudo = Column(Text, nullable=False)
+    drive_url = Column(String(500), nullable=True)
+    autor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    autor_nome = Column(String(150), nullable=True)
+    autor_email = Column(String(150), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH}")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
@@ -1554,6 +1569,69 @@ def init_db():
         INSERT INTO transacoes_financeiras (tipo, categoria, descricao, valor, data_vencimento, data_pagamento, status, contrato_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?);
         """, initial_txs)
+
+    # 24. Tabela de Base de Conhecimento e POPs (Wiki Interna & Continuidade)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS kb_artigos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id TEXT NOT NULL DEFAULT 'edv_jr',
+        titulo TEXT NOT NULL,
+        categoria TEXT NOT NULL CHECK(categoria IN ('juridico', 'financeiro', 'projetos', 'gestao_gente', 'ti', 'comercial', 'geral')),
+        conteudo TEXT NOT NULL,
+        drive_url TEXT,
+        autor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        autor_nome TEXT,
+        autor_email TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_kb_categoria ON kb_artigos(categoria);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_kb_created ON kb_artigos(created_at);")
+
+    cursor.execute("SELECT COUNT(*) FROM kb_artigos;")
+    if cursor.fetchone()[0] == 0:
+        initial_pops = [
+            (
+                "Como Protocolar Pedido de Registro de Marca no INPI (e-INPI)",
+                "projetos",
+                "## Objetivo e Escopo\nEste Procedimento Operacional Padrão (POP) orienta a equipe de Projetos no depósito oficial de marcas perante o Instituto Nacional da Propriedade Industrial (INPI), assegurando o cumprimento da Lei nº 9.279/1996 (LPI).\n\n### Etapas Obrigatórias:\n1. **Emissão da GRU:** Acessar o portal e-INPI e gerar a Guia de Recolhimento da União sob o código 389 (com desconto MEJ).\n2. **Classificação de Nice (NCL):** Validar as classes e a especificação de produtos/serviços conforme contrato.\n3. **Upload da Logo e Procuração:** Anexar arquivo de imagem de alta definição e instrumento de mandato assinado.\n4. **Protocolo e Guarda:** Salvar o comprovante de 9 dígitos e atualizar o prontuário no sistema.\n\nConsulte o manual completo no Google Drive oficial: [Manual INPI 2026](https://drive.google.com/drive/folders/edv-inpi-oficial).",
+                "https://drive.google.com/drive/folders/edv-inpi-oficial",
+                1, "Charles Junior (Presidência)", "charles.junior@edvjr.com.br"
+            ),
+            (
+                "Fluxo de Cobrança, Emissão de Boletos Cora e Nota Fiscal",
+                "financeiro",
+                "## Diretriz Financeira\nPadronização do faturamento dos honorários das consultorias e controle de contas a receber da EDV Jr.\n\n### Passo a Passo:\n1. **Emissão no Banco Cora:** Cadastrar o pagador com CNPJ/CPF e gerar carnê parcelado com juros e multa estatutários.\n2. **Emissão de Nota Fiscal de Serviços (NFS-e):** Emitir no portal da Prefeitura Municipal de Vitória/ES.\n3. **Conciliação no EDbrain:** Registrar a receita no Fluxo de Caixa 2.0 com vínculo ao Contrato RM.\n\nAcesse a pasta financeira no Drive: https://drive.google.com/drive/folders/edv-financeiro-cora.",
+                "https://drive.google.com/drive/folders/edv-financeiro-cora",
+                1, "Charles Junior (Presidência)", "charles.junior@edvjr.com.br"
+            ),
+            (
+                "Governança Institucional, Revisão Estatutária e Lei 13.267/2016",
+                "juridico",
+                "## Marco Legal das Empresas Juniores\nOrientações para conformidade contínua com a Lei Federal nº 13.267/2016, manutenção do Selo EJ Brasil Júnior e arquivo de atas em cartório.\n\n### Requisitos Críticos:\n- **Revisão Bienal:** Revisão obrigatória do Estatuto Social a cada 2 anos.\n- **Certidões Negativas (CNDs):** Emissão mensal da CND Federal, FGTS e Certidão Trabalhista (CNDT).\n\nDocumentação oficial no Drive: [Estatutos & Atas EDV Jr.](https://docs.google.com/document/d/edv-estatuto-oficial).",
+                "https://docs.google.com/document/d/edv-estatuto-oficial",
+                1, "Charles Junior (Presidência)", "charles.junior@edvjr.com.br"
+            ),
+            (
+                "Trilha de Onboarding e Integração de Novos Membros (PSEL)",
+                "gestao_gente",
+                "## Acolhimento e Cultura EDV Jr.\nProcedimentos para recebimento dos novos assessores aprovados no Processo Seletivo.\n\n### Ações Imediatas:\n1. Criação do e-mail institucional corporativo `@edvjr.com.br`.\n2. Inclusão nos grupos oficiais e concessão de acessos RBAC.\n3. Geração da Trilha Atômica de PDI personalizada no EDbrain.",
+                "https://drive.google.com/drive/folders/edv-onboarding-vpgg",
+                2, "Alice Ney (VPGG)", "alice.ney@edvjr.com.br"
+            ),
+            (
+                "Playbook Comercial: Diagnóstico e Apresentação de Propostas",
+                "comercial",
+                "## Diretrizes Comerciais de Alta Performance\nManual de abordagem, reuniões de diagnóstico e condução de negociações no Funil CRM.\n\n### Roteiro da Reunião de Diagnóstico:\n1. Investigação da marca e anterioridade preliminar no INPI.\n2. Mapeamento das dores e riscos jurídicos do cliente.\n3. Apresentação da proposta comercial e envio de minuta formal.",
+                "https://drive.google.com/drive/folders/edv-playbook-comercial",
+                1, "Charles Junior (Presidência)", "charles.junior@edvjr.com.br"
+            )
+        ]
+        cursor.executemany("""
+        INSERT INTO kb_artigos (titulo, categoria, conteudo, drive_url, autor_id, autor_nome, autor_email)
+        VALUES (?, ?, ?, ?, ?, ?, ?);
+        """, initial_pops)
 
     ensure_learning_microblocks(conn)
     conn.commit()
@@ -5191,6 +5269,99 @@ def get_executivo_kpis_consolidados() -> dict:
             "status_geral": status_geral
         }
     }
+
+
+# ==============================================================================
+# 23. BASE DE CONHECIMENTO & POPs (WIKI CORPORATIVA & MITIGAÇÃO DE ROTATIVIDADE)
+# ==============================================================================
+
+VALID_KB_CATEGORIAS = {'juridico', 'financeiro', 'projetos', 'gestao_gente', 'ti', 'comercial', 'geral'}
+
+def create_kb_artigo(data: dict, current_user: Optional[dict] = None) -> dict:
+    """Cadastra novo artigo ou Procedimento Operacional Padrão (POP) na base de conhecimento."""
+    titulo = (data.get("titulo") or "").strip()
+    if not titulo:
+        raise ValueError("O título do artigo/POP é obrigatório.")
+
+    categoria = (data.get("categoria") or "geral").strip().lower()
+    if categoria not in VALID_KB_CATEGORIAS:
+        raise ValueError(f"Categoria '{categoria}' inválida. Permitidas: {list(VALID_KB_CATEGORIAS)}")
+
+    conteudo = (data.get("conteudo") or "").strip()
+    if not conteudo:
+        raise ValueError("O conteúdo descritivo em Markdown é obrigatório.")
+
+    drive_url = (data.get("drive_url") or "").strip() or None
+
+    autor_id = None
+    autor_nome = "Equipe EDV Jr."
+    autor_email = "contato@edvjr.com.br"
+    if current_user:
+        autor_id = current_user.get("id")
+        autor_nome = current_user.get("nome") or current_user.get("name") or autor_nome
+        autor_email = current_user.get("email") or autor_email
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    INSERT INTO kb_artigos (tenant_id, titulo, categoria, conteudo, drive_url, autor_id, autor_nome, autor_email)
+    VALUES ('edv_jr', ?, ?, ?, ?, ?, ?, ?);
+    """, (titulo, categoria, conteudo, drive_url, autor_id, autor_nome, autor_email))
+    artigo_id = cursor.lastrowid
+    conn.commit()
+
+    cursor.execute("SELECT * FROM kb_artigos WHERE id = ?;", (artigo_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row)
+
+
+def get_kb_artigo_by_id(artigo_id: int) -> Optional[dict]:
+    """Recupera os detalhes completos de um artigo ou POP pelo ID."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM kb_artigos WHERE id = ?;", (artigo_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def list_kb_artigos(categoria: Optional[str] = None, search: Optional[str] = None) -> List[dict]:
+    """Lista artigos com suporte a filtro por categoria e busca textual em título e conteúdo."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    query = "SELECT * FROM kb_artigos WHERE 1=1"
+    params = []
+
+    if categoria and categoria.lower() not in ("todos", "todas", ""):
+        query += " AND LOWER(categoria) = ?"
+        params.append(categoria.lower().strip())
+
+    if search and search.strip():
+        s_term = f"%{search.strip()}%"
+        query += " AND (titulo LIKE ? OR conteudo LIKE ?)"
+        params.extend([s_term, s_term])
+
+    query += " ORDER BY updated_at DESC, id DESC;"
+    cursor.execute(query, tuple(params))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def delete_kb_artigo(artigo_id: int) -> bool:
+    """Exclui um artigo ou POP da base de conhecimento."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM kb_artigos WHERE id = ?;", (artigo_id,))
+    if not cursor.fetchone():
+        conn.close()
+        return False
+
+    cursor.execute("DELETE FROM kb_artigos WHERE id = ?;", (artigo_id,))
+    conn.commit()
+    conn.close()
+    return True
 
 
 if __name__ == "__main__":

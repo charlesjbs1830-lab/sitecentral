@@ -42,6 +42,7 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         conn.execute("DELETE FROM transacoes_financeiras;")
         conn.execute("DELETE FROM contratos_rm;")
         conn.execute("DELETE FROM leads;")
+        conn.execute("DELETE FROM kb_artigos;")
         conn.commit()
         conn.close()
         cls.client = TestClient(app)
@@ -2549,6 +2550,107 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         self.assertIn("score_saude_organizacional", resumo)
         self.assertIn("status_geral", resumo)
         self.assertIn(resumo["status_geral"], ["saudavel", "atencao", "critico"])
+
+    def test_65_kb_artigos_creation_listing_and_filtering(self):
+        """Valida cadastro de POPs/artigos na base de conhecimento, validação de categorias, listagem filtrada e busca textual"""
+        token = self.tokens["presidente"]
+
+        # 1. Validação: rejeição de categoria inexistente
+        res_bad_cat = self.client.post("/api/kb/artigos", headers={"Authorization": f"Bearer {token}"}, json={
+            "titulo": "Procedimento Inválido",
+            "categoria": "categoria_fantasma",
+            "conteudo": "Texto descritivo de teste"
+        })
+        self.assertEqual(res_bad_cat.status_code, 400)
+        self.assertIn("inválida", res_bad_cat.json()["detail"].lower())
+
+        # 2. Cadastro de artigo de Projetos com Drive URL
+        res_artigo1 = self.client.post("/api/kb/artigos", headers={"Authorization": f"Bearer {token}"}, json={
+            "titulo": "Manual de Oposição Marcária no INPI",
+            "categoria": "projetos",
+            "conteudo": "## Diretriz de Oposição\nPasso a passo para manifestação contra pedidos colidentes de marcas no INPI com base no art. 158 da LPI.\n\nLink: https://drive.google.com/drive/folders/oposicao-inpi",
+            "drive_url": "https://drive.google.com/drive/folders/oposicao-inpi"
+        })
+        self.assertEqual(res_artigo1.status_code, 201)
+        data1 = res_artigo1.json()["artigo"]
+        artigo1_id = data1["id"]
+        self.assertEqual(data1["categoria"], "projetos")
+        self.assertIn("oposicao-inpi", data1["drive_url"])
+
+        # 3. Cadastro de artigo de Financeiro
+        res_artigo2 = self.client.post("/api/kb/artigos", headers={"Authorization": f"Bearer {token}"}, json={
+            "titulo": "Fluxo de Conciliação Bancária no Banco Cora",
+            "categoria": "financeiro",
+            "conteudo": "## Fechamento Mensal de Caixa\nInstruções detalhadas para emissão de extrato OFX e conferência das faturas liquidadas.",
+            "drive_url": "https://drive.google.com/drive/folders/cora-extratos"
+        })
+        self.assertEqual(res_artigo2.status_code, 201)
+        data2 = res_artigo2.json()["artigo"]
+        artigo2_id = data2["id"]
+
+        # 4. Listagem geral
+        res_list = self.client.get("/api/kb/artigos", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_list.status_code, 200)
+        artigos = res_list.json()["artigos"]
+        self.assertGreaterEqual(len(artigos), 2)
+
+        # 5. Filtragem por categoria (projetos)
+        res_cat = self.client.get("/api/kb/artigos?categoria=projetos", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_cat.status_code, 200)
+        artigos_proj = res_cat.json()["artigos"]
+        self.assertTrue(all(a["categoria"] == "projetos" for a in artigos_proj))
+        ids_proj = [a["id"] for a in artigos_proj]
+        self.assertIn(artigo1_id, ids_proj)
+        self.assertNotIn(artigo2_id, ids_proj)
+
+        # 6. Busca textual por palavra-chave (q="Conciliação")
+        res_busca = self.client.get("/api/kb/artigos?q=Conciliação", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_busca.status_code, 200)
+        artigos_busca = res_busca.json()["artigos"]
+        self.assertTrue(any("Conciliação" in a["titulo"] for a in artigos_busca))
+
+        # 7. Recuperação por ID
+        res_detalhe = self.client.get(f"/api/kb/artigos/{artigo1_id}", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_detalhe.status_code, 200)
+        detalhe = res_detalhe.json()["artigo"]
+        self.assertEqual(detalhe["id"], artigo1_id)
+        self.assertIn("Manual de Oposição", detalhe["titulo"])
+        self.assertIn("LPI", detalhe["conteudo"])
+
+    def test_66_kb_artigos_rbac_delete_and_lifecycle(self):
+        """Valida que a remoção de documentos obsoletos na base de conhecimento é restrita a Diretores e Presidente (403 para assessores e gerentes)"""
+        token_pres = self.tokens["presidente"]
+        token_assessor = self.tokens["assessor_comercial"]
+        token_gerente = self.tokens["gerente"]
+        token_diretor = self.tokens["diretor"]
+
+        # 1. Cadastrar artigo para teste de ciclo de vida
+        res_novo = self.client.post("/api/kb/artigos", headers={"Authorization": f"Bearer {token_pres}"}, json={
+            "titulo": "Procedimento Temporário para Teste de Exclusão",
+            "categoria": "geral",
+            "conteudo": "Este procedimento será removido durante o teste de RBAC."
+        })
+        self.assertEqual(res_novo.status_code, 201)
+        artigo_id = res_novo.json()["artigo"]["id"]
+
+        # 2. Tentativa de exclusão por Assessor (deve retornar 403 Forbidden)
+        res_del_assessor = self.client.delete(f"/api/kb/artigos/{artigo_id}", headers={"Authorization": f"Bearer {token_assessor}"})
+        self.assertEqual(res_del_assessor.status_code, 403)
+        self.assertIn("Acesso negado", res_del_assessor.json()["detail"])
+
+        # 3. Tentativa de exclusão por Gerente (deve retornar 403 Forbidden)
+        res_del_gerente = self.client.delete(f"/api/kb/artigos/{artigo_id}", headers={"Authorization": f"Bearer {token_gerente}"})
+        self.assertEqual(res_del_gerente.status_code, 403)
+        self.assertIn("Acesso negado", res_del_gerente.json()["detail"])
+
+        # 4. Exclusão autorizada por Diretor ou Presidente (deve retornar 200 OK)
+        res_del_dir = self.client.delete(f"/api/kb/artigos/{artigo_id}", headers={"Authorization": f"Bearer {token_diretor}"})
+        self.assertEqual(res_del_dir.status_code, 200)
+        self.assertEqual(res_del_dir.json()["status"], "success")
+
+        # 5. Consulta subsequente ao artigo excluído deve retornar 404 Not Found
+        res_get_deleted = self.client.get(f"/api/kb/artigos/{artigo_id}", headers={"Authorization": f"Bearer {token_pres}"})
+        self.assertEqual(res_get_deleted.status_code, 404)
 
 
 if __name__ == "__main__":

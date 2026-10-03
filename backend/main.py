@@ -130,7 +130,11 @@ try:
         list_transacoes_financeiras,
         update_transacao_financeira_status,
         get_financeiro_kpis,
-        get_executivo_kpis_consolidados
+        get_executivo_kpis_consolidados,
+        create_kb_artigo,
+        get_kb_artigo_by_id,
+        list_kb_artigos,
+        delete_kb_artigo
     )
     from backend.auth import (
         verify_password,
@@ -239,7 +243,11 @@ except ImportError:
         list_transacoes_financeiras,
         update_transacao_financeira_status,
         get_financeiro_kpis,
-        get_executivo_kpis_consolidados
+        get_executivo_kpis_consolidados,
+        create_kb_artigo,
+        get_kb_artigo_by_id,
+        list_kb_artigos,
+        delete_kb_artigo
     )
     from auth import (
         verify_password,
@@ -2541,6 +2549,92 @@ async def obter_kpis_executivo_endpoint(
         return get_executivo_kpis_consolidados()
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+# ==============================================================================
+# BASE DE CONHECIMENTO & POPs (WIKI CORPORATIVA & MITIGAÇÃO DE ROTATIVIDADE)
+# ==============================================================================
+
+class KBArtigoCreate(BaseModel):
+    titulo: str = Field(..., min_length=3, description="Título descritivo do POP ou manual")
+    categoria: str = Field(..., description="Categoria operacional (juridico, financeiro, projetos, gestao_gente, ti, comercial, geral)")
+    conteudo: str = Field(..., min_length=5, description="Corpo do artigo em Markdown estruturado")
+    drive_url: Optional[str] = Field(None, description="URL do documento original no Google Drive")
+
+
+@app.post(
+    "/api/kb/artigos",
+    status_code=status.HTTP_201_CREATED,
+    summary="Cadastrar novo POP ou artigo de conhecimento"
+)
+async def criar_kb_artigo_endpoint(
+    payload: KBArtigoCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        created = create_kb_artigo(payload.model_dump(), current_user=current_user)
+        return {
+            "status": "success",
+            "artigo": created
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@app.get(
+    "/api/kb/artigos",
+    summary="Listar artigos da base de conhecimento com filtros por categoria e busca textual"
+)
+async def listar_kb_artigos_endpoint(
+    categoria: Optional[str] = Query(None, description="Filtrar por categoria operacional"),
+    q: Optional[str] = Query(None, description="Busca textual em título e conteúdo"),
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        artigos = list_kb_artigos(categoria=categoria, search=q)
+        return {
+            "status": "success",
+            "artigos": artigos,
+            "total": len(artigos)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@app.get(
+    "/api/kb/artigos/{artigo_id}",
+    summary="Recuperar o conteúdo integral de um artigo de conhecimento"
+)
+async def obter_kb_artigo_endpoint(
+    artigo_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    artigo = get_kb_artigo_by_id(artigo_id)
+    if not artigo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artigo de conhecimento não encontrado.")
+    return {
+        "status": "success",
+        "artigo": artigo
+    }
+
+
+@app.delete(
+    "/api/kb/artigos/{artigo_id}",
+    summary="Remover documento obsoleto (restrito a Presidência e Diretoria)"
+)
+async def deletar_kb_artigo_endpoint(
+    artigo_id: int,
+    current_user: dict = Depends(require_role(["presidente", "diretor"]))
+):
+    sucesso = delete_kb_artigo(artigo_id)
+    if not sucesso:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artigo de conhecimento não encontrado para exclusão.")
+    return {
+        "status": "success",
+        "message": f"Artigo #{artigo_id} removido com sucesso da base de conhecimento."
+    }
 
 
 # ==============================================================================
