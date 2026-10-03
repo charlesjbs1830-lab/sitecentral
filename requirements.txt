@@ -3,3 +3,4 @@ uvicorn>=0.30.0
 bcrypt>=4.2.0
 pyjwt>=2.9.0
 pydantic[email]>=2.8.0
+openpyxl>=3.1.5
