@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from main import app, login_rate_limiter
-from database import init_db, get_connection, VALID_ROLES
+from database import init_db, get_connection, VALID_ROLES, seed_official_kb_pops, OFFICIAL_KB_POPS
 
 class TestEDbrainRBACAndFinancial(unittest.TestCase):
 
@@ -2651,6 +2651,73 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         # 5. Consulta subsequente ao artigo excluído deve retornar 404 Not Found
         res_get_deleted = self.client.get(f"/api/kb/artigos/{artigo_id}", headers={"Authorization": f"Bearer {token_pres}"})
         self.assertEqual(res_get_deleted.status_code, 404)
+
+    def test_67_seed_oficial_8_pops_persistence_and_retrieval(self):
+        """Valida a injeção do Catálogo Oficial com os 8 POPs Técnicos e a recuperação estruturada via API"""
+        token = self.tokens["presidente"]
+
+        # 1. Executar injeção oficial
+        res_seed = seed_official_kb_pops()
+        self.assertEqual(res_seed["total"], 8)
+        self.assertGreaterEqual(res_seed["inserted"] + res_seed["updated"], 8)
+
+        # 2. Recuperar listagem completa via API
+        res_list = self.client.get("/api/kb/artigos", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_list.status_code, 200)
+        artigos = res_list.json()["artigos"]
+        self.assertGreaterEqual(len(artigos), 8)
+
+        # 3. Validar a presença de cada um dos 8 POPs oficiais
+        codigos_esperados = [f"POP-0{i}" for i in range(1, 9)]
+        titulos = [a["titulo"] for a in artigos]
+
+        for cod in codigos_esperados:
+            self.assertTrue(any(cod in t for t in titulos), f"Código {cod} não encontrado nos artigos cadastrados.")
+
+        # 4. Validar estrutura detalhada e hierarquia Markdown de cada POP
+        for pop_ref in OFFICIAL_KB_POPS:
+            cod = pop_ref["codigo"]
+            artigo_match = next((a for a in artigos if cod in a["titulo"]), None)
+            self.assertIsNotNone(artigo_match, f"Artigo {cod} não encontrado na listagem.")
+
+            artigo_id = artigo_match["id"]
+            res_detalhe = self.client.get(f"/api/kb/artigos/{artigo_id}", headers={"Authorization": f"Bearer {token}"})
+            self.assertEqual(res_detalhe.status_code, 200)
+            detalhe = res_detalhe.json()["artigo"]
+
+            # Validar campos de metadados
+            self.assertEqual(detalhe["categoria"], pop_ref["categoria"])
+            if pop_ref.get("drive_url"):
+                self.assertIn("drive.google.com", detalhe["drive_url"])
+
+            # Validar estrutura Markdown obrigatória
+            conteudo = detalhe["conteudo"]
+            self.assertIn(f"# {cod} -", conteudo)
+            self.assertIn("**Área Responsável**:", conteudo)
+            self.assertIn("**Nível de Acesso**:", conteudo)
+            self.assertIn("## 1. Objetivo Operacional", conteudo)
+            self.assertIn("## 2. Pré-requisitos Sistêmicos", conteudo)
+            self.assertIn("## 3. Passo a Passo na Interface do EDbrain", conteudo)
+            self.assertIn("## 4. Tratamento de Exceções & Suporte Coletivo", conteudo)
+
+        # 5. Validar filtragem por categoria específica
+        # Ex: ti deve conter POP-02
+        res_ti = self.client.get("/api/kb/artigos?categoria=ti", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_ti.status_code, 200)
+        artigos_ti = res_ti.json()["artigos"]
+        self.assertTrue(any("POP-02" in a["titulo"] for a in artigos_ti))
+
+        # Ex: comercial deve conter POP-03
+        res_com = self.client.get("/api/kb/artigos?categoria=comercial", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_com.status_code, 200)
+        artigos_com = res_com.json()["artigos"]
+        self.assertTrue(any("POP-03" in a["titulo"] for a in artigos_com))
+
+        # 6. Validar busca textual
+        res_busca_sha = self.client.get("/api/kb/artigos?q=SHA-256", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_busca_sha.status_code, 200)
+        artigos_sha = res_busca_sha.json()["artigos"]
+        self.assertTrue(any("POP-04" in a["titulo"] for a in artigos_sha))
 
 
 if __name__ == "__main__":

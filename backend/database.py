@@ -1589,49 +1589,8 @@ def init_db():
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_kb_categoria ON kb_artigos(categoria);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_kb_created ON kb_artigos(created_at);")
 
-    cursor.execute("SELECT COUNT(*) FROM kb_artigos;")
-    if cursor.fetchone()[0] == 0:
-        initial_pops = [
-            (
-                "Como Protocolar Pedido de Registro de Marca no INPI (e-INPI)",
-                "projetos",
-                "## Objetivo e Escopo\nEste Procedimento Operacional Padrão (POP) orienta a equipe de Projetos no depósito oficial de marcas perante o Instituto Nacional da Propriedade Industrial (INPI), assegurando o cumprimento da Lei nº 9.279/1996 (LPI).\n\n### Etapas Obrigatórias:\n1. **Emissão da GRU:** Acessar o portal e-INPI e gerar a Guia de Recolhimento da União sob o código 389 (com desconto MEJ).\n2. **Classificação de Nice (NCL):** Validar as classes e a especificação de produtos/serviços conforme contrato.\n3. **Upload da Logo e Procuração:** Anexar arquivo de imagem de alta definição e instrumento de mandato assinado.\n4. **Protocolo e Guarda:** Salvar o comprovante de 9 dígitos e atualizar o prontuário no sistema.\n\nConsulte o manual completo no Google Drive oficial: [Manual INPI 2026](https://drive.google.com/drive/folders/edv-inpi-oficial).",
-                "https://drive.google.com/drive/folders/edv-inpi-oficial",
-                1, "Charles Junior (Presidência)", "charles.junior@edvjr.com.br"
-            ),
-            (
-                "Fluxo de Cobrança, Emissão de Boletos Cora e Nota Fiscal",
-                "financeiro",
-                "## Diretriz Financeira\nPadronização do faturamento dos honorários das consultorias e controle de contas a receber da EDV Jr.\n\n### Passo a Passo:\n1. **Emissão no Banco Cora:** Cadastrar o pagador com CNPJ/CPF e gerar carnê parcelado com juros e multa estatutários.\n2. **Emissão de Nota Fiscal de Serviços (NFS-e):** Emitir no portal da Prefeitura Municipal de Vitória/ES.\n3. **Conciliação no EDbrain:** Registrar a receita no Fluxo de Caixa 2.0 com vínculo ao Contrato RM.\n\nAcesse a pasta financeira no Drive: https://drive.google.com/drive/folders/edv-financeiro-cora.",
-                "https://drive.google.com/drive/folders/edv-financeiro-cora",
-                1, "Charles Junior (Presidência)", "charles.junior@edvjr.com.br"
-            ),
-            (
-                "Governança Institucional, Revisão Estatutária e Lei 13.267/2016",
-                "juridico",
-                "## Marco Legal das Empresas Juniores\nOrientações para conformidade contínua com a Lei Federal nº 13.267/2016, manutenção do Selo EJ Brasil Júnior e arquivo de atas em cartório.\n\n### Requisitos Críticos:\n- **Revisão Bienal:** Revisão obrigatória do Estatuto Social a cada 2 anos.\n- **Certidões Negativas (CNDs):** Emissão mensal da CND Federal, FGTS e Certidão Trabalhista (CNDT).\n\nDocumentação oficial no Drive: [Estatutos & Atas EDV Jr.](https://docs.google.com/document/d/edv-estatuto-oficial).",
-                "https://docs.google.com/document/d/edv-estatuto-oficial",
-                1, "Charles Junior (Presidência)", "charles.junior@edvjr.com.br"
-            ),
-            (
-                "Trilha de Onboarding e Integração de Novos Membros (PSEL)",
-                "gestao_gente",
-                "## Acolhimento e Cultura EDV Jr.\nProcedimentos para recebimento dos novos assessores aprovados no Processo Seletivo.\n\n### Ações Imediatas:\n1. Criação do e-mail institucional corporativo `@edvjr.com.br`.\n2. Inclusão nos grupos oficiais e concessão de acessos RBAC.\n3. Geração da Trilha Atômica de PDI personalizada no EDbrain.",
-                "https://drive.google.com/drive/folders/edv-onboarding-vpgg",
-                2, "Alice Ney (VPGG)", "alice.ney@edvjr.com.br"
-            ),
-            (
-                "Playbook Comercial: Diagnóstico e Apresentação de Propostas",
-                "comercial",
-                "## Diretrizes Comerciais de Alta Performance\nManual de abordagem, reuniões de diagnóstico e condução de negociações no Funil CRM.\n\n### Roteiro da Reunião de Diagnóstico:\n1. Investigação da marca e anterioridade preliminar no INPI.\n2. Mapeamento das dores e riscos jurídicos do cliente.\n3. Apresentação da proposta comercial e envio de minuta formal.",
-                "https://drive.google.com/drive/folders/edv-playbook-comercial",
-                1, "Charles Junior (Presidência)", "charles.junior@edvjr.com.br"
-            )
-        ]
-        cursor.executemany("""
-        INSERT INTO kb_artigos (titulo, categoria, conteudo, drive_url, autor_id, autor_nome, autor_email)
-        VALUES (?, ?, ?, ?, ?, ?, ?);
-        """, initial_pops)
+    # Injeção e atualização idempotente do Catálogo Oficial de POPs Técnicos (POP-01 a POP-08)
+    seed_official_kb_pops(conn)
 
     ensure_learning_microblocks(conn)
     conn.commit()
@@ -5276,6 +5235,321 @@ def get_executivo_kpis_consolidados() -> dict:
 # ==============================================================================
 
 VALID_KB_CATEGORIAS = {'juridico', 'financeiro', 'projetos', 'gestao_gente', 'ti', 'comercial', 'geral'}
+
+OFFICIAL_KB_POPS = [
+    {
+        "codigo": "POP-01",
+        "titulo": "POP-01: Utilização do Dashboard Executivo (BI Consolidado)",
+        "categoria": "juridico",
+        "drive_url": "https://drive.google.com/drive/folders/edv-bi-governanca",
+        "autor_id": 1,
+        "autor_nome": "Charles Junior (Presidência)",
+        "autor_email": "charles.junior@edvjr.com.br",
+        "conteudo": (
+            "# POP-01 - Utilização do Dashboard Executivo (BI Consolidado)\n"
+            "**Área Responsável**: Estratégico & Governança\n"
+            "**Nível de Acesso**: Presidência e Diretorias (Roles: presidente, diretor)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Centralizar o monitoramento estratégico da EDV Jr. em um único painel executivo de inteligência de negócios, "
+            "integrando telemetria em tempo real sobre liquidez de caixa, tração comercial do funil CRM, avanço das competências "
+            "da equipe no PDI e governança sob a Lei Federal nº 13.267/2016.\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Usuário autenticado com credencial de Diretor ou Presidente (token JWT ativo).\n"
+            "* Sincronização prévia das planilhas de Fluxo de Caixa e CRM do Google Drive.\n"
+            "* Módulos Financeiro, CRM e VPGG inicializados com dados operacionais vigentes.\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain\n"
+            "1. Localize o menu lateral correspondente e clique na aba **Presidência & BI** (`#view-presidencia`).\n"
+            "2. Acesse a sub-aba **Dashboard Executivo (BI)** (`#subtab-pres-bi`), posicionada como visualização primária da liderança.\n"
+            "3. Analise o **Score de Saúde Organizacional** (0 a 100), inspecionando os 4 quadrantes oficiais:\n"
+            "   - **Quadrante 1 (Financeiro & Caixa)**: Saldo Bruto em Caixa, Previsão a Receber/Pagar e Taxa de Inadimplência.\n"
+            "   - **Quadrante 2 (Comercial & RMs)**: Volume em Aberto no Pipeline, Leads em Negociação e Contratos Ativos.\n"
+            "   - **Quadrante 3 (Desenvolvimento PDI)**: Média de Avanço das Trilhas e Taxa de Conclusão de Micro-Blocos.\n"
+            "   - **Quadrante 4 (Governança & Selo EJ)**: Chamados no Fórum aguardando diretriz e Conformidade Selo BJ.\n"
+            "4. Caso surjam alertas de gargalos críticos no banner superior, clique nos botões de atalho contextual para navegar diretamente ao módulo afetado.\n"
+            "5. Para forçar a consolidação instantânea dos dados, clique no botão **Atualizar BI**.\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "Caso o painel retorne erro `403 Forbidden`, verifique se o seu perfil de usuário possui a prerrogativa estatutária necessária. "
+            "Se os indicadores apresentarem discrepância em relação às contas bancárias ou ao Drive, acione a rotina de ressincronização em "
+            "**Central de Planilhas** ou reporte a ocorrência no Fórum Coletivo com a tag `#governanca-bi`."
+        )
+    },
+    {
+        "codigo": "POP-02",
+        "titulo": "POP-02: Gestão de Acessos e Controle RBAC",
+        "categoria": "ti",
+        "drive_url": "https://drive.google.com/drive/folders/edv-ti-seguranca",
+        "autor_id": 1,
+        "autor_nome": "Charles Junior (Presidência)",
+        "autor_email": "charles.junior@edvjr.com.br",
+        "conteudo": (
+            "# POP-02 - Gestão de Acessos e Controle RBAC\n"
+            "**Área Responsável**: Estratégico & Governança\n"
+            "**Nível de Acesso**: Presidência e TI (Roles: presidente, diretor, ti)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Garantir a integridade da segurança da informação, a confidencialidade dos dados de clientes e a segregação estrita de funções "
+            "no EDbrain através do controle de acesso baseado em papéis (Role-Based Access Control - RBAC), prevenindo auto-promoção e vazamento de informações.\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Login efetuado com perfil de Administrador do Sistema (Presidência ou TI).\n"
+            "* Cadastro prévio do colaborador na base corporativa com e-mail institucional `@edvjr.com.br`.\n"
+            "* Termo de Confidencialidade e Adesão Estatutária assinado pelo membro.\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain\n"
+            "1. Localize o menu lateral e acione a seção de **Auditoria & Segurança** ou a aba **Gestão de Gente (VPGG)**.\n"
+            "2. Na listagem de membros ativos, selecione o usuário para validação ou alteração de privilégios.\n"
+            "3. Configure o perfil de acesso adequado conforme a hierarquia do ecossistema:\n"
+            "   - **Assessor**: Acesso restrito a preenchimento operacional de CRM, visualização de RMs atribuídos e Meu PDI.\n"
+            "   - **Gerente**: Permissão de homologação operacional de projetos, gestão de follow-ups e avaliação de PDIs.\n"
+            "   - **Diretor**: Acesso gerencial completo à sua respectiva diretoria e ao BI Executivo.\n"
+            "   - **Presidente**: Acesso irrestrito a todos os módulos, parametrizações globais e exclusão de registros.\n"
+            "4. Submeta a alteração e confirme o registro do log de auditoria com carimbo temporal e IP de origem.\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "Tentativas de auto-elevação de privilégio disparam bloqueio imediato e geram notificação de segurança de nível crítico. "
+            "Em caso de bloqueio acidental de credenciais da Diretoria, solicite reset criptográfico seguro via console de emergência do servidor "
+            "ou abra chamado de contingência com a tag `#seguranca-rbac`."
+        )
+    },
+    {
+        "codigo": "POP-03",
+        "titulo": "POP-03: Operação do Funil de Vendas CRM (6 Etapas)",
+        "categoria": "comercial",
+        "drive_url": "https://drive.google.com/drive/folders/edv-crm-vendas",
+        "autor_id": 1,
+        "autor_nome": "Charles Junior (Presidência)",
+        "autor_email": "charles.junior@edvjr.com.br",
+        "conteudo": (
+            "# POP-03 - Operação do Funil de Vendas CRM (6 Etapas)\n"
+            "**Área Responsável**: Comercial & Marketing\n"
+            "**Nível de Acesso**: Equipe Comercial e RMs (Roles: assessor, gerente, diretor, presidente)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Padronizar a esteira de prospecção, qualificação e conversão de leads B2B interessados em Registro de Marcas (RMs) e consultoria jurídica, "
+            "assegurando o cumprimento dos SLAs comerciais e a previsibilidade de faturamento da EDV Jr.\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Lead identificado com Razão Social, CNPJ válido (14 dígitos numéricos) e canal de origem mapeado.\n"
+            "* Consultor comercial atribuído como responsável direto pela negociação.\n"
+            "* Tabela de honorários e modelos de proposta vigentes parametrizados no sistema.\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain\n"
+            "1. Localize o menu lateral e acione a aba **Comercial & CRM** (`#view-comercial`).\n"
+            "2. No quadro Kanban oficial, cadastre ou selecione o lead e conduza-o pelas 6 etapas obrigatórias:\n"
+            "   - **1. Prospecção**: Triagem inicial de empresas e verificação preliminar de marca no banco do INPI.\n"
+            "   - **2. Contato Inicial**: Primeiro contato via WhatsApp/E-mail com aplicação do script de abordagem rápida.\n"
+            "   - **3. Diagnóstico**: Reunião de alinhamento técnico para mapeamento de riscos e classes de Nice (NCL).\n"
+            "   - **4. Proposta Enviada**: Envio formal da proposta comercial com honorários discriminados e link do Drive.\n"
+            "   - **5. Negociação**: Alinhamento de condições de pagamento (Cora parcelado) e minutas jurídicas.\n"
+            "   - **6. Fechado**: Conclusão da venda com upload do contrato assinado e conversão automática em Projeto RM.\n"
+            "3. A cada interação com o cliente, adicione notas de follow-up detalhadas para manter o histórico unificado.\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "Caso o validador de CNPJ aponte inconsistência cadastral, consulte a situação na Receita Federal via BrasilAPI ou portal Redesim. "
+            "Se o cliente solicitar prorrogação de proposta por mais de 15 dias, sinalize a Diretoria Comercial ou submeta a dúvida na thread "
+            "do Fórum Coletivo sob a tag `#comercial-negociacao`."
+        )
+    },
+    {
+        "codigo": "POP-04",
+        "titulo": "POP-04: Automação e Emissão de Minutas Jurídicas com SHA-256",
+        "categoria": "juridico",
+        "drive_url": "https://drive.google.com/drive/folders/edv-juridico-contratos",
+        "autor_id": 1,
+        "autor_nome": "Charles Junior (Presidência)",
+        "autor_email": "charles.junior@edvjr.com.br",
+        "conteudo": (
+            "# POP-04 - Automação e Emissão de Minutas Jurídicas com SHA-256\n"
+            "**Área Responsável**: Comercial & Marketing\n"
+            "**Nível de Acesso**: Projetos e Jurídico (Roles: assessor, gerente, diretor, presidente)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Automatizar a confecção de minutas de contratos de prestação de serviços de consultoria em conformidade com as diretrizes da "
+            "Lei Federal nº 13.267/2016 (Lei das EJs), aplicando marca d'água institucional e autenticação por hash criptográfico SHA-256 "
+            "para assegurar a idoneidade jurídica do instrumento.\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Lead no estágio de `negociacao` no CRM ou registro de consultoria homologado em Projetos.\n"
+            "* Dados cadastrais completos do tomador do serviço (Razão Social, CNPJ, Endereço, Representante Legal e CPF).\n"
+            "* Modelo de minuta contratual homologado pela Diretoria Jurídica disponível no catálogo do sistema.\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain\n"
+            "1. Acesse a aba **Comercial** ou navegue até o **Painel de Contratos** na interface.\n"
+            "2. Na linha correspondente à oportunidade contratada, clique na ação **Gerar Minuta Contratual**.\n"
+            "3. Selecione o modelo adequado (ex: Contrato Padrão de Consultoria e Registro de Marca no INPI).\n"
+            "4. O motor jurídico do EDbrain processará os campos dinâmicos, inserirá a marca d'água oficial da EDV Jr. e estampará o rodapé com a assinatura digital contendo o hash criptográfico SHA-256.\n"
+            "5. Verifique a prévia do documento na tela e realize o download do arquivo PDF pronto para assinatura eletrônica (Gov.br, Clicksign ou Docusign).\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "Se houver divergência entre as cláusulas padrão e exigências particulares do cliente, não edite o arquivo sem prévia autorização. "
+            "Solicite parecer técnico da Diretoria Jurídica abrindo um chamado no Fórum Coletivo com a tag `#juridico-contratos`."
+        )
+    },
+    {
+        "codigo": "POP-05",
+        "titulo": "POP-05: Acompanhamento de RMs e Marcos de Entrega",
+        "categoria": "projetos",
+        "drive_url": "https://drive.google.com/drive/folders/edv-projetos-rms",
+        "autor_id": 1,
+        "autor_nome": "Charles Junior (Presidência)",
+        "autor_email": "charles.junior@edvjr.com.br",
+        "conteudo": (
+            "# POP-05 - Acompanhamento de RMs e Marcos de Entrega\n"
+            "**Área Responsável**: Operação & Finanças\n"
+            "**Nível de Acesso**: Gerentes de Projetos (Roles: gerente, diretor, presidente)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Monitorar a execução técnica das consultorias de Registro de Marcas (RMs), garantindo o cumprimento dos prazos legais do INPI "
+            "(Lei nº 9.279/1996 - LPI), o controle de entregáveis por marcos e a mitigação de atrasos ou perdas de prazos decadenciais.\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Contrato de consultoria assinado e projeto registrado na base com código oficial de RM.\n"
+            "* Gerente e consultores de projeto designados para o acompanhamento do prontuário.\n"
+            "* Cadastro do número de processo ou protocolo do pedido perante o sistema e-INPI.\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain\n"
+            "1. Localize o menu lateral e acione a aba **Projetos & RMs** (`#view-projetos`).\n"
+            "2. Acesse a grade de controle operacional ou o quadro de marcos de entrega das consultorias ativas.\n"
+            "3. Para cada projeto sob sua gestão, atualize o status conforme a evolução perante a autarquia federal:\n"
+            "   - `ativo`: Consultoria em andamento regular dentro do cronograma contratado.\n"
+            "   - `suspenso`: Processo sobrestado aguardando subsídios do cliente ou publicação oficial na RPI.\n"
+            "   - `concluido`: Entrega técnica finalizada com protocolo deferido ou certificado expedido.\n"
+            "4. Lance os despachos semanais da Revista da Propriedade Industrial (RPI), vinculando os links dos comprovantes oficiais salvos na pasta correspondente do Google Drive.\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "Publicações de oposição (art. 158 da LPI) exigem manifestação em até 60 dias ininterruptos. Caso ocorra uma colidência de marcas ou "
+            "notificação do INPI, notifique imediatamente o Diretor de Projetos e publique um tópico de alerta no Fórum Coletivo sob a tag `#projetos-inpi`."
+        )
+    },
+    {
+        "codigo": "POP-06",
+        "titulo": "POP-06: Tesouraria, Fluxo de Caixa e Controle de Inadimplência",
+        "categoria": "financeiro",
+        "drive_url": "https://drive.google.com/drive/folders/edv-financeiro-cora",
+        "autor_id": 1,
+        "autor_nome": "Charles Junior (Presidência)",
+        "autor_email": "charles.junior@edvjr.com.br",
+        "conteudo": (
+            "# POP-06 - Tesouraria, Fluxo de Caixa e Controle de Inadimplência\n"
+            "**Área Responsável**: Operação & Finanças\n"
+            "**Nível de Acesso**: Diretoria Financeira (Roles: diretor, presidente)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Garantir o rigor contábil, a solvência financeira e a conciliação bancária de receitas e despesas da EDV Jr., "
+            "monitorando o faturamento oriundo de consultorias de RM, taxas federativas e controlando de forma ativa os índices de inadimplência.\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Autenticação autorizada com credenciais de Diretor Financeiro ou Presidente.\n"
+            "* Extrato de conciliação bancária (Banco Cora) e notas fiscais de serviço (NFS-e) emitidas.\n"
+            "* Base de contratos de consultoria associada aos respectivos planos de parcelamento.\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain\n"
+            "1. Localize o menu lateral e selecione a aba **Financeiro** (`#view-financeiro`).\n"
+            "2. Para lançar novos recebíveis ou custos operacionais, acione o botão **Nova Transação**:\n"
+            "   - Defina o tipo contábil: `receita` ou `despesa`.\n"
+            "   - Escolha a categoria oficial: `consultoria_rm`, `taxa_federativa`, `capacitacao`, `infraestrutura` ou `administrativo`.\n"
+            "   - Preencha a descrição, valor monetário e data de vencimento.\n"
+            "   - Em caso de consultorias, selecione o **Contrato RM Vinculado** para reconciliação automática.\n"
+            "3. Monitore os indicadores de topo: Saldo em Caixa Consolidado, Previsão Mensal e Taxa de Inadimplência.\n"
+            "4. Ao constatar a liquidação em conta corrente, clique em **Dar Baixa** e informe a data do efetivo pagamento.\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "Títulos em atraso há mais de 15 dias disparam automaticamente alertas de risco no BI Executivo. Ao constatar inadimplência, "
+            "inicie o protocolo de cobrança amigável em alinhamento com a equipe Comercial. Dúvidas tributárias ou de emissão de guias devem "
+            "ser abertas no Fórum Coletivo com a tag `#financeiro-tesouraria`."
+        )
+    },
+    {
+        "codigo": "POP-07",
+        "titulo": "POP-07: Geração e Execução do PDI Baseado no Motor Semântico",
+        "categoria": "gestao_gente",
+        "drive_url": "https://drive.google.com/drive/folders/edv-vpgg-pdi",
+        "autor_id": 2,
+        "autor_nome": "Alice Ney (VPGG)",
+        "autor_email": "alice.ney@edvjr.com.br",
+        "conteudo": (
+            "# POP-07 - Geração e Execução do PDI Baseado no Motor Semântico\n"
+            "**Área Responsável**: Pessoas & Conhecimento\n"
+            "**Nível de Acesso**: Todos os Membros (Roles: assessor, gerente, diretor, presidente)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Acelerar a curva de maturidade técnica e comportamental dos membros da EDV Jr., fornecendo planos de desenvolvimento individual (PDI) "
+            "dinâmicos gerados por inteligência semântica a partir da triangulação de gaps de competência, feedbacks 360º e objetivos estratégicos da gestão.\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Cadastro ativo do membro no ecossistema e perfil de acesso atribuído.\n"
+            "* Participação no ciclo semestral de Avaliação de Desempenho 360º ou registro de entregas operacionais.\n"
+            "* Definição da área de atuação e aspirações de liderança (sucessão) no módulo VPGG.\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain\n"
+            "1. Localize o menu lateral e clique em **Meu PDI / Painel do Membro** (`#view-painel_membro`) ou acesse via **Gestão de Gente (VPGG)**.\n"
+            "2. Acione o botão **Gerar Trilha Atômica com IA**. O motor semântico cruzará:\n"
+            "   - Gaps de competências identificados pelos pares e liderança;\n"
+            "   - Histórico de desempenho operacional em consultorias de RM;\n"
+            "   - Foco individual declarado pelo colaborador.\n"
+            "3. No Centro de Execução, examine os micro-blocos pedagógicos criados com títulos, ementas, materiais sugeridos e prazos de SLA (em dias).\n"
+            "4. Ao concluir o estudo dos manuais ou capacitações gravadas correspondentes, clique em **Concluir Micro-Bloco** e registre a síntese do aprendizado para contabilizar o avanço percentual da trilha.\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "Caso o motor semântico gere micro-blocos com SLA expirado ou fora do escopo funcional de sua diretoria, solicite a recalibração da trilha "
+            "ao Gerente de Gente ou submeta uma solicitação de ajuste no Fórum Coletivo com a tag `#vpgg-pdi`."
+        )
+    },
+    {
+        "codigo": "POP-08",
+        "titulo": "POP-08: Utilização do Fórum Coletivo de Dúvidas",
+        "categoria": "geral",
+        "drive_url": "https://drive.google.com/drive/folders/edv-forum-colaborativo",
+        "autor_id": 1,
+        "autor_nome": "Charles Junior (Presidência)",
+        "autor_email": "charles.junior@edvjr.com.br",
+        "conteudo": (
+            "# POP-08 - Utilização do Fórum Coletivo de Dúvidas\n"
+            "**Área Responsável**: Pessoas & Conhecimento\n"
+            "**Nível de Acesso**: Todos os Membros (Roles: assessor, gerente, diretor, presidente)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Institucionalizar a gestão do conhecimento tácito da EDV Jr., fornecendo uma plataforma colaborativa assíncrona para resolução ágil de "
+            "travas operacionais em consultorias, dúvidas jurídicas de PI e rotinas administrativas, mitigando o retrabalho entre diferentes gerações de membros.\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Acesso autenticado ao sistema EDbrain por qualquer membro da empresa júnior.\n"
+            "* Consulta prévia aos artigos da Base de Conhecimento e POPs para verificar se o problema já possui solução documentada.\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain\n"
+            "1. Localize o menu lateral e acione a seção de **Fórum Colaborativo**.\n"
+            "2. Clique no botão **Nova Dúvida / Tópico**:\n"
+            "   - Defina o título conciso do obstáculo enfrentado.\n"
+            "   - Selecione a área temática (`juridico`, `comercial`, `projetos`, `financeiro`, `vpgg` ou `ti`).\n"
+            "   - Detalhe o contexto, o número do processo/lead (se aplicável) e as tentativas de resolução já efetuadas.\n"
+            "3. Acompanhe as respostas e debates colaborativos postados pelos pares, gerentes e diretores na thread.\n"
+            "4. Assim que a dúvida for esclarecida, o autor ou um membro da Diretoria deve clicar em **Homologar Solução**, fixando a melhor resposta no topo como diretriz oficial para futuras consultas.\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "Travas operacionais emergenciais que impactem prazos fatais perante terceiros (como defesas no INPI com vencimento em menos de 48 horas) "
+            "devem ser sinalizadas com a flag de alta prioridade e comunicadas concomitantemente no canal de contingência da Presidência sob a tag `#forum-urgente`."
+        )
+    }
+]
+
+def seed_official_kb_pops(conn=None) -> dict:
+    """
+    Popula e atualiza de forma idempotente o Catálogo Oficial de Tutoriais e POPs Técnicos
+    do EDbrain (POP-01 a POP-08), garantindo hierarquia Markdown estrita e metadados de autoria.
+    """
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+    cursor = conn.cursor()
+    try:
+        inserted = 0
+        updated = 0
+        for pop in OFFICIAL_KB_POPS:
+            codigo = pop.get("codigo", "")
+            cursor.execute("SELECT id FROM kb_artigos WHERE titulo = ? OR titulo LIKE ?;", (pop["titulo"], f"{codigo}%"))
+            existing = cursor.fetchone()
+            if existing:
+                artigo_id = existing[0]
+                cursor.execute("""
+                UPDATE kb_artigos
+                SET titulo = ?, categoria = ?, conteudo = ?, drive_url = ?,
+                    autor_id = ?, autor_nome = ?, autor_email = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?;
+                """, (
+                    pop["titulo"], pop["categoria"], pop["conteudo"], pop.get("drive_url"),
+                    pop.get("autor_id", 1), pop.get("autor_nome", "Charles Junior (Presidência)"),
+                    pop.get("autor_email", "charles.junior@edvjr.com.br"), artigo_id
+                ))
+                updated += 1
+            else:
+                cursor.execute("""
+                INSERT INTO kb_artigos (tenant_id, titulo, categoria, conteudo, drive_url, autor_id, autor_nome, autor_email)
+                VALUES ('edv_jr', ?, ?, ?, ?, ?, ?, ?);
+                """, (
+                    pop["titulo"], pop["categoria"], pop["conteudo"], pop.get("drive_url"),
+                    pop.get("autor_id", 1), pop.get("autor_nome", "Charles Junior (Presidência)"),
+                    pop.get("autor_email", "charles.junior@edvjr.com.br")
+                ))
+                inserted += 1
+        conn.commit()
+        return {"inserted": inserted, "updated": updated, "total": len(OFFICIAL_KB_POPS)}
+    finally:
+        if should_close:
+            conn.close()
+
 
 def create_kb_artigo(data: dict, current_user: Optional[dict] = None) -> dict:
     """Cadastra novo artigo ou Procedimento Operacional Padrão (POP) na base de conhecimento."""
