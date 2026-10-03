@@ -3760,10 +3760,18 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
                     <!-- Header do Leitor -->
                     <div class="border-b border-slate-100 pb-4 mb-4">
                       <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                        <span id="kb-leitor-categoria" class="px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider bg-emerald-100 text-emerald-800">
-                          Categoria
-                        </span>
                         <div class="flex items-center gap-2">
+                          <span id="kb-leitor-categoria" class="px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider bg-emerald-100 text-emerald-800">
+                            Categoria
+                          </span>
+                          <span id="kb-leitor-ia-badge" class="hidden px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1">
+                            <i class="fa-solid fa-wand-magic-sparkles text-purple-600"></i> Ramificação Semântica
+                          </span>
+                        </div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <button id="kb-leitor-expandir-btn" onclick="abrirModalRamificacaoSemantica()" class="hidden px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold text-xs rounded-lg shadow-2xs transition flex items-center gap-1.5 cursor-pointer" title="Desdobrar este manual em trilhas e sub-etapas operacionais autônomas com o motor semântico">
+                            <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i> Gerar Trilhas e Sub-etapas Autônomas
+                          </button>
                           <a id="kb-leitor-drive-btn" href="#" target="_blank" rel="noopener noreferrer" class="hidden px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg shadow-2xs transition flex items-center gap-1.5 cursor-pointer" title="Abrir arquivo oficial no Google Drive">
                             <i class="fa-brands fa-google-drive"></i> Abrir no Drive ↗
                           </a>
@@ -5774,6 +5782,133 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Modal de Ramificação Semântica Autônoma & Desdobramento Operacional -->
+  <div id="modal-ramificacao-semantica" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-5 border border-indigo-100 my-8 max-h-[90vh] flex flex-col">
+      <!-- Topo Modal -->
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center gap-3">
+          <span class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-indigo-200">
+            <i class="fa-solid fa-brain"></i>
+          </span>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 class="font-bold text-slate-800 text-base">Ramificação Semântica Autônoma</h3>
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-purple-100 text-purple-700 tracking-wider">Motor IA EDbrain</span>
+            </div>
+            <p id="modal-ramif-subtitulo" class="text-xs text-slate-500 mt-0.5 font-medium">Selecione um POP para cruzar com as demandas estratégicas da EDV Jr.</p>
+          </div>
+        </div>
+        <button type="button" onclick="fecharModalRamificacaoSemantica()" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Configuração da Ramificação -->
+      <div class="bg-indigo-50/60 border border-indigo-100/80 rounded-xl p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-indigo-900 flex items-center gap-1.5 uppercase tracking-wider">
+            <i class="fa-solid fa-crosshairs text-indigo-600"></i> Alinhamento com Vetor Estratégico da EJ
+          </span>
+          <span id="modal-ramif-demandas" class="text-[11px] text-indigo-700 font-semibold bg-white/80 px-2.5 py-0.5 rounded-md border border-indigo-200">
+            PE 2026 • Auditoria Selo EJ • SLAs Críticos
+          </span>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+          <div class="md:col-span-4">
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Área / Foco de Aplicação</label>
+            <select id="modal_ramif_area" class="w-full text-xs border border-indigo-200 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium">
+              <option value="">🎯 Detectar Automaticamente pelo POP</option>
+              <option value="projetos">🛡️ Projetos & RM (Busca, Protocolo, Notificação)</option>
+              <option value="financeiro">💰 Financeiro (Cora, Cobrança, DRE, NF)</option>
+              <option value="comercial">🎯 Comercial & Negociação (Leads, RMs)</option>
+              <option value="juridico">⚖️ Jurídico & Governança (Contratos, Selo EJ)</option>
+              <option value="gestao_gente">👥 Gestão de Gente & PDI (VPGG)</option>
+              <option value="ti">💻 Tecnologia, Dados & LGPD</option>
+              <option value="geral">📦 Geral & Operações</option>
+            </select>
+          </div>
+          <div class="md:col-span-5">
+            <label class="block text-[11px] font-bold text-slate-700 uppercase mb-1">Diretriz Adicional ou Contexto (Opcional)</label>
+            <input type="text" id="modal_ramif_contexto" placeholder="Ex: Foco no sprint de fechamento do Selo EJ ou cliente prioritário..." class="w-full text-xs border border-indigo-200 rounded-lg p-2.5 bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          </div>
+          <div class="md:col-span-3">
+            <button type="button" id="btn-executar-ramificacao" onclick="executarRamificacaoSemantica()" class="w-full py-2.5 px-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-lg text-xs font-bold shadow-md hover:shadow-lg transition cursor-pointer flex items-center justify-center gap-2">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span>Processar com IA</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Corpo da Ramificação (Scrollável) -->
+      <div id="modal-ramif-corpo" class="flex-1 overflow-y-auto space-y-4 pr-1 min-h-[220px]">
+        <!-- Placeholder inicial -->
+        <div id="modal-ramif-placeholder" class="h-48 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-center p-6 text-slate-400">
+          <i class="fa-solid fa-network-wired text-3xl mb-2 text-indigo-300"></i>
+          <p class="text-xs font-semibold text-slate-600">Pronto para ramificar o manual em plano de ação</p>
+          <p class="text-[11px] text-slate-400 mt-1 max-w-md">O motor semântico lerá o POP e deduzirá etapas práticas com checklists, critérios de aceite e SLAs calculados.</p>
+        </div>
+
+        <!-- Conteúdo gerado inserido dinamicamente via JS -->
+        <div id="modal-ramif-conteudo-gerado" class="hidden space-y-4">
+          <!-- Resumo da Derivação -->
+          <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-2">
+            <div class="text-xs">
+              <span class="font-bold text-slate-700">Artigo Nativo Derivado: </span>
+              <span id="ramif-artigo-derivado-titulo" class="font-mono text-indigo-700 font-semibold"></span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="ramif-artigo-derivado-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                <i class="fa-solid fa-robot"></i> 100% Nativo no BD
+              </span>
+              <button type="button" id="btn-ver-guia-wiki" onclick="abrirGuiaDerivadoNaWiki()" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 underline cursor-pointer">
+                Ver Guia Completo na Base
+              </button>
+            </div>
+          </div>
+
+          <!-- Etapas Autônomas -->
+          <div>
+            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-2">
+              <i class="fa-solid fa-list-check text-indigo-600"></i> Etapas Operacionais Deduzidas
+            </h4>
+            <div id="ramif-lista-etapas" class="space-y-2.5"></div>
+          </div>
+
+          <!-- Checklist de Validação -->
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-2">
+                <i class="fa-solid fa-square-check text-emerald-600"></i> Checklist de Validação Executiva
+              </h4>
+              <button type="button" onclick="copiarChecklistSemantico()" class="text-[11px] text-slate-500 hover:text-indigo-600 font-medium flex items-center gap-1 cursor-pointer">
+                <i class="fa-regular fa-copy"></i> Copiar Checklist
+              </button>
+            </div>
+            <div id="ramif-lista-checklist" class="bg-white border border-slate-200 rounded-xl p-3 space-y-1.5 text-xs"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rodapé do Modal -->
+      <div class="border-t border-slate-200 pt-3 flex items-center justify-between">
+        <span class="text-[11px] text-slate-400">
+          <i class="fa-solid fa-shield-halved text-emerald-500"></i> Sincronização direta com a base nativa de conhecimento
+        </span>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="fecharModalRamificacaoSemantica()" class="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+            Fechar
+          </button>
+          <button type="button" id="btn-enviar-ramif-pdi" onclick="enviarRamificacaoAoPDI()" class="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg text-xs font-bold shadow-md transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+            <i class="fa-solid fa-bullseye"></i>
+            <span>Vincular Etapas ao Meu PDI</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 

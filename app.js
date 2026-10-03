@@ -10360,11 +10360,18 @@ function renderKBArtigosList(artigos) {
             <span class="px-2 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider ${catCfg.colorClass}">
               <i class="fa-solid ${catCfg.icon} mr-0.5"></i> ${catCfg.label}
             </span>
-            ${a.drive_url ? `
-              <span class="text-[10px] text-emerald-700 font-bold flex items-center gap-1" title="Contém link oficial para o Google Drive">
-                <i class="fa-brands fa-google-drive"></i> Drive
-              </span>
-            ` : ''}
+            <div class="flex items-center gap-1.5">
+              ${a.gerado_por_ia ? `
+                <span class="text-[9px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded flex items-center gap-1 border border-purple-200" title="Manual expandido/gerado autonomamente por IA">
+                  <i class="fa-solid fa-brain"></i> IA
+                </span>
+              ` : ''}
+              ${a.drive_url ? `
+                <span class="text-[10px] text-emerald-700 font-bold flex items-center gap-1" title="Contém link oficial para o Google Drive">
+                  <i class="fa-brands fa-google-drive"></i> Drive
+                </span>
+              ` : ''}
+            </div>
           </div>
           <h4 class="font-bold text-xs text-slate-800 leading-snug line-clamp-2">${escaparHTMLSeguro(a.titulo)}</h4>
           <p class="text-[11px] text-slate-500 line-clamp-2 mt-1 font-normal leading-relaxed">${escaparHTMLSeguro(snippet)}...</p>
@@ -10425,6 +10432,8 @@ async function selecionarKBArtigo(id) {
   const elConteudo = document.getElementById('kb-leitor-conteudo');
   const btnDrive = document.getElementById('kb-leitor-drive-btn');
   const btnDelete = document.getElementById('kb-leitor-delete-btn');
+  const btnExpandir = document.getElementById('kb-leitor-expandir-btn');
+  const badgeIA = document.getElementById('kb-leitor-ia-badge');
 
   if (elCat) {
     elCat.textContent = catCfg.label;
@@ -10462,6 +10471,20 @@ async function selecionarKBArtigo(id) {
       btnDelete.classList.add('hidden');
     }
   }
+
+  // Botão de Ramificação Semântica (IA)
+  if (btnExpandir) {
+    btnExpandir.classList.remove('hidden');
+  }
+
+  // Badge de Artigo Gerado por IA
+  if (badgeIA) {
+    if (artigo.gerado_por_ia) {
+      badgeIA.classList.remove('hidden');
+    } else {
+      badgeIA.classList.add('hidden');
+    }
+  }
 }
 
 function limparLeitorKB() {
@@ -10469,6 +10492,8 @@ function limparLeitorKB() {
   const elConteudo = document.getElementById('kb-leitor-conteudo');
   const btnDrive = document.getElementById('kb-leitor-drive-btn');
   const btnDelete = document.getElementById('kb-leitor-delete-btn');
+  const btnExpandir = document.getElementById('kb-leitor-expandir-btn');
+  const badgeIA = document.getElementById('kb-leitor-ia-badge');
   const elAutor = document.getElementById('kb-leitor-autor');
   const elData = document.getElementById('kb-leitor-data');
   const elCat = document.getElementById('kb-leitor-categoria');
@@ -10482,6 +10507,8 @@ function limparLeitorKB() {
   }
   if (btnDrive) btnDrive.classList.add('hidden');
   if (btnDelete) btnDelete.classList.add('hidden');
+  if (btnExpandir) btnExpandir.classList.add('hidden');
+  if (badgeIA) badgeIA.classList.add('hidden');
   if (elConteudo) {
     elConteudo.innerHTML = `
       <div class="p-8 text-center text-slate-400 italic">
@@ -10697,6 +10724,273 @@ function imprimirArtigoKB() {
     </html>
   `);
   printWindow.document.close();
+}
+
+// ==============================================================================
+// 7.7 RAMIFICAÇÃO SEMÂNTICA AUTÔNOMA & INTEGRAÇÃO AO PDI
+// ==============================================================================
+window.ramificacaoSemanticaAtual = null;
+
+function abrirModalRamificacaoSemantica(artigoId) {
+  const targetId = artigoId || window.kbArtigoSelecionadoId;
+  const artigo = (window.kbArtigosLista || []).find(a => a.id === targetId);
+
+  const modal = document.getElementById('modal-ramificacao-semantica');
+  const subTit = document.getElementById('modal-ramif-subtitulo');
+  const selectArea = document.getElementById('modal_ramif_area');
+  const inputContexto = document.getElementById('modal_ramif_contexto');
+  const placeholder = document.getElementById('modal-ramif-placeholder');
+  const conteudoGerado = document.getElementById('modal-ramif-conteudo-gerado');
+  const btnPDI = document.getElementById('btn-enviar-ramif-pdi');
+
+  if (subTit) {
+    if (artigo) {
+      subTit.innerHTML = `Desdobrando: <strong class="text-indigo-900">${escaparHTMLSeguro(artigo.titulo)}</strong> (${artigo.categoria || 'Geral'})`;
+    } else {
+      subTit.textContent = 'Cruze os procedimentos com as demandas estratégicas da EDV Jr.';
+    }
+  }
+
+  if (selectArea && artigo?.categoria) {
+    selectArea.value = artigo.categoria;
+  } else if (selectArea) {
+    selectArea.value = '';
+  }
+
+  if (inputContexto) {
+    inputContexto.value = '';
+  }
+
+  if (placeholder) placeholder.classList.remove('hidden');
+  if (conteudoGerado) conteudoGerado.classList.add('hidden');
+
+  if (btnPDI) {
+    btnPDI.disabled = true;
+    btnPDI.className = 'px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg text-xs font-bold shadow-md transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed';
+    btnPDI.innerHTML = '<i class="fa-solid fa-bullseye"></i><span>Vincular Etapas ao Meu PDI</span>';
+  }
+
+  window.ramificacaoSemanticaAtual = null;
+
+  if (modal) {
+    modal.classList.remove('hidden');
+  }
+}
+
+function fecharModalRamificacaoSemantica() {
+  const modal = document.getElementById('modal-ramificacao-semantica');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function executarRamificacaoSemantica() {
+  const targetId = window.kbArtigoSelecionadoId;
+  if (!targetId) {
+    alert('Por favor, selecione um artigo ou POP primeiro.');
+    return;
+  }
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  const area = document.getElementById('modal_ramif_area')?.value || null;
+  const contexto = document.getElementById('modal_ramif_contexto')?.value || null;
+  const btn = document.getElementById('btn-executar-ramificacao');
+
+  const originalBtnHTML = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Processando IA...';
+  }
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    const res = await fetch(`${API_BASE_URL}/api/kb/artigos/${targetId}/expandir`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({
+        vincular_ao_pdi: false,
+        area_foco: area || null,
+        contexto_adicional: contexto || null
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      window.ramificacaoSemanticaAtual = data;
+      renderizarCorpoRamificacao(data);
+      showToast('✨ Ramificação semântica gerada com sucesso!');
+      // Atualizar lista em segundo plano para refletir o artigo derivado criado nativamente
+      await carregarKBArtigos();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert(`⚠️ Erro na ramificação semântica: ${err.detail || 'Falha ao processar.'}`);
+    }
+  } catch (err) {
+    console.error('Erro na ramificação semântica:', err);
+    alert('Erro de conexão ao processar ramificação semântica.');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalBtnHTML;
+    }
+  }
+}
+
+function renderizarCorpoRamificacao(data) {
+  const placeholder = document.getElementById('modal-ramif-placeholder');
+  const conteudoGerado = document.getElementById('modal-ramif-conteudo-gerado');
+  const titDerivado = document.getElementById('ramif-artigo-derivado-titulo');
+  const listaEtapas = document.getElementById('ramif-lista-etapas');
+  const listaChecklist = document.getElementById('ramif-lista-checklist');
+  const btnPDI = document.getElementById('btn-enviar-ramif-pdi');
+
+  if (placeholder) placeholder.classList.add('hidden');
+  if (conteudoGerado) conteudoGerado.classList.remove('hidden');
+
+  if (titDerivado && data.artigo_derivado) {
+    titDerivado.textContent = data.artigo_derivado.titulo;
+  }
+
+  if (listaEtapas) {
+    const etapas = data.etapas_autonomas || [];
+    listaEtapas.innerHTML = etapas.map(step => `
+      <div class="p-3.5 bg-slate-50 border border-slate-200/90 rounded-xl hover:border-indigo-300 transition space-y-2">
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span class="w-6 h-6 rounded-lg bg-indigo-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
+              ${step.passo}
+            </span>
+            <h5 class="text-xs font-bold text-slate-800">${escaparHTMLSeguro(step.titulo)}</h5>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              <i class="fa-regular fa-clock mr-1"></i>SLA: ${step.sla_dias}d
+            </span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+              ${escaparHTMLSeguro(step.complexidade || 'Médio')}
+            </span>
+          </div>
+        </div>
+        <p class="text-xs text-slate-600 pl-8 leading-relaxed">${escaparHTMLSeguro(step.descricao)}</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pl-8 pt-1">
+          <div class="bg-white p-2.5 rounded-lg border border-slate-200/70">
+            <div class="text-[10px] font-bold text-emerald-700 uppercase flex items-center gap-1 mb-0.5">
+              <i class="fa-solid fa-circle-check"></i> Critério de Aceite
+            </div>
+            <span class="text-slate-700">${escaparHTMLSeguro(step.criterio_aceite)}</span>
+          </div>
+          <div class="bg-white p-2.5 rounded-lg border border-slate-200/70">
+            <div class="text-[10px] font-bold text-indigo-700 uppercase flex items-center gap-1 mb-0.5">
+              <i class="fa-solid fa-file-export"></i> Entregável Esperado
+            </div>
+            <span class="text-slate-700">${escaparHTMLSeguro(step.formato_entregavel)}</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  if (listaChecklist) {
+    const checklist = data.checklist_consolidado || [];
+    listaChecklist.innerHTML = checklist.map((item, idx) => `
+      <label class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 transition cursor-pointer select-none">
+        <input type="checkbox" id="chk-ramif-${idx}" class="w-4 h-4 rounded text-emerald-600 border-slate-300 focus:ring-emerald-500 cursor-pointer">
+        <span class="text-xs text-slate-700 font-medium">${escaparHTMLSeguro(item)}</span>
+      </label>
+    `).join('');
+  }
+
+  if (btnPDI) {
+    btnPDI.disabled = false;
+    btnPDI.className = 'px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-lg text-xs font-bold shadow-md transition cursor-pointer flex items-center gap-1.5';
+    btnPDI.innerHTML = `<i class="fa-solid fa-bullseye"></i><span>Vincular Etapas ao Meu PDI (${data.total_etapas || 0})</span>`;
+  }
+}
+
+async function enviarRamificacaoAoPDI() {
+  if (!window.ramificacaoSemanticaAtual) return;
+  const targetId = window.ramificacaoSemanticaAtual.artigo_base?.id || window.kbArtigoSelecionadoId;
+  if (!targetId) return;
+
+  const btnPDI = document.getElementById('btn-enviar-ramif-pdi');
+  if (btnPDI) {
+    btnPDI.disabled = true;
+    btnPDI.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i> Vinculando ao PDI...';
+  }
+
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+
+  try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    const res = await fetch(`${API_BASE_URL}/api/kb/artigos/${targetId}/expandir`, {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify({
+        vincular_ao_pdi: true,
+        area_foco: window.ramificacaoSemanticaAtual.area_foco || null,
+        contexto_adicional: window.ramificacaoSemanticaAtual.contexto_adicional || null
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      showToast(`🎯 ${data.blocos_pdi_vinculados?.length || data.total_etapas} micro-blocos vinculados ao Centro de Execução (Meu PDI)!`);
+      if (btnPDI) {
+        btnPDI.className = 'px-5 py-2 bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-md transition flex items-center gap-1.5 cursor-default';
+        btnPDI.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-300"></i> Etapas Vinculadas ao PDI';
+      }
+      if (typeof carregarBlocosPDI === 'function') {
+        carregarBlocosPDI();
+      }
+    } else {
+      const err = await res.json().catch(() => ({}));
+      alert(`⚠️ Erro ao vincular ao PDI: ${err.detail || 'Falha ao vincular.'}`);
+      if (btnPDI) {
+        btnPDI.disabled = false;
+        btnPDI.innerHTML = '<i class="fa-solid fa-bullseye"></i><span>Tentar Vincular Novamente</span>';
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao enviar ramificação ao PDI:', err);
+    alert('Erro de conexão ao vincular etapas ao PDI.');
+    if (btnPDI) {
+      btnPDI.disabled = false;
+      btnPDI.innerHTML = '<i class="fa-solid fa-bullseye"></i><span>Tentar Vincular Novamente</span>';
+    }
+  }
+}
+
+function copiarChecklistSemantico() {
+  if (!window.ramificacaoSemanticaAtual || !window.ramificacaoSemanticaAtual.checklist_consolidado) {
+    alert('Nenhum checklist disponível para copiar.');
+    return;
+  }
+
+  const data = window.ramificacaoSemanticaAtual;
+  const tit = data.artigo_derivado?.titulo || data.artigo_base?.titulo || 'POP';
+  let md = `# Checklist de Validação: ${tit}\n\n`;
+  data.checklist_consolidado.forEach(item => {
+    md += `- [ ] ${item}\n`;
+  });
+
+  navigator.clipboard.writeText(md).then(() => {
+    showToast('📋 Checklist copiado para a área de transferência!');
+  }).catch(() => {
+    alert('Não foi possível copiar para a área de transferência.');
+  });
+}
+
+function abrirGuiaDerivadoNaWiki() {
+  if (window.ramificacaoSemanticaAtual?.artigo_derivado?.id) {
+    const id = window.ramificacaoSemanticaAtual.artigo_derivado.id;
+    fecharModalRamificacaoSemantica();
+    selecionarKBArtigo(id);
+    showToast('📖 Exibindo guia expandido na base nativa.');
+  }
 }
 
 // ==============================================================================

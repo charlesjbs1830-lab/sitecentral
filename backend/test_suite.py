@@ -2719,6 +2719,101 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         artigos_sha = res_busca_sha.json()["artigos"]
         self.assertTrue(any("POP-04" in a["titulo"] for a in artigos_sha))
 
+    def test_68_kb_artigos_semantic_branching_and_pdi_linking(self):
+        """Valida a Ramificação Semântica Autônoma de POPs e Vinculação ao PDI"""
+        token = self.tokens["presidente"]
+        token_assessor = self.tokens["assessor_comercial"]
+
+        # 1. Garantir que exista um artigo base (ex: POP-03 Funil Comercial)
+        seed_official_kb_pops()
+        res_list = self.client.get("/api/kb/artigos?categoria=comercial", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_list.status_code, 200)
+        artigos = res_list.json()["artigos"]
+        self.assertTrue(len(artigos) > 0)
+        base_artigo = artigos[0]
+        base_id = base_artigo["id"]
+
+        # 2. Rejeição de chamada anônima (401)
+        anon_client = TestClient(app)
+        res_anon = anon_client.post(f"/api/kb/artigos/{base_id}/expandir", json={})
+        self.assertEqual(res_anon.status_code, 401)
+
+        # 3. Erro 404 para artigo inexistente
+        res_404 = self.client.post("/api/kb/artigos/999999/expandir", headers={"Authorization": f"Bearer {token}"}, json={})
+        self.assertEqual(res_404.status_code, 404)
+
+        # 4. Executar Ramificação Semântica sem vincular ao PDI (apenas geração nativa e dedução)
+        res_exp = self.client.post(
+            f"/api/kb/artigos/{base_id}/expandir",
+            headers={"Authorization": f"Bearer {token_assessor}"},
+            json={
+                "vincular_ao_pdi": False,
+                "area_foco": "comercial",
+                "contexto_adicional": "Sprint de fechamento de metas comerciais do PE 2026"
+            }
+        )
+        self.assertEqual(res_exp.status_code, 200)
+        data_exp = res_exp.json()
+        self.assertTrue(data_exp["success"])
+        self.assertEqual(data_exp["area_foco"], "comercial")
+        self.assertFalse(data_exp["vinculado_ao_pdi"])
+        self.assertGreaterEqual(data_exp["total_etapas"], 3)
+        self.assertEqual(len(data_exp["blocos_pdi_vinculados"]), 0)
+
+        # Validar conteúdo das etapas autônomas geradas
+        etapas = data_exp["etapas_autonomas"]
+        self.assertTrue(all("passo" in s and "titulo" in s and "criterio_aceite" in s for s in etapas))
+        self.assertTrue(all("sla_dias" in s and "formato_entregavel" in s for s in etapas))
+
+        # Validar checklist consolidado
+        checklist = data_exp["checklist_consolidado"]
+        self.assertGreaterEqual(len(checklist), 3)
+
+        # Validar artigo derivado nativo persistido no banco
+        derivado = data_exp["artigo_derivado"]
+        deriv_id = derivado["id"]
+        self.assertTrue(derivado["gerado_por_ia"])
+
+        res_deriv_detalhe = self.client.get(f"/api/kb/artigos/{deriv_id}", headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res_deriv_detalhe.status_code, 200)
+        artigo_detalhe = res_deriv_detalhe.json()["artigo"]
+        self.assertTrue(artigo_detalhe["gerado_por_ia"])
+        self.assertEqual(artigo_detalhe["trilha_derivada_id"], base_id)
+        self.assertIn("# [Trilha Autônoma]", artigo_detalhe["conteudo"])
+        self.assertIn("## 1. Etapas Operacionais Deduzidas", artigo_detalhe["conteudo"])
+        self.assertIn("## 2. Checklist Executivo de Validação", artigo_detalhe["conteudo"])
+
+        # 5. Executar Ramificação com vinculação ao PDI do membro logado
+        res_pdi = self.client.post(
+            f"/api/kb/artigos/{base_id}/expandir",
+            headers={"Authorization": f"Bearer {token_assessor}"},
+            json={
+                "vincular_ao_pdi": True,
+                "area_foco": "comercial"
+            }
+        )
+        self.assertEqual(res_pdi.status_code, 200)
+        data_pdi = res_pdi.json()
+        self.assertTrue(data_pdi["success"])
+        self.assertTrue(data_pdi["vinculado_ao_pdi"])
+        self.assertGreater(len(data_pdi["blocos_pdi_vinculados"]), 0)
+
+        blocos = data_pdi["blocos_pdi_vinculados"]
+        for b in blocos:
+            self.assertIn("id", b)
+            self.assertTrue(b["microblock_code"].startswith("POP"))
+            self.assertEqual(b["status"], "pendente")
+            self.assertGreater(b["sla_days"], 0)
+
+        # Verificar se os blocos estão de fato persistidos no banco
+        conn = get_connection()
+        rows = conn.execute(
+            "SELECT * FROM member_pdi_blocks WHERE user_email = ? AND microblock_code LIKE 'POP%'",
+            ("estevao.coutinho@edvjr.com.br",)
+        ).fetchall()
+        conn.close()
+        self.assertGreaterEqual(len(rows), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

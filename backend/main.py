@@ -134,7 +134,8 @@ try:
         create_kb_artigo,
         get_kb_artigo_by_id,
         list_kb_artigos,
-        delete_kb_artigo
+        delete_kb_artigo,
+        expand_kb_artigo_semantically
     )
     from backend.auth import (
         verify_password,
@@ -247,7 +248,8 @@ except ImportError:
         create_kb_artigo,
         get_kb_artigo_by_id,
         list_kb_artigos,
-        delete_kb_artigo
+        delete_kb_artigo,
+        expand_kb_artigo_semantically
     )
     from auth import (
         verify_password,
@@ -2635,6 +2637,43 @@ async def deletar_kb_artigo_endpoint(
         "status": "success",
         "message": f"Artigo #{artigo_id} removido com sucesso da base de conhecimento."
     }
+
+
+class KBArtigoExpandRequest(BaseModel):
+    user_email: Optional[str] = Field(None, description="E-mail do membro para vincular ao Centro de Execução")
+    vincular_ao_pdi: Optional[bool] = Field(False, description="Se deve registrar os passos como micro-blocos no PDI")
+    area_foco: Optional[str] = Field(None, description="Área temática de foco (opcional)")
+    contexto_adicional: Optional[str] = Field(None, description="Observações complementares de execução")
+
+
+@app.post(
+    "/api/kb/artigos/{artigo_id}/expandir",
+    summary="Motor Semântico de Ramificação: Desdobrar POP em trilhas e checklists operacionais autônomos"
+)
+async def expandir_kb_artigo_endpoint(
+    artigo_id: int,
+    payload: Optional[KBArtigoExpandRequest] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        user_email = payload.user_email if payload else None
+        vincular_pdi = payload.vincular_ao_pdi if payload else False
+        area_foco = payload.area_foco if payload else None
+        contexto = payload.contexto_adicional if payload else None
+
+        resultado = expand_kb_artigo_semantically(
+            artigo_id=artigo_id,
+            user_email=user_email,
+            vincular_ao_pdi=vincular_pdi,
+            area_foco=area_foco,
+            contexto_adicional=contexto,
+            current_user=current_user
+        )
+        return resultado
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 # ==============================================================================

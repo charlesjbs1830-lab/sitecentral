@@ -24,7 +24,7 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "auth.db")
 VALID_ROLES = {"presidente", "diretor", "gerente", "assessor"}
 
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
-from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey, DateTime, func, create_engine
+from sqlalchemy import Column, Integer, String, Float, Text, ForeignKey, DateTime, Boolean, func, create_engine
 
 Base = declarative_base()
 
@@ -364,6 +364,8 @@ class KBArtigoORM(Base):
     autor_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     autor_nome = Column(String(150), nullable=True)
     autor_email = Column(String(150), nullable=True)
+    gerado_por_ia = Column(Boolean, default=False, nullable=False)
+    trilha_derivada_id = Column(Integer, ForeignKey("pdis.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -1582,12 +1584,24 @@ def init_db():
         autor_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         autor_nome TEXT,
         autor_email TEXT,
+        gerado_por_ia BOOLEAN DEFAULT FALSE,
+        trilha_derivada_id INTEGER REFERENCES pdis(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_kb_categoria ON kb_artigos(categoria);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_kb_created ON kb_artigos(created_at);")
+
+    # Migração segura para colunas gerado_por_ia e trilha_derivada_id caso tabela já exista
+    for col_def in [
+        ("gerado_por_ia", "BOOLEAN DEFAULT FALSE"),
+        ("trilha_derivada_id", "INTEGER REFERENCES pdis(id) ON DELETE SET NULL")
+    ]:
+        try:
+            cursor.execute(f"ALTER TABLE kb_artigos ADD COLUMN {col_def[0]} {col_def[1]};")
+        except Exception:
+            pass
 
     # Injeção e atualização idempotente do Catálogo Oficial de POPs Técnicos (POP-01 a POP-08)
     seed_official_kb_pops(conn)
@@ -5575,12 +5589,15 @@ def create_kb_artigo(data: dict, current_user: Optional[dict] = None) -> dict:
         autor_nome = current_user.get("nome") or current_user.get("name") or autor_nome
         autor_email = current_user.get("email") or autor_email
 
+    gerado_por_ia = 1 if data.get("gerado_por_ia") else 0
+    trilha_derivada_id = data.get("trilha_derivada_id")
+
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-    INSERT INTO kb_artigos (tenant_id, titulo, categoria, conteudo, drive_url, autor_id, autor_nome, autor_email)
-    VALUES ('edv_jr', ?, ?, ?, ?, ?, ?, ?);
-    """, (titulo, categoria, conteudo, drive_url, autor_id, autor_nome, autor_email))
+    INSERT INTO kb_artigos (tenant_id, titulo, categoria, conteudo, drive_url, autor_id, autor_nome, autor_email, gerado_por_ia, trilha_derivada_id)
+    VALUES ('edv_jr', ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    """, (titulo, categoria, conteudo, drive_url, autor_id, autor_nome, autor_email, gerado_por_ia, trilha_derivada_id))
     artigo_id = cursor.lastrowid
     conn.commit()
 
@@ -5636,6 +5653,627 @@ def delete_kb_artigo(artigo_id: int) -> bool:
     conn.commit()
     conn.close()
     return True
+
+
+def expand_kb_artigo_semantically(
+    artigo_id: int,
+    user_email: Optional[str] = None,
+    vincular_ao_pdi: bool = False,
+    area_foco: Optional[str] = None,
+    contexto_adicional: Optional[str] = None,
+    current_user: Optional[dict] = None
+) -> dict:
+    """
+    Motor semântico autônomo do EDbrain que expande um POP em trilhas operacionais práticas,
+    passos atômicos, checklists de validação e critérios de aceite vinculáveis ao Centro de Execução (PDI).
+    """
+    artigo = get_kb_artigo_by_id(artigo_id)
+    if not artigo:
+        raise ValueError(f"Artigo/POP com ID {artigo_id} não encontrado na Base de Conhecimento.")
+
+    cat = (artigo.get("categoria") or "geral").lower()
+    titulo = artigo.get("titulo") or "Procedimento Operacional"
+
+    templates_por_categoria = {
+        "projetos": {
+            "trilha_titulo": f"Trilha Operacional de Execução: {titulo}",
+            "vetor_demandas": "Prazos do INPI (Lei nº 9.279/1996 - LPI), prevenção de perda de prazos de 60 dias da RPI, garantia de satisfação do cliente e entrega tempestiva da consultoria de RM.",
+            "etapas": [
+                {
+                    "etapa_num": 1,
+                    "titulo": "Auditoria Prévia e Análise de Anterioridade Marcária",
+                    "descricao": "Executar varredura aprofundada na base do INPI para identificação de marcas colidentes antes de qualquer manifestação ou depósito.",
+                    "passos_praticos": [
+                        "Acessar a base de marcas do portal do INPI com busca por radical e fonética;",
+                        "Mapear todas as marcas com processo ativo ou deferido nas mesmas classes de Nice (NCL);",
+                        "Elaborar relatório preliminar de viabilidade e risco com parecer consultivo."
+                    ],
+                    "checklist_validacao": [
+                        "Busca exata e fonética concluída no INPI",
+                        "Classes de Nice (NCL) confrontadas com o objeto social do cliente",
+                        "Relatório anexado ao prontuário do projeto"
+                    ],
+                    "criterios_aceite": "Ausência de colidência direta nas classes primárias e aprovação formal do parecer pelo Gerente de Projetos.",
+                    "sla_dias": 3,
+                    "complexidade": "Média",
+                    "entregavel_esperado": "Parecer de Anterioridade e Risco homologado"
+                },
+                {
+                    "etapa_num": 2,
+                    "titulo": "Preparação Documental e Emissão de GRU com Desconto MEJ",
+                    "descricao": "Reunir o instrumental de mandato (procuração com poderes específicos) e emitir a Guia de Recolhimento da União com benefício de MEJ (código 389).",
+                    "passos_praticos": [
+                        "Colher procuração assinada digitalmente com poderes expressos perante o INPI;",
+                        "Emitir a GRU sob código 389 no e-INPI aplicando desconto MEJ (Lei Complementar 123/2006);",
+                        "Confirmar a compensação bancária da guia antes da submissão do protocolo."
+                    ],
+                    "checklist_validacao": [
+                        "Procuração assinada com poderes específicos conferidos à EDV Jr.",
+                        "GRU código 389 emitida no CPF/CNPJ do titular",
+                        "Comprovante de pagamento bancário arquivado"
+                    ],
+                    "criterios_aceite": "Guia compensada no sistema e-INPI sem divergência cadastral de titularidade.",
+                    "sla_dias": 2,
+                    "complexidade": "Baixa",
+                    "entregavel_esperado": "Dossiê com Procuração e Comprovante de GRU quitada"
+                },
+                {
+                    "etapa_num": 3,
+                    "titulo": "Protocolo Digital no e-INPI e Guarda do Comprovante de 9 Dígitos",
+                    "descricao": "Submeter o formulário oficial no e-Marcas, anexando a logo em formato exigido (JPG/PNG alta definição) e salvando o número de processo.",
+                    "passos_praticos": [
+                        "Preencher o formulário no e-INPI com a especificação detalhada de produtos/serviços;",
+                        "Realizar upload da arte visual conforme diretrizes de dimensão e resolução;",
+                        "Baixar o recibo de protocolo contendo o número oficial de 9 dígitos e atualizar o prontuário no EDbrain."
+                    ],
+                    "checklist_validacao": [
+                        "Formulário conferido e transmitido sem erros de validação",
+                        "Recibo oficial de 9 dígitos salvo no diretório do projeto",
+                        "Status do projeto atualizado para 'ativo' no módulo de RMs"
+                    ],
+                    "criterios_aceite": "Comprovante com carimbo temporal da autarquia e número de processo gerado com sucesso.",
+                    "sla_dias": 1,
+                    "complexidade": "Média",
+                    "entregavel_esperado": "Recibo de Protocolo com Número de Processo INPI"
+                },
+                {
+                    "etapa_num": 4,
+                    "titulo": "Configuração da Esteira de Vigilância na RPI",
+                    "descricao": "Cadastrar o número de processo na rotina semanal de leitura da Revista da Propriedade Industrial (RPI) para monitoramento de despachos e prazos.",
+                    "passos_praticos": [
+                        "Inserir o processo no radar de monitoramento da RPI do EDbrain;",
+                        "Agendar alerta para publicação do pedido (início do prazo de oposição de 60 dias);",
+                        "Emitir notificação informativa de conclusão da fase inicial para o cliente."
+                    ],
+                    "checklist_validacao": [
+                        "Processo cadastrado no radar semanal da RPI",
+                        "Alerta de 60 dias de oposição configurado",
+                        "Relatório de protocolo enviado formalmente ao cliente"
+                    ],
+                    "criterios_aceite": "Processo rastreado no sistema e cliente cientificado com termo de protocolo formal.",
+                    "sla_dias": 2,
+                    "complexidade": "Baixa",
+                    "entregavel_esperado": "Comunicação Formal de Depósito e Calendário de Acompanhamento"
+                }
+            ]
+        },
+        "financeiro": {
+            "trilha_titulo": f"Trilha de Rigor Contábil e Liquidez: {titulo}",
+            "vetor_demandas": "Conciliação bancária Cora, emissão de NFS-e sob Lei Municipal de Vitória, controle de inadimplência e preservação do índice de solvência da EDV Jr.",
+            "etapas": [
+                {
+                    "etapa_num": 1,
+                    "titulo": "Parametrização do Sacado e Emissão de Boletos no Banco Cora",
+                    "descricao": "Cadastrar o cliente com dados tributários completos e programar os boletos das parcelas com incidência estatutária de juros e multa.",
+                    "passos_praticos": [
+                        "Inserir o CNPJ/CPF e razão social do contratante no Cora Banking;",
+                        "Configurar o plano de parcelamento alinhado às cláusulas do Contrato de RM;",
+                        "Vincular código da fatura à transação correspondente no Fluxo de Caixa do EDbrain."
+                    ],
+                    "checklist_validacao": [
+                        "CNPJ validado sem restrições cadastrais",
+                        "Datas de vencimento batendo com o contrato assinado",
+                        "Chave de integração da cobrança salva no EDbrain"
+                    ],
+                    "criterios_aceite": "Carnê emitido e link de liquidação testado e funcional.",
+                    "sla_dias": 2,
+                    "complexidade": "Baixa",
+                    "entregavel_esperado": "Boletos emitidos com QR Code PIX e código de barras"
+                },
+                {
+                    "etapa_num": 2,
+                    "titulo": "Emissão de Nota Fiscal de Serviços Eletrônica (NFS-e)",
+                    "descricao": "Emitir a NFS-e oficial no portal da Prefeitura Municipal conforme o enquadramento de imunidade/isenção tributária de Empresa Júnior.",
+                    "passos_praticos": [
+                        "Acessar o portal fazendário municipal com certificado digital da EDV Jr.;",
+                        "Discriminar os serviços de consultoria técnica prestados sem retenção indevida de ISS;",
+                        "Fazer o download do XML e PDF da nota fiscal e arquivar na pasta financeira."
+                    ],
+                    "checklist_validacao": [
+                        "Código de serviço compatível com consultoria jurídica e mercadológica",
+                        "Valores e dados das partes conferidos",
+                        "Nota Fiscal anexada ao registro financeiro do EDbrain"
+                    ],
+                    "criterios_aceite": "NFS-e transmitida com sucesso e número de autorização municipal gerado.",
+                    "sla_dias": 3,
+                    "complexidade": "Média",
+                    "entregavel_esperado": "NFS-e autorizada e transmitida"
+                },
+                {
+                    "etapa_num": 3,
+                    "titulo": "Conciliação Bancária e Mitigação Ativa de Inadimplência",
+                    "descricao": "Realizar o batimento do extrato bancário semanal com as previsões de caixa e executar cobrança amigável caso haja atraso superior a 5 dias.",
+                    "passos_praticos": [
+                        "Importar extrato OFX do Cora e verificar conciliação 100% de entradas;",
+                        "Executar rotina de 'Dar Baixa' nas transações quitadas;",
+                        "Acionar régua de comunicação para faturas em atraso antes do corte de 15 dias."
+                    ],
+                    "checklist_validacao": [
+                        "Extrato conciliado com saldo bancário real",
+                        "Transações marcadas como 'pago' com data efetiva",
+                        "Alertas do BI Executivo atualizados"
+                    ],
+                    "criterios_aceite": "Divergência financeira zero entre extrato do Cora e o Fluxo de Caixa 2.0.",
+                    "sla_dias": 2,
+                    "complexidade": "Média",
+                    "entregavel_esperado": "Relatório Semanal de Conciliação e Status de Recebíveis"
+                }
+            ]
+        },
+        "comercial": {
+            "trilha_titulo": f"Esteira de Conversão e Tração Comercial: {titulo}",
+            "vetor_demandas": "Metas de faturamento do Planejamento Estratégico, SLA de follow-ups no CRM em menos de 48h e fechamento de contratos de Registro de Marca.",
+            "etapas": [
+                {
+                    "etapa_num": 1,
+                    "titulo": "Qualificação B2B e Pesquisa Preliminar de Marca",
+                    "descricao": "Triar o lead recém-chegado, verificar enquadramento no perfil de cliente ideal (ICP) e realizar checagem sumária no INPI.",
+                    "passos_praticos": [
+                        "Conferir situação cadastral do CNPJ via BrasilAPI;",
+                        "Realizar checagem prévia no INPI para levar subsídios técnicos à reunião;",
+                        "Mover o lead da etapa 'prospeccao' para 'contato_inicial' no CRM."
+                    ],
+                    "checklist_validacao": [
+                        "CNPJ ativo e verificado",
+                        "Dossiê preliminar de marca preenchido",
+                        "Contato com tomador de decisão estabelecido"
+                    ],
+                    "criterios_aceite": "Abordagem realizada em menos de 24 horas após entrada do lead.",
+                    "sla_dias": 1,
+                    "complexidade": "Baixa",
+                    "entregavel_esperado": "Dossiê de Qualificação Comercial do Lead"
+                },
+                {
+                    "etapa_num": 2,
+                    "titulo": "Condução de Reunião de Diagnóstico e Pitch de Valor",
+                    "descricao": "Apresentar os riscos de operar sem registro de marca, explicar as vantagens do apoio da EDV Jr. e levantar necessidades específicas do cliente.",
+                    "passos_praticos": [
+                        "Conduzir alinhamento consultivo via Google Meet;",
+                        "Apresentar casos de sucesso e a segurança da Lei 13.267/2016;",
+                        "Mover oportunidade para 'diagnostico' e agendar envio de proposta."
+                    ],
+                    "checklist_validacao": [
+                        "Dores e expectativas do tomador registradas no CRM",
+                        "Número de classes estimadas acordado com o cliente",
+                        "Data limite para apresentação da proposta fixada"
+                    ],
+                    "criterios_aceite": "Cliente engajado com confirmação de recebimento da proposta comercial formal.",
+                    "sla_dias": 2,
+                    "complexidade": "Média",
+                    "entregavel_esperado": "Ata de Reunião de Diagnóstico Comercial"
+                },
+                {
+                    "etapa_num": 3,
+                    "titulo": "Envio de Proposta Comercial e Fechamento de Contrato",
+                    "descricao": "Elaborar proposta personalizada com condições facilitadas no Cora e colher assinatura para conversão em projeto ativo.",
+                    "passos_praticos": [
+                        "Emitir minuta formal com hash SHA-256 e marca d'água oficial;",
+                        "Negociar condições finais e encaminhar para assinatura digital Gov.br/Clicksign;",
+                        "Mover oportunidade para 'fechado' e acionar a equipe de Projetos."
+                    ],
+                    "checklist_validacao": [
+                        "Contrato assinado por ambas as partes arquivado",
+                        "Receita lançada no módulo Financeiro",
+                        "Kick-off agendado com o Gerente de Projetos"
+                    ],
+                    "criterios_aceite": "Contrato devidamente formalizado e registrado no Painel de Contratos do EDbrain.",
+                    "sla_dias": 4,
+                    "complexidade": "Alta",
+                    "entregavel_esperado": "Contrato de Consultoria Assinado e Projeto Aberto"
+                }
+            ]
+        },
+        "juridico": {
+            "trilha_titulo": f"Trilha de Governança, Compliance e Lei 13.267: {titulo}",
+            "vetor_demandas": "Auditoria do Selo EJ Brasil Júnior, segurança documental com hash SHA-256, arquivamento de atas e regularidade fiscal e estatutária.",
+            "etapas": [
+                {
+                    "etapa_num": 1,
+                    "titulo": "Auditoria de Cláusulas Obrigatórias e Mitigação de Vícios Formais",
+                    "descricao": "Conferir minutas e atos societários garantindo conformidade com a Lei Federal nº 13.267/2016 e as diretrizes do Conselho Nacional de Justiça (CNJ).",
+                    "passos_praticos": [
+                        "Checar qualificação completa das partes contratantes;",
+                        "Garantir cláusula expressa de destinação não-lucrativa dos recursos para fins educacionais;",
+                        "Verificar eleição de foro da Comarca de Vitória/ES."
+                    ],
+                    "checklist_validacao": [
+                        "Conformidade com os arts. 2º e 3º da Lei 13.267/2016",
+                        "Ausência de cláusulas abusivas ou de responsabilidade ilimitada",
+                        "Aprovação do parecer pelo Diretor Jurídico"
+                    ],
+                    "criterios_aceite": "Parecer de conformidade com carimbo de aprovação da Diretoria Jurídica.",
+                    "sla_dias": 2,
+                    "complexidade": "Média",
+                    "entregavel_esperado": "Parecer Jurídico de Regularidade Formal"
+                },
+                {
+                    "etapa_num": 2,
+                    "titulo": "Autenticação Criptográfica com Hash SHA-256 e Marca D'água",
+                    "descricao": "Processar o documento no motor criptográfico do EDbrain para geração do carimbo de inviolabilidade digital.",
+                    "passos_praticos": [
+                        "Gerar PDF final com aplicação da marca d'água oficial da EDV Jr.;",
+                        "Executar algoritmo SHA-256 para extração da chave única do arquivo;",
+                        "Estampar hash no rodapé da minuta antes da colheita das assinaturas."
+                    ],
+                    "checklist_validacao": [
+                        "Hash SHA-256 computado e registrado no banco de dados",
+                        "Marca d'água institucional aplicada sem obstruir o texto",
+                        "Arquivo disponibilizado para assinatura segura"
+                    ],
+                    "criterios_aceite": "Integridade criptográfica conferida contra adulteração textual posterior.",
+                    "sla_dias": 1,
+                    "complexidade": "Baixa",
+                    "entregavel_esperado": "Instrumento Jurídico Autenticado com Assinatura SHA-256"
+                },
+                {
+                    "etapa_num": 3,
+                    "titulo": "Gestão de Certidões Negativas de Débitos (CNDs) e Selo EJ",
+                    "descricao": "Verificar a regularidade contínua da empresa júnior emitindo mensalmente CND Federal, FGTS e CNDT perante a Receita Federal e TST.",
+                    "passos_praticos": [
+                        "Emitir CND Conjunta da Receita Federal e PGFN;",
+                        "Emitir Certificado de Regularidade do FGTS (CRF) na Caixa Econômica;",
+                        "Emitir CNDT perante a Justiça do Trabalho e anexar ao repositório Selo EJ."
+                    ],
+                    "checklist_validacao": [
+                        "3 certidões negativas válidas e sem pendências fiscais",
+                        "Documentos arquivados na pasta oficial do Selo EJ",
+                        "Dashboard Executivo atualizado com status verde no Selo EJ"
+                    ],
+                    "criterios_aceite": "Todas as certidões com prazo de validade vigente e arquivadas no sistema.",
+                    "sla_dias": 3,
+                    "complexidade": "Média",
+                    "entregavel_esperado": "Dossiê Mensal de Certidões Negativas (CNDs)"
+                }
+            ]
+        },
+        "gestao_gente": {
+            "trilha_titulo": f"Trilha de Desenvolvimento e Aceleração de Membros: {titulo}",
+            "vetor_demandas": "Mitigação de turnover, triangulação de gaps de desempenho 360º, retenção de talentos e formação de novas lideranças (plano de sucessão).",
+            "etapas": [
+                {
+                    "etapa_num": 1,
+                    "titulo": "Triangulação de Gaps e Diagnóstico 360º",
+                    "descricao": "Cruzar as avaliações de pares com o histórico de entregas operacionais do membro para identificar prioridades de capacitação.",
+                    "passos_praticos": [
+                        "Consultar matriz de competências da Brasil Júnior no módulo VPGG;",
+                        "Identificar competências com nota inferior a 3.5 em autoavaliação ou liderança;",
+                        "Selecionar micro-blocos de aprendizagem correspondentes no catálogo."
+                    ],
+                    "checklist_validacao": [
+                        "Triangulação executada com dados de avaliações ativas",
+                        "Gaps classificados em Hard Skills e Soft Skills",
+                        "Foco adicional acordado em reunião 1-on-1"
+                    ],
+                    "criterios_aceite": "Diagnóstico validado pelo membro e pelo Gerente de Gente.",
+                    "sla_dias": 3,
+                    "complexidade": "Média",
+                    "entregavel_esperado": "Mapa Individual de Gaps de Competência"
+                },
+                {
+                    "etapa_num": 2,
+                    "titulo": "Execução de Micro-Ações Práticas e Estudo de POPs",
+                    "descricao": "Cumprir a esteira pedagógica de micro-blocos, estudando a documentação oficial da Wiki e executando entregáveis práticos supervisionados.",
+                    "passos_praticos": [
+                        "Ler os POPs correspondentes à área de atuação na Base de Conhecimento;",
+                        "Executar tarefas práticas simuladas sob mentoria de um membro sênior;",
+                        "Registrar a síntese de aprendizado na plataforma."
+                    ],
+                    "checklist_validacao": [
+                        "POPs obrigatórios concluídos e validados",
+                        "Entregável prático submetido na esteira",
+                        "SLA de conclusão do micro-bloco respeitado"
+                    ],
+                    "criterios_aceite": "Homologação do entregável pelo mentor com feedback descritivo.",
+                    "sla_dias": 7,
+                    "complexidade": "Média",
+                    "entregavel_esperado": "Síntese Prática de Aprendizado Homologada"
+                },
+                {
+                    "etapa_num": 3,
+                    "titulo": "Avaliação de Impacto e Calibração Sucessória",
+                    "descricao": "Medir a evolução do membro pós-trilha e posicioná-lo no pipeline de sucessão para cargos de gerência e diretoria.",
+                    "passos_praticos": [
+                        "Apurar ganho de maturidade nos indicadores de entrega;",
+                        "Atualizar o score de prontidão para sucessão (IPS) no painel VPGG;",
+                        "Emitir certificado de conclusão de ciclo de PDI."
+                    ],
+                    "checklist_validacao": [
+                        "Avanço percentual do PDI atualizado para 100%",
+                        "Score de sucessão recalculado automaticamente",
+                        "Feedback final registrado na ata do membro"
+                    ],
+                    "criterios_aceite": "Membro calibrado e apto para novos desafios operacionais e estatutários.",
+                    "sla_dias": 4,
+                    "complexidade": "Média",
+                    "entregavel_esperado": "Parecer de Evolução Individual e Prontidão de Sucessão"
+                }
+            ]
+        },
+        "ti": {
+            "trilha_titulo": f"Trilha de Segurança, Auditoria e Governança Tecnológica: {titulo}",
+            "vetor_demandas": "Blindagem de acessos RBAC, conformidade com a LGPD (Lei 13.709/2018), integridade dos logs de auditoria e alta disponibilidade do servidor.",
+            "etapas": [
+                {
+                    "etapa_num": 1,
+                    "titulo": "Auditoria de Matriz RBAC e Princípio do Menor Privilégio",
+                    "descricao": "Conferir todas as credenciais ativas no banco de dados e revogar permissões sobressalentes ou perfis órfãos.",
+                    "passos_praticos": [
+                        "Executar varredura na tabela de usuários confrontando papéis atuais;",
+                        "Validar isolamento de rotas de diretoria e presidência;",
+                        "Garantir bloqueio de auto-promoção de assessores para diretores."
+                    ],
+                    "checklist_validacao": [
+                        "Todos os membros com papéis estritamente mapeados",
+                        "Nenhuma conta ativa sem e-mail institucional corporativo",
+                        "Testes de bloqueio 403 validados com sucesso"
+                    ],
+                    "criterios_aceite": "Relatório de conformidade de acessos sem inconformidades críticas.",
+                    "sla_dias": 2,
+                    "complexidade": "Média",
+                    "entregavel_esperado": "Relatório de Auditoria de Acessos e Papéis"
+                },
+                {
+                    "etapa_num": 2,
+                    "titulo": "Inspeção de Logs de Auditoria e Snapshot de Backup",
+                    "descricao": "Verificar integridade da trilha de auditoria contínua e gerar snapshot seguro da base SQLite com hash de integridade.",
+                    "passos_praticos": [
+                        "Acessar módulo de auditoria e validar registros de operações críticas;",
+                        "Executar rotina de snapshot de backup do arquivo auth.db;",
+                        "Calcular hash SHA-256 da base de dados e arquivar cópia de contingência."
+                    ],
+                    "checklist_validacao": [
+                        "Logs de auditoria ativos e sem gaps temporais",
+                        "Backup gerado e testado com restauração em sandbox",
+                        "Hash criptográfico do backup arquivado"
+                    ],
+                    "criterios_aceite": "Backup íntegro e base operacional pronta para contingência.",
+                    "sla_dias": 1,
+                    "complexidade": "Baixa",
+                    "entregavel_esperado": "Snapshot de Contingência e Hash de Integridade"
+                }
+            ]
+        }
+    }
+
+    template_default = {
+        "trilha_titulo": f"Plano de Execução Autônoma: {titulo}",
+        "vetor_demandas": "Continuidade institucional, mitigação de rotatividade entre gestões e retenção do saber operacional da EDV Jr.",
+        "etapas": [
+            {
+                "etapa_num": 1,
+                "titulo": "Revisão e Assimilação das Diretrizes do POP",
+                "descricao": "Ler integralmente o manual oficial e identificar as conexões operacionais com a sua rotina semanal.",
+                "passos_praticos": [
+                    "Estudar as seções de objetivo e pré-requisitos sistêmicos;",
+                    "Mapear os menus e botões correspondentes na interface do EDbrain;",
+                    "Identificar pontos de atenção e possíveis travas operacionais."
+                ],
+                "checklist_validacao": [
+                    "Leitura completa do POP realizada",
+                    "Acesso aos módulos e ferramentas necessários testado",
+                    "Dúvidas iniciais sanadas com a liderança"
+                ],
+                "criterios_aceite": "Compreensão clara do fluxo operacional sem bloqueios de procedimento.",
+                "sla_dias": 2,
+                "complexidade": "Baixa",
+                "entregavel_esperado": "Confirmação de Leitura e Plano de Aplicação"
+            },
+            {
+                "etapa_num": 2,
+                "titulo": "Execução Prática Supervisionada com Checklist de Validação",
+                "descricao": "Aplicar o procedimento operacional em um caso real ou projeto ativo sob acompanhamento de par ou gerente.",
+                "passos_praticos": [
+                    "Preencher os formulários oficiais na interface;",
+                    "Submeter as ações cumprindo todos os critérios de validação;",
+                    "Registrar a conclusão da atividade no sistema."
+                ],
+                "checklist_validacao": [
+                    "Todos os campos obrigatórios validados",
+                    "Evidências e anexos arquivados na base",
+                    "Status da operação atualizado para concluído"
+                ],
+                "criterios_aceite": "Execução em conformidade com as regras do POP sem necessidade de retrabalho.",
+                "sla_dias": 4,
+                "complexidade": "Média",
+                "entregavel_esperado": "Evidência de Execução Prática Homologada"
+            },
+            {
+                "etapa_num": 3,
+                "titulo": "Registro de Lições Aprendidas e Contribuição no Fórum",
+                "descricao": "Documentar melhorias identificadas durante a rotina para aprimoramento contínuo da Base de Conhecimento.",
+                "passos_praticos": [
+                    "Anotar pontos de melhoria observados durante a execução;",
+                    "Compartilhar dicas práticas com a equipe no Fórum Coletivo;",
+                    "Sugerir atualizações nos manuais em caso de mudança de procedimentos externos."
+                ],
+                "checklist_validacao": [
+                    "Lições aprendidas registradas",
+                    "Tópico ou contribuição publicada no Fórum",
+                    "Diretoria ciente de eventuais oportunidades de melhoria"
+                ],
+                "criterios_aceite": "Disseminação do saber técnico concluída com sucesso entre os membros.",
+                "sla_dias": 3,
+                "complexidade": "Baixa",
+                "entregavel_esperado": "Registro de Contribuição Coletiva"
+            }
+        ]
+    }
+
+    ramificacao = templates_por_categoria.get(cat, template_default)
+
+    checklist_consolidado = []
+    for etapa in ramificacao["etapas"]:
+        etapa["passo"] = etapa.get("etapa_num", 1)
+        etapa["criterio_aceite"] = etapa.get("criterios_aceite", "")
+        etapa["formato_entregavel"] = etapa.get("entregavel_esperado", "")
+        for item in etapa["checklist_validacao"]:
+            checklist_consolidado.append({
+                "etapa_num": etapa["etapa_num"],
+                "etapa_titulo": etapa["titulo"],
+                "item": item,
+                "concluido": False
+            })
+
+    markdown_linhas = [
+        f"# [Trilha Autônoma] {ramificacao['trilha_titulo']}",
+        f"**Documento Base**: {titulo}  ",
+        f"**Categoria Operacional**: {cat.upper()}  ",
+        f"**Vetor de Demandas**: {ramificacao['vetor_demandas']}  ",
+        f"**Origem**: Gerado Autonomamente pelo Motor Semântico do EDbrain  \n",
+        "## 1. Etapas Operacionais Deduzidas",
+        f"Esta trilha prática desdobra o procedimento operacional padrão `{titulo}` em sub-etapas atômicas, checklists de validação e critérios objetivos de aceite para execução imediata pelos membros da EDV Jr.\n",
+        "## 2. Checklist Executivo de Validação",
+    ]
+    for chk in checklist_consolidado:
+        markdown_linhas.append(f"- [ ] **[Etapa {chk['etapa_num']}]** {chk['item']}")
+
+    markdown_linhas.append("\n## 3. SLA Global & Governança\n")
+    for etapa in ramificacao["etapas"]:
+        markdown_linhas.append(f"### Etapa {etapa['etapa_num']}: {etapa['titulo']}")
+        markdown_linhas.append(f"**SLA Estimado**: {etapa['sla_dias']} dias | **Complexidade**: {etapa['complexidade']}  ")
+        markdown_linhas.append(f"**Entregável Esperado**: `{etapa['entregavel_esperado']}`\n")
+        markdown_linhas.append(f"{etapa['descricao']}\n")
+        markdown_linhas.append("**Passos Práticos de Execução**:")
+        for p in etapa["passos_praticos"]:
+            markdown_linhas.append(f"1. {p}")
+        markdown_linhas.append("\n**Critérios de Aceite & Conformidade**:")
+        markdown_linhas.append(f"> {etapa['criterios_aceite']}\n")
+
+    markdown_linhas.append("## 4. Integração com o Centro de Execução")
+    markdown_linhas.append(
+        "Todas as sub-etapas desta trilha podem ser vinculadas ao seu PDI individual no menu **Meu PDI / VPGG**, "
+        "gerando micro-blocos rastreáveis com contagem de SLA e pontuação para o plano de sucessão da empresa júnior."
+    )
+
+    markdown_derivado = "\n".join(markdown_linhas)
+
+    novo_artigo_titulo = f"Trilha Prática: {titulo} (Ramificação Semântica)"
+    artigo_derivado = create_kb_artigo({
+        "titulo": novo_artigo_titulo,
+        "categoria": cat,
+        "conteudo": markdown_derivado,
+        "drive_url": artigo.get("drive_url"),
+        "gerado_por_ia": True,
+        "trilha_derivada_id": artigo_id
+    }, current_user={
+        "id": (current_user.get("id") if current_user else None),
+        "nome": "Motor Semântico EDbrain",
+        "email": "ia@edvjr.com.br"
+    })
+
+    blocos_pdi_criados = []
+
+    if vincular_ao_pdi:
+        conn = get_connection()
+        cursor = conn.cursor()
+        try:
+            target_user = None
+            if user_email:
+                cursor.execute("SELECT id, nome, email FROM users WHERE LOWER(email) = ?;", (user_email.lower().strip(),))
+                target_user = cursor.fetchone()
+            if not target_user and current_user and current_user.get("email"):
+                cursor.execute("SELECT id, nome, email FROM users WHERE LOWER(email) = ?;", (current_user["email"].lower().strip(),))
+                target_user = cursor.fetchone()
+            if not target_user:
+                cursor.execute("SELECT id, nome, email FROM users ORDER BY id ASC LIMIT 1;")
+                target_user = cursor.fetchone()
+
+            if target_user:
+                u_id = target_user["id"]
+                u_email = target_user["email"]
+
+                for etapa in ramificacao["etapas"]:
+                    micro_code = f"POP{artigo_id}-E{etapa['etapa_num']}"
+                    cursor.execute("SELECT id FROM member_pdi_blocks WHERE user_id = ? AND microblock_code = ?;", (u_id, micro_code))
+                    bloco_existente = cursor.fetchone()
+                    if not bloco_existente:
+                        cursor.execute("""
+                        INSERT INTO member_pdi_blocks (
+                            tenant_id, user_id, user_email, microblock_code, title,
+                            competency_mej, eixo, area, complexity, description,
+                            deliverable_format, evaluation_metric, sla_days, status,
+                            justificativa_algoritmica
+                        ) VALUES (
+                            'edv_jr', ?, ?, ?, ?,
+                            'Execução de Consultorias', 'Operação & Técnica', ?, ?, ?,
+                            ?, 'Checklist 100% Homologado', ?, 'pendente',
+                            ?
+                        );
+                        """, (
+                            u_id, u_email, micro_code, f"[{cat.upper()}] {etapa['titulo']}",
+                            cat, 2 if etapa['complexidade'] == 'Média' else (3 if etapa['complexidade'] == 'Alta' else 1),
+                            etapa['descricao'], etapa['entregavel_esperado'], etapa['sla_dias'],
+                            f"Ramificação semântica automática gerada do {titulo}"
+                        ))
+                        bloco_id = cursor.lastrowid
+                        blocos_pdi_criados.append({
+                            "id": bloco_id,
+                            "code": micro_code,
+                            "microblock_code": micro_code,
+                            "title": etapa["titulo"],
+                            "sla_days": etapa["sla_dias"],
+                            "status": "pendente"
+                        })
+                conn.commit()
+
+                if blocos_pdi_criados:
+                    cursor.execute("UPDATE kb_artigos SET trilha_derivada_id = ? WHERE id = ?;", (blocos_pdi_criados[0]["id"], artigo_derivado["id"]))
+                    conn.commit()
+                    artigo_derivado["trilha_derivada_id"] = blocos_pdi_criados[0]["id"]
+        finally:
+            conn.close()
+
+    checklist_simples = [item["item"] for item in checklist_consolidado]
+
+    return {
+        "status": "success",
+        "success": True,
+        "artigo_base_id": artigo_id,
+        "artigo_base": {
+            "id": artigo_id,
+            "titulo": titulo,
+            "categoria": cat
+        },
+        "artigo_base_titulo": titulo,
+        "categoria": cat,
+        "area_foco": area_foco or cat,
+        "contexto_adicional": contexto_adicional or "",
+        "vinculado_ao_pdi": bool(vincular_ao_pdi),
+        "total_etapas": len(ramificacao["etapas"]),
+        "etapas_autonomas": ramificacao["etapas"],
+        "checklist_consolidado": checklist_simples,
+        "checklist_detalhado": checklist_consolidado,
+        "ramificacao_semantica": {
+            "trilha_titulo": ramificacao["trilha_titulo"],
+            "vetor_demandas_analisado": ramificacao["vetor_demandas"],
+            "etapas_autonomas": ramificacao["etapas"],
+            "checklist_consolidado": checklist_simples,
+            "total_etapas": len(ramificacao["etapas"])
+        },
+        "artigo_derivado": artigo_derivado,
+        "blocos_pdi_vinculados": blocos_pdi_criados
+    }
+
 
 
 if __name__ == "__main__":
