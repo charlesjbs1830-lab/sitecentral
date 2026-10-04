@@ -21,9 +21,16 @@ import sqlite3
 import re
 import unicodedata
 from datetime import datetime, date
-import openpyxl
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
 
-sys.stdout.reconfigure(encoding='utf-8')
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding='utf-8')
+except Exception:
+    pass
 
 def json_serial(obj):
     if isinstance(obj, (datetime, date)):
@@ -76,16 +83,18 @@ def sync_data(sync_sqlite: bool = True):
 
     drive_root = r"G:\Drives compartilhados\Gestão 2026 - EDV Jr"
     meu_drive_root = r"G:\Meu Drive"
-    drive_available = os.path.exists(drive_root) or os.path.exists(meu_drive_root)
-
-    print(f"[*] Iniciando sincronização com Google Drive. Conexão detectada: {drive_available}")
+    drive_available = (openpyxl is not None) and (os.path.exists(drive_root) or os.path.exists(meu_drive_root))
+    if openpyxl is None:
+        print("[!] Aviso: 'openpyxl' não está instalado neste interpretador. Utilizando dados legados em cache.")
+    else:
+        print(f"[*] Iniciando sincronização com Google Drive. Conexão detectada: {drive_available}")
 
     # =========================================================================
     # 1. PROJETOS / RMS (Controle de RMs.xlsx)
     # =========================================================================
     p_rms = os.path.join(drive_root, r"04. Projetos\Controle de RMs.xlsx")
     rms_data = []
-    if os.path.exists(p_rms):
+    if drive_available and os.path.exists(p_rms):
         print(f"[+] Extraindo RMs de: {p_rms}")
         try:
             wb = openpyxl.load_workbook(p_rms, data_only=True)
@@ -133,7 +142,7 @@ def sync_data(sync_sqlite: bool = True):
     totais_financeiro = {'receitas': 0.0, 'despesas': 0.0, 'saldo': 0.0}
     seen_transactions = set()
 
-    if fluxo_source and os.path.exists(fluxo_source):
+    if drive_available and fluxo_source and os.path.exists(fluxo_source):
         print(f"[+] Extraindo Fluxo de Caixa Mensal Oficial de: {fluxo_source}")
         try:
             wb = openpyxl.load_workbook(fluxo_source, data_only=True)
@@ -178,7 +187,7 @@ def sync_data(sync_sqlite: bool = True):
             print(f"[-] Erro ao ler fluxo mensal: {e}")
 
     # Complemento via Fluxo Unificado Cora se disponível
-    if os.path.exists(p_fluxo_meu_drive):
+    if drive_available and os.path.exists(p_fluxo_meu_drive):
         try:
             wb = openpyxl.load_workbook(p_fluxo_meu_drive, data_only=True, read_only=True)
             sh = wb['Sheet1']
@@ -250,7 +259,7 @@ def sync_data(sync_sqlite: bool = True):
     crm_data = []
     seen_crm_leads = set()
 
-    if os.path.exists(p_crm):
+    if drive_available and os.path.exists(p_crm):
         print(f"[+] Extraindo Leads do CRM Oficial de: {p_crm}")
         try:
             wb = openpyxl.load_workbook(p_crm, data_only=True, read_only=True)
@@ -300,7 +309,7 @@ def sync_data(sync_sqlite: bool = True):
     # =========================================================================
     p_corrida = os.path.join(drive_root, r"15. Corrida ENEJ 2026\Planilha Leads Duplas - Corrida ENEJ 2026 .xlsx")
     corrida_data = []
-    if os.path.exists(p_corrida):
+    if drive_available and os.path.exists(p_corrida):
         print(f"[+] Extraindo Leads da Corrida ENEJ de: {p_corrida}")
         try:
             wb = openpyxl.load_workbook(p_corrida, data_only=True, read_only=True)
@@ -456,7 +465,7 @@ def sync_data(sync_sqlite: bool = True):
     # =========================================================================
     desempenho_individual = []
     desemp_dir = os.path.join(drive_root, r"06. Comercial\DESEMPENHO INDIVIDUAL")
-    if os.path.exists(desemp_dir):
+    if drive_available and os.path.exists(desemp_dir):
         for member_folder in os.listdir(desemp_dir):
             m_path = os.path.join(desemp_dir, member_folder)
             if os.path.isdir(m_path):
