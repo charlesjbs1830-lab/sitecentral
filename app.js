@@ -54,9 +54,22 @@ const AUTH_TOKEN_KEY = 'edv_auth_token';
 const PROD_API_URL = 'https://edbrain.onrender.com';
 const LOCAL_API_URL = 'http://127.0.0.1:8000';
 
-const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? LOCAL_API_URL
-  : (window.EDV_API_BASE_URL || PROD_API_URL);
+function resolveApiBaseUrl() {
+  const customUrl = window.EDV_API_BASE_URL || localStorage.getItem('EDV_API_BASE_URL');
+  if (customUrl) return customUrl.replace(/\/+$/, '');
+  
+  const hostname = window.location.hostname;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return (window.location.port === '8000' || !window.location.port) ? window.location.origin : LOCAL_API_URL;
+  }
+  // Se estiver acessando diretamente pelo Render (ex: edbrain.onrender.com ou qualquer subdominio)
+  if (hostname.endsWith('.onrender.com')) {
+    return window.location.origin;
+  }
+  return PROD_API_URL;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 let currentUserSession = null;
 
 function isTokenExpired(token) {
