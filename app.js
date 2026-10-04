@@ -59,11 +59,51 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
   : (window.EDV_API_BASE_URL || PROD_API_URL);
 let currentUserSession = null;
 
+function isTokenExpired(token) {
+  if (!token) return true;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return true;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        })
+        .join('')
+    );
+    const payload = JSON.parse(jsonPayload);
+    if (!payload.exp) return false;
+    // Expira com margem de segurança de 10 segundos
+    return Date.now() >= (payload.exp - 10) * 1000;
+  } catch (e) {
+    return true;
+  }
+}
+
+function handleSessionExpired(msg) {
+  console.warn("[Auth] Sessão expirada ou inválida:", msg);
+  localStorage.removeItem(SESSION_STORAGE_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  currentUserSession = null;
+  showLoginScreen();
+  showLoginError(msg || "Sua sessão expirou por segurança. Por favor, faça login novamente.");
+  showToast("⚠️ Sessão expirada. Faça login novamente.");
+}
+
 async function initAuth() {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
 
-  if (savedSession) {
+  // Se houver sessão salva mas o token não existir ou estiver expirado, limpar e exigir novo login
+  if (savedSession && (!token || isTokenExpired(token))) {
+    handleSessionExpired("Sua sessão expirou por segurança. Por favor, faça login novamente.");
+    return;
+  }
+
+  if (savedSession && token) {
     try {
       const userData = JSON.parse(savedSession);
       applyUserSession(userData);
@@ -80,8 +120,8 @@ async function initAuth() {
       });
       return;
     } catch (e) {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
-      localStorage.removeItem(AUTH_TOKEN_KEY);
+      handleSessionExpired("Dados de sessão corrompidos. Faça login novamente.");
+      return;
     }
   }
   showLoginScreen();
@@ -5616,6 +5656,10 @@ async function sincronizarGoogleDrive() {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: 'Erro HTTP ' + res.status }));
+      if (res.status === 401 && (err.detail || '').toLowerCase().includes('expirado')) {
+        handleSessionExpired('Token de acesso expirado. Por favor, faça login novamente.');
+        return;
+      }
       throw new Error(err.detail || 'Falha ao sincronizar com Google Drive');
     }
 
@@ -5662,6 +5706,13 @@ async function verificarStatusDrive() {
         'Authorization': token ? 'Bearer ' + token : ''
       }
     });
+    if (res.status === 401) {
+      const err = await res.json().catch(() => ({}));
+      if ((err.detail || '').toLowerCase().includes('expirado')) {
+        handleSessionExpired('Token de acesso expirado. Por favor, faça login novamente.');
+        return;
+      }
+    }
     if (res.ok) {
       const data = await res.json();
       const isConnected = data.drive_connected;

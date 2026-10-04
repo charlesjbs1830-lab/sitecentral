@@ -18,7 +18,7 @@ except ImportError:
 
 SECRET_KEY = os.getenv("EDV_JWT_SECRET", "edv_junior_secure_jwt_token_secret_key_gestao_2026_enterprise_rbac_sig")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas de sessão
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", str(60 * 24 * 7)))  # 7 dias de sessão contínua para evitar expirações abruptas
 
 security = HTTPBearer(auto_error=False)
 

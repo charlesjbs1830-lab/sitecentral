@@ -5056,6 +5056,16 @@ async def list_evaluator_calibrations_endpoint(
     return get_evaluator_calibrations()
 
 
+# ==============================================================================
+# MONTAGEM DE ARQUIVOS ESTÁTICOS (INTERFACE WEB INTEGRADA)
+# Posicionado após todas as rotas da API para evitar sobrescritas
+# ==============================================================================
+from fastapi.staticfiles import StaticFiles
+
+STATIC_DIR = BASE_DIR if os.path.exists(os.path.join(BASE_DIR, "index.html")) else "."
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
