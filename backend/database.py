@@ -3881,6 +3881,21 @@ def scan_and_create_deadlines() -> dict:
             """, (notif_title,))
             created_count += 1
 
+    # 5. Notificação Global para a Rede / EJ (Garante presença de 'ALL' na listagem)
+    cursor.execute("SELECT COUNT(*) FROM system_notifications WHERE recipient_email = 'ALL' AND created_at >= datetime('now', '-1 day');")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("""
+        INSERT INTO system_notifications (
+            tenant_id, recipient_email, target_role, target_area, title, message, category, priority, link, is_read, email_sent
+        ) VALUES (
+            'edv_jr', 'ALL', NULL, NULL,
+            'Atualização Geral de Prazos e Governança EDbrain 2026',
+            'Varredura ativa de prazos operacionais concluída. Verifique os prazos de RMs, contratos e PDI no painel.',
+            'compliance', 'normal', '#view-tutoriais', 0, 0
+        );
+        """)
+        created_count += 1
+
     conn.commit()
     conn.close()
     return {
@@ -5518,10 +5533,336 @@ OFFICIAL_KB_POPS = [
     }
 ]
 
+COMPLEMENTARY_SERVICE_POPS = [
+    {
+        "codigo": "POP-09",
+        "titulo": "POP-09: Guia Descomplicado de Registro de Marca no INPI",
+        "categoria": "projetos",
+        "drive_url": "https://drive.google.com/drive/search?q=Registro%20de%20Marca",
+        "autor_id": 1,
+        "autor_nome": "Charles Junior (Presidência)",
+        "autor_email": "charles.junior@edvjr.com.br",
+        "conteudo": (
+            "# POP-09 - Guia Descomplicado de Registro de Marca no INPI\n"
+            "**Área Responsável**: Projetos & Registro de Marcas\n"
+            "**Nível de Acesso**: Todos os Membros (Assessor, Gerente, Diretor, Presidente)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Orientar de forma simples e descomplicada toda a equipe da EDV Jr. no processo completo de Registro de Marca perante o INPI, "
+            "desde a pesquisa de viabilidade prévia até a concessão definitiva do certificado de registro (decênio). "
+            "A marca é a certidão de nascimento e o maior ativo imaterial de uma empresa, garantindo exclusividade de uso em todo o território nacional.\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Consulta de viabilidade realizada na base do INPI (busca exata e por radical).\n"
+            "* Definição do titular da marca: Pessoa Física (CPF) ou Pessoa Jurídica (CNPJ - ME, EPP, LTDA ou MEI).\n"
+            "* Arquivo do logotipo em formato JPG/PNG (fundo transparente ou branco, resolução nítida) se for marca mista ou figurativa.\n"
+            "* Acesso ao portal oficial do INPI (https://www.gov.br/inpi/pt-br) e sistema e-Marcas.\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain e Sistemas Oficiais\n"
+            "1. **Pesquisa Prévia de Viabilidade**:\n"
+            "   - Acesse o portal do INPI -> menu *Marcas* -> *Busca na Base de Dados* (acesso anônimo ou Gov.br).\n"
+            "   - Realize a busca em dois formatos obrigatórios: termo **exato** e por **radical**.\n"
+            "   - Identifique a **Classe de Nice** do produto ou serviço (ex: Classe 35 para comércio e publicidade; Classe 41 para cursos e treinamentos; Classe 43 para alimentação/restaurantes).\n"
+            "   - Classifique o cenário do cliente: **Cenário A** (Marca 100% Livre - urgência de registro); **Cenário B** (Semelhante em classe distinta - avaliar colidência por afinidade); **Cenário C** (Conflito direto na mesma classe - orientar reformulação ou ajuste).\n"
+            "2. **Cadastro do Cliente no INPI e Emissão da GRU**:\n"
+            "   - Acesse o sistema *e-Marcas* -> clique em *Cadastre-se aqui* como: 'Cliente - Pessoa física ou jurídica domiciliada no país sem procurador'.\n"
+            "   - Gere a Guia de Recolhimento da União (GRU) selecionando: Tipo: *Marcas*, Serviço: *Pedido de Registro de Marca com especificação pré-aprovada (Código 389)*.\n"
+            "   - Quantidade de classes: SEMPRE 1 (uma GRU para cada classe pretendida).\n"
+            "   - Aplique o desconto legal de 60% se o titular for ME, EPP, MEI, pessoa física ou instituição de ensino/pesquisa.\n"
+            "   - Salve o comprovante e número da GRU e encaminhe ao cliente/financeiro para pagamento.\n"
+            "3. **Preenchimento e Protocolo do Formulário Eletrônico (e-Marcas)**:\n"
+            "   - Após a compensação bancária da GRU, insira o número do boleto pago no e-Marcas.\n"
+            "   - Preencha a natureza da marca: *Nominativa*, *Mista* ou *Figurativa*.\n"
+            "   - Selecione a lista de produtos/serviços pré-aprovados condizentes com a atividade comprovada no CNPJ/contrato social.\n"
+            "   - Anexe o logotipo oficial e a declaração de capacidade econômica/legal.\n"
+            "   - Revise todos os dados, envie o formulário e faça download imediato do protocolo com o **Número do Processo (9 dígitos)**.\n"
+            "4. **Acompanhamento no EDbrain (Módulo Processos RM)**:\n"
+            "   - Cadastre o número do processo, titular e prazo na aba **Processos RM** (`#view-projetos`).\n"
+            "   - Acompanhe semanalmente as publicações da **Revista da Propriedade Industrial (RPI)**, publicada pontualmente às terças-feiras.\n"
+            "   - Fases-chave a monitorar: Publicação para Oposição (60 dias de prazo para terceiros contestarem), Exame de Mérito, Deferimento e Prazo para Pagamento do Decênio (primeiros 10 anos de proteção).\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "* **Golpe do Boleto Falso**: Imediatamente após a publicação do pedido, o cliente costuma receber e-mails e cartas fraudulentas cobrando 'taxas de publicação' ou 'manutenção de registro'. Oriente o cliente de que o INPI **NUNCA** envia cobranças por e-mail e que nenhuma taxa deve ser paga sem validação prévia da EDV Jr.\n"
+            "* **Notificação de Exigência Formal**: Caso o examinador solicite esclarecimentos sobre logotipo ou CNAE, o prazo é improrrogável de 5 dias úteis. Abra uma thread com a tag `#rm-urgente` no fórum de dúvidas do EDbrain para apoio do Gerente de Projetos."
+        )
+    },
+    {
+        "codigo": "POP-10",
+        "titulo": "POP-10: Elaboração e Revisão de Contratos de Prestação de Serviços",
+        "categoria": "juridico",
+        "drive_url": "https://drive.google.com/drive/search?q=Contrato%20Prestacao%20Servicos",
+        "autor_id": 1,
+        "autor_nome": "Charles Junior (Presidência)",
+        "autor_email": "charles.junior@edvjr.com.br",
+        "conteudo": (
+            "# POP-10 - Elaboração e Revisão de Contratos de Prestação de Serviços\n"
+            "**Área Responsável**: Jurídico & Contratos\n"
+            "**Nível de Acesso**: Todos os Membros (Assessor, Gerente, Diretor, Presidente)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Padronizar a estruturação, redação e revisão de contratos de prestação de serviços empresariais elaborados pela EDV Jr., "
+            "garantindo segurança jurídica preventiva, equilíbrio entre as partes contratantes, mitigação de riscos de inadimplência e "
+            "conformidade com a Lei Federal nº 13.267/2016 (Lei das Empresas Juniores) e Código Civil Brasileiro.\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Realização da Reunião de Diagnóstico/Briefing com o cliente para coleta detalhada das necessidades operacionais.\n"
+            "* Dados cadastrais completos das partes (Razão Social, CNPJ, Inscrição Municipal, Endereço, Representante Legal, CPF e e-mail institucional).\n"
+            "* Definição exata do escopo, cronograma de entregáveis e fluxo financeiro validado pela Diretoria Financeira.\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain e Minuta Jurídica\n"
+            "1. **Estrutura Clássica da Minuta Contratual**:\n"
+            "   - **Preâmbulo**: Qualificação jurídica completa das partes (Contratante e Contratada).\n"
+            "   - **Cláusula do Objeto**: Descrição cirúrgica e objetiva do serviço contratado. Especifique com clareza o que **está** incluído e, fundamentalmente, delimite o que **NÃO está** contemplado (ex: taxas governamentais do INPI correm por conta do cliente).\n"
+            "   - **Cláusula de Obrigações**: Deveres da Contratada (prazos, qualidade técnica, acompanhamento) e deveres da Contratante (fornecimento de documentos no prazo, aprovação dos relatórios).\n"
+            "   - **Cláusula de Preço e Condições de Pagamento**: Valor global, quantidade de parcelas, datas de vencimento, conta bancária oficial da EDV Jr. (Banco Cora) e penalidades para atraso (multa moratória de 2% e juros de 1% ao mês).\n"
+            "   - **Cláusula de Vigência e Cronograma**: Prazos de execução por etapas (marcos de entrega), prazo para manifestação do cliente e vigência total do instrumento.\n"
+            "   - **Cláusula de Rescisão e Penalidades**: Regras de resilição unilateral (aviso prévio de 15 a 30 dias), rescisão por inadimplemento e retenção justa de percentual proporcional ao trabalho já executado.\n"
+            "   - **Cláusula de Sigilo, Confidencialidade e LGPD**: Proteção aos dados e segredos operacionais compartilhados durante o projeto.\n"
+            "   - **Foro de Eleição**: Eleição da Comarca de Vitória/ES para dirimir quaisquer dúvidas oriundas do contrato.\n"
+            "2. **Geração Automatizada no EDbrain**:\n"
+            "   - Acesse o módulo **Minutas Jurídicas** (`#view-comercial`).\n"
+            "   - Selecione o modelo aprovado de *Contrato de Prestação de Serviços Jurídicos Preventivos*.\n"
+            "   - Preencha os campos estruturados de partes, valor e prazos e clique em **Gerar Minuta com SHA-256**.\n"
+            "   - O sistema aplicará a marca d'água oficial da EDV Jr. e calculará o hash criptográfico inviolável para assinatura.\n"
+            "3. **Coleta de Assinaturas Digitais**:\n"
+            "   - Encaminhe a minuta final para assinatura eletrônica via plataforma homologada (Gov.br ou Autentique).\n"
+            "   - Assim que assinado por ambas as partes e duas testemunhas, realize o upload do PDF assinado no Google Drive oficial (`05. VPGG/01. Financeiro/03. Contratos Assinados`).\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "* **Cliente solicitando alteração substancial de cláusula**: Qualquer alteração em cláusulas de responsabilidade, penalidades financeiras ou foro de eleição deve ser obrigatoriamente submetida à validação da Diretoria Jurídica e do Professor Orientador da FDV.\n"
+            "* **Atraso no envio de documentos pelo cliente**: Se o cliente demorar mais de 10 dias úteis para enviar os subsídios necessários, emita uma notificação formal amigável de sobrestamento do prazo para resguardar a equipe."
+        )
+    },
+    {
+        "codigo": "POP-11",
+        "titulo": "POP-11: Assessoria e Consultoria Jurídica Preventiva para Pequenas Empresas e Startups",
+        "categoria": "juridico",
+        "drive_url": "https://drive.google.com/drive/search?q=Consultoria%20Preventiva",
+        "autor_id": 1,
+        "autor_nome": "Charles Junior (Presidência)",
+        "autor_email": "charles.junior@edvjr.com.br",
+        "conteudo": (
+            "# POP-11 - Assessoria e Consultoria Jurídica Preventiva para Pequenas Empresas e Startups\n"
+            "**Área Responsável**: Jurídico & Consultoria Preventiva\n"
+            "**Nível de Acesso**: Todos os Membros (Assessor, Gerente, Diretor, Presidente)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Guiar os membros na condução de projetos de consultoria e assessoria jurídica preventiva, permitindo diagnosticar riscos legais ocultos, "
+            "elaborar pareceres e memorandos em linguagem acessível (Visual Law) e blindar empreendedores contra litígios futuros no âmbito societário, "
+            "trabalhista, contratual e de propriedade intelectual.\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Contrato de consultoria preventiva devidamente assinado com o cliente.\n"
+            "* Acesso aos documentos basilares do cliente: Contrato Social, termos de uso, políticas internas, contratos vigentes e rotinas trabalhistas.\n"
+            "* Reunião de alinhamento com o Professor Orientador da FDV antes do início da redação das entregas.\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain e Execução Prática\n"
+            "1. **Mapeamento de Riscos (Checklist 360º)**:\n"
+            "   - Efetue o diagnóstico por 4 pilares: *Societário* (contrato social, quotas, sócios), *Contratual* (fornecedores, clientes e parceiros), *Trabalhista/Prestadores* (riscos de vínculo empregatício e terceirização irregular) e *Propriedade Intelectual & Dados* (marcas, patentes, segredos de negócio e LGPD).\n"
+            "2. **Redação da Solução em Linguagem Acessível (Legal Design / Visual Law)**:\n"
+            "   - Evite excesso de latim e citações doutrinárias extensas; foque em soluções práticas e acionáveis.\n"
+            "   - Utilize matrizes visuais de gravidade de risco: 🔴 **Alto Risco** (ação imediata exigida); 🟡 **Médio Risco** (readequação a médio prazo); 🟢 **Baixo Risco / Regular** (conformidade mantida).\n"
+            "   - Apresente planos de ação passo a passo para cada inadequação encontrada, indicando o modelo de documento a ser adotado.\n"
+            "3. **Reunião Devolutiva e Entrega Técnica**:\n"
+            "   - Apresente o diagnóstico ao cliente em reunião guiada por apresentação visual clara.\n"
+            "   - Colete o Termo de Aceite e Encerramento de Projeto assinado pelo cliente.\n"
+            "   - Arquive o relatório e a documentação na pasta de cases do Google Drive da EDV Jr (`14. Cases`).\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "* **Identificação de Contencioso Judicial em Andamento**: A EDV Jr., por força de sua natureza institucional e da Lei nº 13.267/2016, atua exclusivamente no âmbito da consultoria preventiva e extrajudicial. Caso o cliente demande representação judicial ou peticionamento contencioso perante o Poder Judiciário, oriente-o a constituir advogado inscrito na OAB ou buscar a Defensoria Pública/Núcleo de Prática Jurídica da FDV."
+        )
+    },
+    {
+        "codigo": "POP-12",
+        "titulo": "POP-12: Estruturação, Elaboração e Alteração de Estatuto Social",
+        "categoria": "juridico",
+        "drive_url": "https://drive.google.com/drive/search?q=Estatuto%20Social",
+        "autor_id": 1,
+        "autor_nome": "Charles Junior (Presidência)",
+        "autor_email": "charles.junior@edvjr.com.br",
+        "conteudo": (
+            "# POP-12 - Estruturação, Elaboração e Alteração de Estatuto Social\n"
+            "**Área Responsável**: Governança & Terceiro Setor\n"
+            "**Nível de Acesso**: Todos os Membros (Assessor, Gerente, Diretor, Presidente)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Orientar a elaboração, revisão e adequação de Estatutos Sociais para empresas juniores, associações civis sem fins lucrativos, "
+            "entidades acadêmicas e organizações do terceiro setor, assegurando governança transparente, conformidade com a legislação federal "
+            "e aptidão plena para registro perante o Cartório de Registro Civil de Pessoas Jurídicas (RCPJ).\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Roteiro de perguntas e diagnóstico institucional respondido pelos dirigentes da entidade.\n"
+            "* Definição das categorias de associados, instâncias deliberativas e modelo de gestão da entidade.\n"
+            "* Consulta à Lei Federal nº 13.267/2016 (no caso de EJs) ou Código Civil (arts. 53 a 61, no caso de Associações Gerais).\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain e na Prática Notarial\n"
+            "1. **Estruturação dos Capítulos Obrigatórios**:\n"
+            "   - **Denominação, Sede, Fins e Duração**: Razão social completa, sigla oficial, sede no município de registro e finalidade sem fins lucrativos.\n"
+            "   - **Associados**: Requisitos para admissão, demissão e exclusão, direitos e deveres dos membros, vedação à remuneração de dirigentes e inexistência de responsabilidade solidária ou subsidiária dos associados pelas dívidas da entidade.\n"
+            "   - **Órgãos da Administração**: Composição, mandatos e competências da Assembleia Geral (órgão soberano), Diretoria Executiva e Conselho Fiscal/Consultivo.\n"
+            "   - **Processo Eleitoral e Quórum**: Regras transparentes para convocação de assembleias ordinárias e extraordinárias, quórum de instalação e quórum qualificado para alteração estatutária e dissolução da entidade.\n"
+            "   - **Patrimônio e Regime Financeiro**: Fontes de recursos, aplicação integral dos resultados operacionais na manutenção e desenvolvimento dos objetivos institucionais e destinação do patrimônio líquido remanescente a outra entidade congênere em caso de dissolução.\n"
+            "2. **Convocação e Assembleia de Aprovação**:\n"
+            "   - Elaboração do Edital de Convocação com antecedência mínima prevista no estatuto anterior.\n"
+            "   - Redação rigorosa da Ata da Assembleia Geral de Fundação ou Alteração Estatutária, contendo lista de presença com qualificação e assinatura dos membros votantes.\n"
+            "3. **Registro Notarial no RCPJ**:\n"
+            "   - Montagem do kit documental: Requerimento assinado pelo Presidente, duas vias do Estatuto assinadas pelo Presidente e com visto de advogado regular na OAB (art. 1º, § 2º da Lei 8.906/94), duas vias da Ata de Aprovação e comprovante de quitação dos emolumentos cartorários.\n"
+            "   - Atualização do CNPJ perante a Receita Federal do Brasil via Coletor Nacional (REDESIM/DBE).\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "* **Exigência Cartorária de Retificação**: Caso o oficial do RCPJ aponte nota devolutiva ou exigência (ex: falta de visto do advogado ou imprecisão em quórum), revise o texto pontualmente conforme a exigência e reapresente no prazo legal de 30 dias sem custo de nova prenotação. Comunique no canal `#governanca` para validação imediata."
+        )
+    },
+    {
+        "codigo": "POP-13",
+        "titulo": "POP-13: Criação e Implantação de Regimento Interno Corporativo",
+        "categoria": "gestao_gente",
+        "drive_url": "https://drive.google.com/drive/search?q=Regimento%20Interno",
+        "autor_id": 1,
+        "autor_nome": "Charles Junior (Presidência)",
+        "autor_email": "charles.junior@edvjr.com.br",
+        "conteudo": (
+            "# POP-13 - Criação e Implantação de Regimento Interno Corporativo\n"
+            "**Área Responsável**: Gestão de Pessoas & Cultura\n"
+            "**Nível de Acesso**: Todos os Membros (Assessor, Gerente, Diretor, Presidente)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Normatizar a rotina operacional, conduta institucional, processos internos e diretrizes de convivência da organização através "
+            "da redação e implementação de um Regimento Interno moderno, acolhedor e transparente. Enquanto o Estatuto Social dita a macroestrutura jurídica, "
+            "o Regimento Interno organiza o dia a dia, trazendo previsibilidade, segurança e harmonia para o time.\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Estatuto Social vigente da organização aprovado e registrado em cartório.\n"
+            "* Diagnóstico cultural e operacional realizado com lideranças e membros da equipe.\n"
+            "* Alinhamento de valores e expectativas com a Vice-Presidência de Gente e Gestão (VPGG).\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain e Implementação Cultural\n"
+            "1. **Estrutura Essencial do Regimento Interno**:\n"
+            "   - **Diretrizes e Cultura**: Missão, visão, valores, compromisso com a diversidade, respeito mútuo e excelência profissional.\n"
+            "   - **Organização Setorial**: Atribuições detalhadas de cada diretoria, gerência e assessoria (escopo de trabalho, reuniões semanais e metas periódicas).\n"
+            "   - **Jornada e Assiduidade**: Horários de plantão, flexibilidade acadêmica, regras para justificação de faltas com antecedência mínima de 24 horas e política de compensação de banco de horas.\n"
+            "   - **Uso de Ferramentas e Recursos Digitais**: Boas práticas de organização no Google Drive institucional, etiqueta em canais de comunicação (WhatsApp, Slack, Discord) e segurança no manejo de senhas corporativas.\n"
+            "   - **Processo de Desenvolvimento Individual (PDI) e Feedbacks**: Periodicidade das rodadas de avaliação 360º, realização obrigatória de reuniões 1-on-1 e critérios meritocráticos para promoções e transições de liderança.\n"
+            "   - **Regime Disciplinar Educativo**: Estabelecimento de escala progressiva e transparente de medidas socioeducativas diante de infrações éticas ou descumprimento de prazos: 1) Conversa informal de alinhamento; 2) Feedback formal registrado em ata; 3) Advertência formal escrita; 4) Suspensão temporária; 5) Processo de desligamento com garantia de contraditório e ampla defesa perante o Conselho.\n"
+            "2. **Aprovação e Validação Coletiva**:\n"
+            "   - Realize workshops participativos para discussão da minuta com os membros, garantindo sentimento de pertencimento e adesão orgânica.\n"
+            "   - Submeta a versão final para aprovação da Diretoria Executiva ou Conselho Deliberativo da entidade.\n"
+            "   - Colete o Termo de Ciência e Compromisso assinado por todos os membros ativos e novos trainees.\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "* **Conflito Interpessoal ou Descumprimento Reiterado**: Casos de assédio, discriminação ou violações graves ao Código de Ética devem ser encaminhados imediatamente para comissão independente da VPGG e Presidência, com sigilo rigoroso das partes envolvidas."
+        )
+    },
+    {
+        "codigo": "POP-14",
+        "titulo": "POP-14: Acordos de Sócios, Memorandos de Entendimento (MoU) e Termos de Confidencialidade (NDA)",
+        "categoria": "comercial",
+        "drive_url": "https://drive.google.com/drive/search?q=Acordo%20de%20Socios%20NDA",
+        "autor_id": 1,
+        "autor_nome": "Charles Junior (Presidência)",
+        "autor_email": "charles.junior@edvjr.com.br",
+        "conteudo": (
+            "# POP-14 - Acordos de Sócios, Memorandos de Entendimento (MoU) e Termos de Confidencialidade (NDA)\n"
+            "**Área Responsável**: Comercial & Novos Negócios\n"
+            "**Nível de Acesso**: Todos os Membros (Assessor, Gerente, Diretor, Presidente)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Prestar suporte jurídico preventivo a fundadores, startups e empreendedores na estruturação de parcerias societárias sólidas, "
+            "protegendo ideias inovadoras por meio de Termos de Confidencialidade (NDA), alinhando expectativas de dedicação em Memorandos de Entendimento (MoU) "
+            "e disciplinando regras de governança societária em Acordos de Sócios/Quotistas.\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Reunião de alinhamento com os sócios/fundadores para apuração da dinâmica societária e plano de negócios.\n"
+            "* Mapeamento do percentual de participação de cada sócio, dedicação horária e aporte financeiro ou de trabalho (sweat equity).\n"
+            "* Definição das regras de saída, entrada de novos sócios e proteção de segredos industriais.\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain e Estruturação de Instrumentos\n"
+            "1. **Elaboração do NDA (Non-Disclosure Agreement / Acordo de Confidencialidade)**:\n"
+            "   - Defina com precisão o que constitui **Informação Confidencial** (código-fonte, planos de negócio, base de clientes, protótipos).\n"
+            "   - Estabeleça exceções legítimas (informações já públicas, previamente conhecidas ou requisitadas por ordem judicial).\n"
+            "   - Fixe prazo razoável de sigilo (geralmente entre 2 e 5 anos após o término das tratativas) e penalidade por quebra (multa compensatória).\n"
+            "2. **Elaboração do MoU (Memorando de Entendimento entre Fundadores)**:\n"
+            "   - Instrumento preliminar e ágil para formalizar a intenção de constituir sociedade.\n"
+            "   - Estabeleça papéis de liderança (CEO, CTO, COO), metas de dedicação e divisão societária pretendida.\n"
+            "   - Defina se o documento possui eficácia vinculante total ou apenas em relação às cláusulas de confidencialidade e exclusividade.\n"
+            "3. **Estruturação do Acordo de Sócios (Cláusulas Críticas de Proteção)**:\n"
+            "   - **Cláusula de Vesting**: Liberação progressiva da participação societária do sócio ao longo de 2 a 4 anos, condicionada a tempo de permanência (*cliff* de 1 ano) e marcos de entrega (*milestones*).\n"
+            "   - **Direito de Preferência**: Regras claras caso um sócio deseje alienar suas quotas a terceiros.\n"
+            "   - **Tag Along (Direito de Saída Conjunta)**: Garante aos sócios minoritários o direito de vender suas quotas nas mesmas condições do majoritário.\n"
+            "   - **Drag Along (Obrigação de Venda Conjunta)**: Permite ao majoritário exigir que os minoritários vendam suas quotas se houver proposta de compra integral da empresa.\n"
+            "   - **Cláusulas de Bad Leaver e Good Leaver**: Determinação do valor de recompra de quotas caso um sócio saia por justa causa/descumprimento de deveres ou por motivo justificado/amigável.\n"
+            "   - **Não-Concorrência (Non-Compete)**: Proibição de o sócio retirante abrir negócio concorrente durante período determinado (ex: 1 a 2 anos).\n"
+            "4. **Assinatura e Arquivamento**:\n"
+            "   - Colete assinaturas digitais de todos os sócios e arquive na sede da empresa (com arquivamento perante a Junta Comercial caso aplicável).\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "* **Impasses em Votações (Deadlock)**: Preveja mecanismos contratuais objetivos para desempate de votações 50%/50% (ex: mediação de terceiro neutro ou cláusula de *shotgun*/*buy or sell* para evitar paralisia operacional da empresa)."
+        )
+    },
+    {
+        "codigo": "POP-15",
+        "titulo": "POP-15: Protocolo e Resposta a Exigências e Oposições perante o INPI",
+        "categoria": "projetos",
+        "drive_url": "https://drive.google.com/drive/search?q=Peticao%20Oposicao%20INPI",
+        "autor_id": 1,
+        "autor_nome": "Charles Junior (Presidência)",
+        "autor_email": "charles.junior@edvjr.com.br",
+        "conteudo": (
+            "# POP-15 - Protocolo e Resposta a Exigências e Oposições perante o INPI\n"
+            "**Área Responsável**: Projetos & Contencioso Administrativo\n"
+            "**Nível de Acesso**: Todos os Membros (Assessor, Gerente, Diretor, Presidente)\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Capacitar os assessores e gerentes de projetos na elaboração e protocolo ágil de defesas administrativas perante o INPI, "
+            "incluindo manifestações a oposições de terceiros e cumprimento de exigências formais ou de mérito, defendendo o direito de registro "
+            "das marcas de clientes sob as diretrizes da Lei da Propriedade Industrial (Lei nº 9.279/96).\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Notificação de despacho publicada na Revista da Propriedade Industrial (RPI) para o processo do cliente.\n"
+            "* Leitura minuciosa da petição de oposição ou do teor do despacho de exigência do examinador do INPI.\n"
+            "* Controle rigoroso do prazo legal improrrogável de **60 dias corridos** para manifestação à oposição.\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain e Sistema e-Marcas\n"
+            "1. **Análise dos Argumentos da Oponente**:\n"
+            "   - Baixe a petição da oponente no sistema *e-Marcas* ou portal de consulta do INPI.\n"
+            "   - Verifique os fundamentos invocados pela oponente (geralmente art. 124, incisos XIX ou XXIII da LPI - alegação de imitação ou notoriedade).\n"
+            "   - Confronte as marcas em três planos objetivos: **Visual** (grafias distintas, cores, símbolos figurativos), **Fonético** (pronúncia e sonoridade inconfundíveis) e **Ideológico/Conceitual** (significados e conceitos que não se confundem).\n"
+            "   - Verifique o **Princípio da Especialidade**: analise se os produtos ou serviços atendem a públicos-alvo distintos, canais de distribuição divergentes e ausência de risco de confusão ou associação indevida no consumidor comum.\n"
+            "2. **Redação da Manifestação à Oposição**:\n"
+            "   - Utilize os modelos homologados da EDV Jr (`04. Projetos/01. Registro de Marca/01. PASSO A PASSO RM E MODELOS DE PETIÇÃO/MODELO DE PETIÇÕES PARA O INPI`).\n"
+            "   - Fundamente a anterioridade de uso de boa-fé caso o cliente já utilizasse a marca comprovadamente antes da oponente (art. 129, § 1º da LPI).\n"
+            "   - Anexe provas materiais: notas fiscais, prints de redes sociais com data, matérias de jornal, contratos e portfólio.\n"
+            "   - Submeta a minuta para validação da Gerência de Projetos e do Professor Orientador.\n"
+            "3. **Emissão de GRU e Protocolo no INPI**:\n"
+            "   - Emita a GRU específica para *Manifestação à Oposição (Código 338 ou equivalente)* com desconto legal para ME/EPP/Pessoa Física.\n"
+            "   - Efetue o protocolo eletrônico no sistema e-Marcas dentro do prazo fatal.\n"
+            "   - Salve o comprovante de envio com o número do protocolo e atualize o status do processo na aba **Processos RM** (`#view-projetos`).\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "* **Oposição de Marca de Alto Renome (art. 125 da LPI)**: Se a oponente for marca detentora de proteção especial de Alto Renome declarada pelo INPI (ex: Coca-Cola, Petrobras, Fusca), a proteção vigora em todos os ramos de atividade. Reúna imediatamente a Diretoria para avaliar estratégia de coexistência ou alteração do sinal distintivo do cliente."
+        )
+    },
+    {
+        "codigo": "POP-16",
+        "titulo": "POP-16: Rotina Prática de Emissão de Nota Fiscal de Serviços (NFS-e) e Faturamento",
+        "categoria": "financeiro",
+        "drive_url": "https://drive.google.com/drive/search?q=Nota%20Fiscal%20Servico",
+        "autor_id": 1,
+        "autor_nome": "Marina (Diretoria Financeira)",
+        "autor_email": "marina.financeiro@edvjr.com.br",
+        "conteudo": (
+            "# POP-16 - Rotina Prática de Emissão de Nota Fiscal de Serviços (NFS-e) e Faturamento\n"
+            "**Área Responsável**: Operação & Finanças (Tesouraria)\n"
+            "**Nível de Acesso**: Diretoria Financeira e Tesouraria\n\n"
+            "## 1. Objetivo Operacional\n"
+            "Disciplinar a rotina de faturamento da EDV Jr., assegurando a emissão ágil e regular de Notas Fiscais Eletrônicas de Serviços (NFS-e) "
+            "perante a Prefeitura Municipal de Vitória (PMV), vinculação aos contratos aprovados, conferência tributária e conciliação bancária "
+            "automática no Banco Cora para preservação do Selo EJ e conformidade fiscal plena.\n\n"
+            "## 2. Pré-requisitos Sistêmicos\n"
+            "* Contrato de prestação de serviços assinado por ambas as partes.\n"
+            "* Dados fiscais completos do cliente (Razão Social, CNPJ ou CPF, Endereço Fiscal, E-mail do responsável financeiro).\n"
+            "* Acesso com certificado digital ou senha web ao portal tributário da Prefeitura de Vitória (NFS-e Vitória).\n\n"
+            "## 3. Passo a Passo na Interface do EDbrain e Portal Fazendário\n"
+            "1. **Verificação no Contrato e Cronograma Financeiro**:\n"
+            "   - Consulte a aba **Tesouraria** (`#view-financeiro`) no EDbrain para identificar parcelas com vencimento nos próximos 5 dias úteis.\n"
+            "   - Confirme o valor da parcela conforme o contrato celebrado.\n"
+            "2. **Emissão da Nota Fiscal no Sistema da PMV**:\n"
+            "   - Acesse o portal oficial da Nota Fiscal de Vitória (https://sistemas.vitoria.es.gov.br/nfe/).\n"
+            "   - Insira o login institucional da EDV Jr. (CNPJ da empresa júnior).\n"
+            "   - Clique em *Emitir NFS-e* e preencha o campo do **Tomador de Serviços** com o CNPJ do cliente (o sistema puxará os dados cadastrais automáticos da Receita Federal).\n"
+            "   - **Código de Atividade / Serviço**: Selecione o código correspondente à consultoria e assessoria jurídica extrajudicial/empresarial.\n"
+            "   - **Descrição dos Serviços**: Descreva de forma clara e profissional: `Prestação de serviços de consultoria jurídica preventiva referente à Parcela X do Contrato nº Y celebrado entre as partes. Isento de retenção na fonte conforme Lei Federal nº 13.267/2016 e legislação municipal do MEJ.`\n"
+            "   - Revise o valor bruto, verifique a inexistência de retenções indevidas e clique em **Emitir**.\n"
+            "3. **Envio da Nota e Conciliação no Banco Cora**:\n"
+            "   - Baixe o PDF da NFS-e e o arquivo XML emitidos.\n"
+            "   - Gere o boleto de cobrança com QR Code Pix no internet banking do Banco Cora com a data de vencimento combinada.\n"
+            "   - Encaminhe o e-mail de faturamento ao cliente com a NFS-e e o boleto em anexo.\n"
+            "   - Salve a cópia da nota na pasta do Google Drive (`05. VPGG/01. Financeiro/04. Boletos e Notas Fiscais Clientes`).\n"
+            "   - Registre a transação a receber na aba **Tesouraria** do EDbrain para acompanhamento do índice de liquidez.\n\n"
+            "## 4. Tratamento de Exceções & Suporte Coletivo\n"
+            "* **Cancelamento ou Substituição de Nota Emitida com Erro**: Se for detectado erro em valor, tomador ou descrição, o cancelamento ou substituição da NFS-e deve ser realizado no portal da PMV antes do dia 10 do mês subsequente para evitar recolhimento indevido de tributos. Qualquer dúvida tributária deve ser reportada ao Diretor Financeiro e ao contador parceiro da EDV Jr."
+        )
+    }
+]
+
+ALL_KB_POPS = OFFICIAL_KB_POPS + COMPLEMENTARY_SERVICE_POPS
+
 def seed_official_kb_pops(conn=None) -> dict:
     """
     Popula e atualiza de forma idempotente o Catálogo Oficial de Tutoriais e POPs Técnicos
-    do EDbrain (POP-01 a POP-08), garantindo hierarquia Markdown estrita e metadados de autoria.
+    do EDbrain (POP-01 a POP-16), garantindo hierarquia Markdown estrita e metadados de autoria.
     """
     should_close = False
     if conn is None:
@@ -5531,7 +5872,7 @@ def seed_official_kb_pops(conn=None) -> dict:
     try:
         inserted = 0
         updated = 0
-        for pop in OFFICIAL_KB_POPS:
+        for pop in ALL_KB_POPS:
             codigo = pop.get("codigo", "")
             cursor.execute("SELECT id FROM kb_artigos WHERE titulo = ? OR titulo LIKE ?;", (pop["titulo"], f"{codigo}%"))
             existing = cursor.fetchone()
@@ -5559,7 +5900,13 @@ def seed_official_kb_pops(conn=None) -> dict:
                 ))
                 inserted += 1
         conn.commit()
-        return {"inserted": inserted, "updated": updated, "total": len(OFFICIAL_KB_POPS)}
+        return {
+            "inserted": inserted,
+            "updated": updated,
+            "total": len(OFFICIAL_KB_POPS),
+            "total_complementares": len(COMPLEMENTARY_SERVICE_POPS),
+            "total_geral": len(ALL_KB_POPS)
+        }
     finally:
         if should_close:
             conn.close()

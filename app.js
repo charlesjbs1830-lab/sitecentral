@@ -5666,9 +5666,18 @@ async function sincronizarGoogleDrive() {
     const payload = await res.json();
     const data = payload.data || {};
 
-    // Atualizar base local global
-    if (data.rms || data.crm_leads || data.fluxo) {
-      window.EDV_LEGACY_DATA = data;
+    // Recarregar os dados consolidados atualizados do JSON para window.EDV_LEGACY_DATA
+    try {
+      const legacyRes = await fetch(`/data/legacy_data.json?t=${Date.now()}`);
+      if (legacyRes.ok) {
+        window.EDV_LEGACY_DATA = await legacyRes.json();
+      } else if (data.rms || data.crm_leads || data.fluxo) {
+        window.EDV_LEGACY_DATA = data;
+      }
+    } catch (e) {
+      if (data.rms || data.crm_leads || data.fluxo) {
+        window.EDV_LEGACY_DATA = data;
+      }
     }
 
     // Atualizar todas as visões do sistema
@@ -5681,14 +5690,16 @@ async function sincronizarGoogleDrive() {
     if (typeof carregarMetasPE === 'function') carregarMetasPE();
     if (typeof updateDashboardKPIs === 'function') updateDashboardKPIs();
     if (typeof renderPlanilhasDrive === 'function') renderPlanilhasDrive();
+    if (typeof carregarKBArtigos === 'function') await carregarKBArtigos();
     if (typeof renderTutoriaisDrive === 'function') renderTutoriaisDrive();
 
     const leadsCount = data.leads_crm_total || 983;
     const txCount = data.transacoes_total || 168;
     const ctrCount = data.contratos_assinados_total || 19;
     const rmsCount = data.rms_total || 85;
+    const tutCount = (window.EDV_LEGACY_DATA && window.EDV_LEGACY_DATA.capacitacoes ? window.EDV_LEGACY_DATA.capacitacoes.length : (data.capacitacoes_total || 46));
 
-    showToast(`✅ Google Drive sincronizado com sucesso! (${leadsCount} leads, ${txCount} transações, ${ctrCount} contratos, ${rmsCount} marcas)`);
+    showToast(`✅ Google Drive sincronizado com sucesso! (${tutCount} tutoriais/materiais, ${leadsCount} leads, ${txCount} transações, ${rmsCount} marcas)`);
   } catch (err) {
     console.error("[Drive Sync Error]", err);
     showToast(`⚠️ Erro na sincronização: ${err.message}`);
@@ -5840,36 +5851,128 @@ function renderPlanilhasDrive() {
   }
 }
 
+window.capacitacoesCategoriaAtiva = 'todos';
+
+function filtrarCapacitacoesPorCategoria(categoria) {
+  window.capacitacoesCategoriaAtiva = categoria || 'todos';
+  const chips = ['todos', 'projetos', 'comercial', 'financeiro', 'gestao_gente', 'juridico', 'marketing', 'video'];
+  chips.forEach(c => {
+    const el = document.getElementById('chip-cap-' + c);
+    if (el) {
+      if (c === window.capacitacoesCategoriaAtiva) {
+        el.className = 'px-2.5 py-1 rounded-full bg-blue-600 text-white shadow-2xs cursor-pointer';
+      } else {
+        el.className = 'px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer';
+      }
+    }
+  });
+  renderTutoriaisDrive();
+}
+
+function filtrarCapacitacoesClient() {
+  renderTutoriaisDrive();
+}
+
 function renderTutoriaisDrive() {
   const containerCap = document.getElementById('container-capacitacoes-drive');
   if (!containerCap) return;
   const data = getLegacyData();
-  const caps = data.capacitacoes || [];
+  let caps = data.capacitacoes || [];
+
+  const cat = window.capacitacoesCategoriaAtiva || 'todos';
+  const q = (document.getElementById('tut-capacitacoes-search-input')?.value || '').trim().toLowerCase();
+
+  // Filtrar por Categoria
+  if (cat !== 'todos') {
+    if (cat === 'video') {
+      caps = caps.filter(c => (c.tipo && c.tipo.includes('Vídeo')) || (c.formato && (c.formato === 'MP4' || c.formato === 'MKV')));
+    } else {
+      caps = caps.filter(c => (c.categoria || '').toLowerCase() === cat.toLowerCase());
+    }
+  }
+
+  // Filtrar por Busca Textual
+  if (q) {
+    caps = caps.filter(c => 
+      (c.titulo || '').toLowerCase().includes(q) ||
+      (c.arquivo || '').toLowerCase().includes(q) ||
+      (c.origem || '').toLowerCase().includes(q) ||
+      (c.tipo || '').toLowerCase().includes(q)
+    );
+  }
+
+  // Atualizar contador
+  const countEl = document.getElementById('capacitacoes-total-count');
+  if (countEl) {
+    countEl.textContent = `${caps.length} material${caps.length === 1 ? '' : 'is'} sincronizado${caps.length === 1 ? '' : 's'}`;
+  }
 
   if (caps.length === 0) {
-    containerCap.innerHTML = '<div class="col-span-full p-6 text-center text-slate-400 text-xs italic">Nenhuma capacitação catalogada.</div>';
+    containerCap.innerHTML = `
+      <div class="col-span-full glass-card rounded-xl p-8 text-center text-slate-400 text-xs border border-dashed border-slate-300">
+        <i class="fa-solid fa-graduation-cap text-3xl mb-2 text-slate-300 block"></i>
+        Nenhum material ou tutorial encontrado com os filtros atuais.
+      </div>
+    `;
     return;
   }
 
   containerCap.innerHTML = caps.map(c => {
-    const isVideo = c.tipo && c.tipo.includes('Vídeo');
-    const icon = isVideo ? 'fa-video text-rose-500' : 'fa-file-lines text-blue-500';
-    const driveUrl = c.drive_url || c.link || (c.arquivo ? `https://drive.google.com/drive/search?q=${encodeURIComponent(c.arquivo)}` : 'https://drive.google.com');
+    const isVideo = (c.tipo && c.tipo.includes('Vídeo')) || (c.formato && (c.formato === 'MP4' || c.formato === 'MKV'));
+    const isStep = (c.tipo && c.tipo.includes('Passo a Passo')) || (c.titulo && c.titulo.toLowerCase().includes('passo a passo'));
+    const isPetition = c.tipo && c.tipo.includes('Petição');
+    
+    let borderClass = 'border-blue-500';
+    let iconClass = 'fa-file-lines text-blue-500';
+    if (isVideo) {
+      borderClass = 'border-rose-500';
+      iconClass = 'fa-video text-rose-500';
+    } else if (isStep) {
+      borderClass = 'border-emerald-500';
+      iconClass = 'fa-list-check text-emerald-600';
+    } else if (isPetition) {
+      borderClass = 'border-purple-500';
+      iconClass = 'fa-scale-balanced text-purple-600';
+    }
+
+    const formato = (c.formato || 'DOC').toUpperCase();
+    let formatoBadge = 'bg-slate-100 text-slate-700';
+    if (formato === 'MP4' || formato === 'MKV') formatoBadge = 'bg-rose-100 text-rose-800 border border-rose-200';
+    else if (formato === 'PDF') formatoBadge = 'bg-amber-100 text-amber-800 border border-amber-200';
+    else if (formato === 'DOCX') formatoBadge = 'bg-blue-100 text-blue-800 border border-blue-200';
+    else if (formato === 'GDOC') formatoBadge = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+    else if (formato === 'XLSX') formatoBadge = 'bg-teal-100 text-teal-800 border border-teal-200';
+
+    const driveUrl = c.drive_url || (c.arquivo ? `https://drive.google.com/drive/search?q=${encodeURIComponent(c.arquivo)}` : 'https://drive.google.com');
+    const catCfg = getCategoriaBadgeConfig(c.categoria);
+
     return `
-      <div class="glass-card rounded-xl p-4 border-l-4 ${isVideo ? 'border-rose-500' : 'border-blue-500'} flex flex-col justify-between space-y-2 shadow-2xs hover:shadow-xs transition">
+      <div class="glass-card rounded-xl p-4 border-l-4 ${borderClass} flex flex-col justify-between space-y-3 shadow-2xs hover:shadow-xs transition">
         <div>
-          <div class="flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1">
-            <span><i class="fa-solid ${icon} mr-1"></i> ${escapeHTML(c.tipo || 'Capacitação')}</span>
-            <span class="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-mono">Oficial</span>
+          <div class="flex items-center justify-between gap-1 text-[10px] mb-2 flex-wrap">
+            <span class="px-2 py-0.5 rounded uppercase tracking-wider font-bold ${catCfg.colorClass}">
+              <i class="fa-solid ${catCfg.icon} mr-0.5"></i> ${catCfg.label}
+            </span>
+            <span class="px-1.5 py-0.5 rounded font-mono font-bold text-[9px] ${formatoBadge}">
+              ${escapeHTML(formato)}
+            </span>
           </div>
-          <h4 class="font-bold text-xs text-slate-800 leading-snug">${escapeHTML(c.titulo)}</h4>
-          <span class="text-[10px] text-slate-400 font-mono block mt-1 truncate" title="${escapeHTML(c.arquivo)}">${escapeHTML(c.arquivo)}</span>
+
+          <div class="flex items-start gap-2 mb-1">
+            <i class="fa-solid ${iconClass} text-sm mt-0.5 shrink-0"></i>
+            <h4 class="font-bold text-xs text-slate-800 leading-snug">${escapeHTML(c.titulo)}</h4>
+          </div>
+
+          <p class="text-[11px] text-slate-500 mt-1 font-mono truncate" title="${escapeHTML(c.arquivo)}">
+            <i class="fa-regular fa-folder mr-1 text-slate-400"></i> ${escapeHTML(c.origem || 'Google Drive EDV Jr')}
+          </p>
         </div>
-        <div class="pt-2 border-t border-slate-100 flex items-center justify-between">
-          <span class="text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+
+        <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-[10px]">
+          <span class="text-emerald-700 font-semibold flex items-center gap-1">
             <i class="fa-solid fa-cloud-arrow-down"></i> Sincronizado
           </span>
-          <a href="${driveUrl}" target="_blank" rel="noopener noreferrer" class="text-[11px] text-blue-600 hover:text-blue-800 font-bold hover:underline inline-flex items-center gap-1 cursor-pointer" title="Abrir material no Google Drive em nova aba">
+          <a href="${driveUrl}" target="_blank" rel="noopener noreferrer" class="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded border border-blue-200 transition flex items-center gap-1 cursor-pointer" title="Abrir material no Google Drive em nova aba">
             <i class="fa-brands fa-google-drive text-emerald-600"></i> Acessar no Drive &rarr;
           </a>
         </div>
@@ -10312,7 +10415,7 @@ function getCategoriaBadgeConfig(cat) {
 async function carregarKBArtigos(categoriaFiltro, buscaTexto) {
   const token = localStorage.getItem(AUTH_TOKEN_KEY);
   const container = document.getElementById('kb-cards-container');
-  if (container) {
+  if (container && (!window.kbArtigosLista || window.kbArtigosLista.length === 0)) {
     container.innerHTML = `
       <div class="p-6 text-center text-slate-400 text-xs">
         <i class="fa-solid fa-circle-notch fa-spin text-emerald-600 text-lg mb-2"></i>
@@ -10321,13 +10424,14 @@ async function carregarKBArtigos(categoriaFiltro, buscaTexto) {
     `;
   }
 
+  const cat = categoriaFiltro || window.kbCategoriaAtiva;
+  const q = buscaTexto !== undefined ? buscaTexto : (document.getElementById('kb-search-input')?.value || '');
+
   try {
     const params = new URLSearchParams();
-    const cat = categoriaFiltro || window.kbCategoriaAtiva;
     if (cat && cat !== 'todos') {
       params.append('categoria', cat);
     }
-    const q = buscaTexto !== undefined ? buscaTexto : (document.getElementById('kb-search-input')?.value || '');
     if (q && q.trim()) {
       params.append('q', q.trim());
     }
@@ -10343,7 +10447,8 @@ async function carregarKBArtigos(categoriaFiltro, buscaTexto) {
 
     if (res.ok) {
       const data = await res.json();
-      window.kbArtigosLista = data || [];
+      const artigos = Array.isArray(data) ? data : (data.artigos || []);
+      window.kbArtigosLista = artigos;
       const countEl = document.getElementById('kb-total-count');
       if (countEl) {
         countEl.textContent = `${window.kbArtigosLista.length} artigo${window.kbArtigosLista.length === 1 ? '' : 's'}`;
@@ -10361,17 +10466,33 @@ async function carregarKBArtigos(categoriaFiltro, buscaTexto) {
       } else {
         limparLeitorKB();
       }
-    } else {
-      console.warn('Falha ao carregar artigos KB:', res.status);
-      if (container) {
-        container.innerHTML = '<div class="p-6 text-center text-red-500 text-xs">Erro ao carregar os artigos da Base de Conhecimento.</div>';
-      }
+      return;
     }
   } catch (err) {
-    console.error('Erro de rede ao carregar KB artigos:', err);
-    if (container) {
-      container.innerHTML = '<div class="p-6 text-center text-red-500 text-xs">Falha na conexão com o servidor.</div>';
-    }
+    console.warn('Falha na requisição de artigos KB da API, utilizando cache local:', err);
+  }
+
+  // Fallback offline a partir do window.EDV_LEGACY_DATA
+  const fallbackData = getLegacyData();
+  let artigos = (fallbackData && fallbackData.kb_artigos) || [];
+  if (cat && cat !== 'todos') {
+    artigos = artigos.filter(a => (a.categoria || '').toLowerCase() === cat.toLowerCase());
+  }
+  if (q && q.trim()) {
+    const qLower = q.trim().toLowerCase();
+    artigos = artigos.filter(a => (a.titulo || '').toLowerCase().includes(qLower) || (a.conteudo || '').toLowerCase().includes(qLower));
+  }
+
+  window.kbArtigosLista = artigos;
+  const countEl = document.getElementById('kb-total-count');
+  if (countEl) {
+    countEl.textContent = `${artigos.length} artigo${artigos.length === 1 ? '' : 's'}`;
+  }
+  renderKBArtigosList(artigos);
+  if (artigos.length > 0) {
+    selecionarKBArtigo(artigos[0].id);
+  } else {
+    limparLeitorKB();
   }
 }
 

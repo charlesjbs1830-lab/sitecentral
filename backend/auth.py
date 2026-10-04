@@ -179,6 +179,21 @@ def get_current_user(
     return user_copy
 
 
+def get_current_user_optional(
+    request: Request = None,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+) -> Optional[dict]:
+    """
+    Dependência que retorna os dados do usuário autenticado se o token for válido,
+    ou None se o usuário for anônimo/offline, sem lançar HTTPException 401.
+    """
+    try:
+        return get_current_user(request=request, credentials=credentials)
+    except HTTPException:
+        return None
+
+
+
 def require_role(allowed_roles: List[str]):
     """
     Dependência que restringe a rota aos papéis estritos informados

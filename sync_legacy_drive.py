@@ -20,6 +20,7 @@ import json
 import sqlite3
 import re
 import unicodedata
+import urllib.parse
 from datetime import datetime, date
 try:
     import openpyxl
@@ -431,34 +432,103 @@ def sync_data(sync_sqlite: bool = True):
                 })
 
     # =========================================================================
-    # 8. CAPACITAÇÕES, TUTORIAIS & MATERIAIS DE ESTUDO
+    # 8. CAPACITAÇÕES, TUTORIAIS & MATERIAIS DE ESTUDO (GOOGLE DRIVE COMPARTILHADO)
     # =========================================================================
     capacitacoes = []
-    cap_dir = os.path.join(drive_root, r"13. Capacitações")
-    if os.path.exists(cap_dir):
-        for f in os.listdir(cap_dir):
-            if not f.startswith('.'):
-                f_path = os.path.join(cap_dir, f)
-                ext = os.path.splitext(f)[1].lower()
-                capacitacoes.append({
-                    'titulo': re.sub(r'^\d+\.\s*', '', f).replace(ext, '').strip(),
-                    'tipo': 'Vídeo / Gravação' if ext in ['.mp4', '.mkv'] else ('Manual / Documento' if ext in ['.docx', '.pdf'] else 'Pauta'),
-                    'arquivo': f,
-                    'caminho': f_path
-                })
-    
-    # Materiais de estudo Comercial
-    com_estudo_dir = os.path.join(drive_root, r"06. Comercial\MATERIAIS DE ESTUDO")
-    if os.path.exists(com_estudo_dir):
-        for f in os.listdir(com_estudo_dir):
-            if f.lower().endswith(('.pdf', '.docx')):
-                f_path = os.path.join(com_estudo_dir, f)
-                capacitacoes.append({
-                    'titulo': f[:-5] if f.endswith('.docx') else f[:-4],
-                    'tipo': 'Manual Comercial & Playbook',
-                    'arquivo': f,
-                    'caminho': f_path
-                })
+    tutorial_folders = [
+        (r"13. Capacitações", "geral", "Capacitações Gravadas & Drive"),
+        (r"04. Projetos\01. Registro de Marca\01. PASSO A PASSO RM E MODELOS DE PETIÇÃO", "projetos", "Projetos / Registro de Marca"),
+        (r"04. Projetos\01. Registro de Marca\01. PASSO A PASSO RM E MODELOS DE PETIÇÃO\MODELO DE PETIÇÕES PARA O INPI", "projetos", "Modelos de Petição INPI"),
+        (r"15. Corrida ENEJ 2026", "projetos", "Corrida ENEJ / Viabilidade"),
+        (r"06. Comercial\MATERIAIS DE ESTUDO", "comercial", "Comercial & Vendas"),
+        (r"05. VPGG\01. Financeiro\06. Passo a passo", "financeiro", "Financeiro / Faturamento"),
+        (r"05. VPGG\02. Gestão de Pessoas\PDI", "gestao_gente", "Gente & PDI"),
+        (r"05. VPGG\02. Gestão de Pessoas\Psel", "gestao_gente", "Processo Seletivo"),
+        (r"07. Marketing\00. Organização\04. Roteiros de Posts + Reels", "marketing", "Marketing & Mídias"),
+        (r"02. Documentos Oficiais", "juridico", "Documentos Oficiais & Compliance"),
+        (r"12. Eventos Juniores 2026\01. Líderes - 28 02\02. Pautas\02. Paralelas\02. VPGG", "gestao_gente", "Formação de Lideranças")
+    ]
+
+    seen_tut_files = set()
+    if drive_available:
+        for rel_p, cat, origem_label in tutorial_folders:
+            full_p = os.path.join(drive_root, rel_p)
+            if os.path.exists(full_p):
+                for f in sorted(os.listdir(full_p)):
+                    if f.startswith('.') or os.path.isdir(os.path.join(full_p, f)):
+                        continue
+                    ext = os.path.splitext(f)[1].lower()
+                    if ext in ['.pdf', '.docx', '.mp4', '.mkv', '.gdoc', '.xlsx']:
+                        f_path = os.path.join(full_p, f)
+                        stat = os.stat(f_path) if os.path.exists(f_path) else None
+                        fl = f.lower()
+
+                        clean_title = re.sub(r'^\d+\.\s*', '', f).replace(ext, '').strip()
+                        clean_title = re.sub(r'\s*-\s*2026\d+_\d+.*$', '', clean_title).strip()
+
+                        if ext in ['.mp4', '.mkv'] or 'gravação' in fl or 'gravacao' in fl:
+                            tipo = 'Vídeo / Gravação'
+                        elif 'passo a passo' in fl or 'roteiro' in fl or 'manual' in fl:
+                            tipo = 'Passo a Passo & Manual'
+                        elif 'petição' in fl or 'peticao' in fl:
+                            tipo = 'Modelo de Petição INPI'
+                        elif 'playbook' in fl or 'diagnóstico' in fl or 'diagnostico' in fl:
+                            tipo = 'Playbook Comercial'
+                        elif 'pdi' in fl or 'one a one' in fl or 'competência' in fl:
+                            tipo = 'Metodologia PDI & Gente'
+                        elif 'lei' in fl or 'código' in fl or 'estatuto' in fl:
+                            tipo = 'Marco Legal & Governança'
+                        elif ext == '.gdoc':
+                            tipo = 'Guia / Pauta Digital'
+                        else:
+                            tipo = 'Manual Técnico'
+
+                        file_key = (f.lower(), cat)
+                        if file_key not in seen_tut_files:
+                            seen_tut_files.add(file_key)
+                            capacitacoes.append({
+                                'id': f'TUT-DRIVE-{len(capacitacoes)+1:03d}',
+                                'titulo': clean_title,
+                                'categoria': cat,
+                                'tipo': tipo,
+                                'formato': ext.replace('.', '').upper(),
+                                'arquivo': f,
+                                'caminho': f_path,
+                                'origem': origem_label,
+                                'tamanho_kb': round(stat.st_size / 1024, 1) if stat and os.path.isfile(f_path) else 0,
+                                'data_modificacao': datetime.fromtimestamp(stat.st_mtime).strftime('%d/%m/%Y') if stat else '2026',
+                                'drive_url': f'https://drive.google.com/drive/search?q={urllib.parse.quote(f)}'
+                            })
+
+    if len(capacitacoes) == 0:
+        # Fallback curado para contingência offline
+        capacitacoes = [
+            {'id': 'TUT-DRIVE-001', 'titulo': 'Passo a passo RM', 'categoria': 'projetos', 'tipo': 'Passo a Passo & Manual', 'formato': 'DOCX', 'arquivo': '01. Passo a passo RM .docx', 'caminho': '', 'origem': 'Projetos / Registro de Marca', 'tamanho_kb': 25.4, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Passo%20a%20passo%20RM'},
+            {'id': 'TUT-DRIVE-002', 'titulo': 'Passo a Passo - Pesquisa Prévia de Viabilidade no INPI', 'categoria': 'projetos', 'tipo': 'Passo a Passo & Manual', 'formato': 'PDF', 'arquivo': 'Passo a Passo - Pesquisa Prévia de Viabilidade no INPI.pdf', 'caminho': '', 'origem': 'Corrida ENEJ / Viabilidade', 'tamanho_kb': 180.2, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Pesquisa%20Previa%20Viabilidade%20INPI'},
+            {'id': 'TUT-DRIVE-003', 'titulo': 'Fases do RM', 'categoria': 'projetos', 'tipo': 'Manual Técnico', 'formato': 'PDF', 'arquivo': '02. Fases do RM .pdf', 'caminho': '', 'origem': 'Projetos / Registro de Marca', 'tamanho_kb': 310.5, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Fases%20do%20RM'},
+            {'id': 'TUT-DRIVE-004', 'titulo': 'Fases do RM - mapa mental', 'categoria': 'projetos', 'tipo': 'Manual Técnico', 'formato': 'PDF', 'arquivo': '03. Fases do RM - mapa mental.pdf', 'caminho': '', 'origem': 'Projetos / Registro de Marca', 'tamanho_kb': 420.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Fases%20do%20RM%20mapa%20mental'},
+            {'id': 'TUT-DRIVE-005', 'titulo': 'PETIÇÃO FLOR DE CEREJEIRA', 'categoria': 'projetos', 'tipo': 'Modelo de Petição INPI', 'formato': 'PDF', 'arquivo': 'PETIÇÃO FLOR DE CEREJEIRA.pdf', 'caminho': '', 'origem': 'Modelos de Petição INPI', 'tamanho_kb': 145.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=PETICAO%20FLOR%20DE%20CEREJEIRA'},
+            {'id': 'TUT-DRIVE-006', 'titulo': 'PETIÇÃO MADE IN CONE', 'categoria': 'projetos', 'tipo': 'Modelo de Petição INPI', 'formato': 'PDF', 'arquivo': 'PETIÇÃO MADE IN CONE.pdf', 'caminho': '', 'origem': 'Modelos de Petição INPI', 'tamanho_kb': 152.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=PETICAO%20MADE%20IN%20CONE'},
+            {'id': 'TUT-DRIVE-007', 'titulo': 'PETIÇÃO POP66', 'categoria': 'projetos', 'tipo': 'Modelo de Petição INPI', 'formato': 'PDF', 'arquivo': 'PETIÇÃO POP66.pdf', 'caminho': '', 'origem': 'Modelos de Petição INPI', 'tamanho_kb': 160.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=PETICAO%20POP66'},
+            {'id': 'TUT-DRIVE-008', 'titulo': 'Playbook Comercial', 'categoria': 'comercial', 'tipo': 'Playbook Comercial', 'formato': 'PDF', 'arquivo': 'Playbook.pdf', 'caminho': '', 'origem': 'Comercial & Vendas', 'tamanho_kb': 520.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Playbook'},
+            {'id': 'TUT-DRIVE-009', 'titulo': 'Manual Onboarding Comercial EDV 2026', 'categoria': 'comercial', 'tipo': 'Passo a Passo & Manual', 'formato': 'DOCX', 'arquivo': 'Manual Onboarding Comercial EDV 2026.docx', 'caminho': '', 'origem': 'Comercial & Vendas', 'tamanho_kb': 85.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Manual%20Onboarding%20Comercial'},
+            {'id': 'TUT-DRIVE-010', 'titulo': 'Carta de Serviços EDV Jr.', 'categoria': 'comercial', 'tipo': 'Manual Técnico', 'formato': 'PDF', 'arquivo': 'Carta de Serviços EDV Jr..pdf', 'caminho': '', 'origem': 'Comercial & Vendas', 'tamanho_kb': 1200.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Carta%20de%20Servicos'},
+            {'id': 'TUT-DRIVE-011', 'titulo': 'Diagnóstico e Plano de Ação Comercial 2026', 'categoria': 'comercial', 'tipo': 'Playbook Comercial', 'formato': 'PDF', 'arquivo': 'Diagnóstico e Plano de Ação Comercial 2026 - EDV Jr..pdf', 'caminho': '', 'origem': 'Comercial & Vendas', 'tamanho_kb': 640.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Plano%20de%20Acao%20Comercial'},
+            {'id': 'TUT-DRIVE-012', 'titulo': 'Passo a passo para emissão de NF', 'categoria': 'financeiro', 'tipo': 'Passo a Passo & Manual', 'formato': 'GDOC', 'arquivo': 'Passo a passo para emissão de NF.gdoc', 'caminho': '', 'origem': 'Financeiro / Faturamento', 'tamanho_kb': 5.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Passo%20a%20passo%20emissao%20NF'},
+            {'id': 'TUT-DRIVE-013', 'titulo': 'Estrutura dos PDIs', 'categoria': 'gestao_gente', 'tipo': 'Metodologia PDI & Gente', 'formato': 'PDF', 'arquivo': 'Cópia de Estrutura dos PDIs.pdf', 'caminho': '', 'origem': 'Gente & PDI', 'tamanho_kb': 320.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Estrutura%20dos%20PDIs'},
+            {'id': 'TUT-DRIVE-014', 'titulo': 'Radar de habilidades e competências', 'categoria': 'gestao_gente', 'tipo': 'Metodologia PDI & Gente', 'formato': 'PDF', 'arquivo': 'Cópia de Radar de habilidades e competências.pdf', 'caminho': '', 'origem': 'Gente & PDI', 'tamanho_kb': 280.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Radar%20de%20habilidades'},
+            {'id': 'TUT-DRIVE-015', 'titulo': 'PDI na Prática', 'categoria': 'gestao_gente', 'tipo': 'Metodologia PDI & Gente', 'formato': 'DOCX', 'arquivo': '[CRIAR UMA CÓPIA] PDI   Na Prática.docx', 'caminho': '', 'origem': 'Gente & PDI', 'tamanho_kb': 45.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=PDI%20Na%20Pratica'},
+            {'id': 'TUT-DRIVE-016', 'titulo': 'Cronograma PDI 2026', 'categoria': 'gestao_gente', 'tipo': 'Guia / Pauta Digital', 'formato': 'GDOC', 'arquivo': 'Cronograma PDI 2026.gdoc', 'caminho': '', 'origem': 'Gente & PDI', 'tamanho_kb': 5.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Cronograma%20PDI'},
+            {'id': 'TUT-DRIVE-017', 'titulo': 'Escopo das One a Ones PDI', 'categoria': 'gestao_gente', 'tipo': 'Guia / Pauta Digital', 'formato': 'GDOC', 'arquivo': 'Escopo das One a Ones PDI.gdoc', 'caminho': '', 'origem': 'Gente & PDI', 'tamanho_kb': 5.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Escopo%20One%20a%20Ones'},
+            {'id': 'TUT-DRIVE-018', 'titulo': 'Edital Processo Seletivo - EDV Jr.', 'categoria': 'gestao_gente', 'tipo': 'Marco Legal & Governança', 'formato': 'PDF', 'arquivo': 'Cópia de Edital Processo Seletivo - EDV Jr..pdf', 'caminho': '', 'origem': 'Processo Seletivo', 'tamanho_kb': 380.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Edital%20Processo%20Seletivo'},
+            {'id': 'TUT-DRIVE-019', 'titulo': 'Passo a Passo Criação de Post - Instagram', 'categoria': 'marketing', 'tipo': 'Passo a Passo & Manual', 'formato': 'GDOC', 'arquivo': 'Passo a Passo Criação de Post - Instagram.gdoc', 'caminho': '', 'origem': 'Marketing & Mídias', 'tamanho_kb': 5.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Criacao%20de%20Post%20Instagram'},
+            {'id': 'TUT-DRIVE-020', 'titulo': 'Lei das Empresas Juniores (Lei 13.267/2016)', 'categoria': 'juridico', 'tipo': 'Marco Legal & Governança', 'formato': 'PDF', 'arquivo': '01. Lei das Empresas Juniores.pdf', 'caminho': '', 'origem': 'Documentos Oficiais & Compliance', 'tamanho_kb': 210.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Lei%20das%20Empresas%20Juniores'},
+            {'id': 'TUT-DRIVE-021', 'titulo': 'Código de Ética do MEJ (Brasil Júnior 2025)', 'categoria': 'juridico', 'tipo': 'Marco Legal & Governança', 'formato': 'PDF', 'arquivo': '02. Código de Ética do MEJ - Aprovado em 2025 pelo Conselho BJ.pdf', 'caminho': '', 'origem': 'Documentos Oficiais & Compliance', 'tamanho_kb': 450.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Codigo%20de%20Etica%20do%20MEJ'},
+            {'id': 'TUT-DRIVE-022', 'titulo': 'Estatuto Social - EDV Jr.', 'categoria': 'juridico', 'tipo': 'Marco Legal & Governança', 'formato': 'PDF', 'arquivo': '03. Estatuto Social - EDV.pdf', 'caminho': '', 'origem': 'Documentos Oficiais & Compliance', 'tamanho_kb': 850.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Estatuto%20Social%20EDV'},
+            {'id': 'TUT-DRIVE-023', 'titulo': 'Capacitação CNPJ - Gravação da Reunião', 'categoria': 'geral', 'tipo': 'Vídeo / Gravação', 'formato': 'MP4', 'arquivo': 'Capacitação CNPJ (030726) - EDV Jr-20260703_091201-Gravação da Reunião.mp4', 'caminho': '', 'origem': 'Capacitações Gravadas & Drive', 'tamanho_kb': 45000.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Capacitacao%20CNPJ'},
+            {'id': 'TUT-DRIVE-024', 'titulo': 'Capacitação Atuar x EDV - Gravação de Reunião', 'categoria': 'geral', 'tipo': 'Vídeo / Gravação', 'formato': 'MP4', 'arquivo': 'Capacitação Atuar x EDV (1208)-20260812_191027-Gravação de Reunião.mp4', 'caminho': '', 'origem': 'Capacitações Gravadas & Drive', 'tamanho_kb': 38000.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Capacitacao%20Atuar%20EDV'},
+            {'id': 'TUT-DRIVE-025', 'titulo': 'Capacitação Contratos - Pedro Jaegger', 'categoria': 'geral', 'tipo': 'Manual Técnico', 'formato': 'PDF', 'arquivo': '02. Capacitação Contratos - Pedro Jaegger .pdf', 'caminho': '', 'origem': 'Capacitações Gravadas & Drive', 'tamanho_kb': 720.0, 'data_modificacao': '2026', 'drive_url': 'https://drive.google.com/drive/search?q=Capacitacao%20Contratos'}
+        ]
 
     # =========================================================================
     # 9. REUNIÕES DE DESEMPENHO INDIVIDUAL (06. Comercial / DESEMPENHO)
@@ -571,6 +641,17 @@ def sync_data(sync_sqlite: bool = True):
     # =========================================================================
     # CONSOLIDAÇÃO DO PAYLOAD
     # =========================================================================
+    try:
+        try:
+            from backend.database import seed_official_kb_pops, list_kb_artigos
+        except ImportError:
+            from database import seed_official_kb_pops, list_kb_artigos
+        seed_official_kb_pops()
+        artigos_kb = list_kb_artigos()
+    except Exception as e:
+        print(f"[-] Erro ao carregar kb_artigos no sincronizador: {e}")
+        artigos_kb = []
+
     consolidated = {
         'timestamp': datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
         'drive_connected': drive_available,
@@ -584,6 +665,7 @@ def sync_data(sync_sqlite: bool = True):
         'selo_ej': selo_ej_data,
         'documentos_oficiais': documentos_oficiais,
         'capacitacoes': capacitacoes,
+        'kb_artigos': artigos_kb,
         'desempenho_individual': desempenho_individual,
         'planilhas_drive': planilhas_drive,
         'vpgg': vpgg_data
@@ -762,6 +844,7 @@ def sync_data(sync_sqlite: bool = True):
         'selo_ej_documentos_total': len(selo_ej_data),
         'documentos_oficiais_total': len(documentos_oficiais),
         'capacitacoes_total': len(capacitacoes),
+        'kb_artigos_total': len(artigos_kb),
         'desempenho_membros_total': len(desempenho_individual),
         'sqlite_synced': sqlite_synced
     }

@@ -3816,20 +3816,41 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
               <div>
                 <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
                   🎓 Capacitações Gravadas & Manuais de Estudo (Google Drive)
-                  <span class="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">Pastas Oficiais</span>
+                  <span id="capacitacoes-total-count" class="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">Carregando...</span>
                 </h3>
-                <p class="text-xs text-slate-500 mt-0.5">Apostilas, videoaulas e playbooks mapeados diretamente do Google Drive oficial da Gestão 2026.</p>
+                <p class="text-xs text-slate-500 mt-0.5">Apostilas, videoaulas, modelos de petição e playbooks operacionais mapeados diretamente do Google Drive oficial da Gestão 2026.</p>
               </div>
               <div class="flex items-center gap-2">
-                <button onclick="sincronizarGoogleDrive()" class="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-2xs flex items-center gap-1.5 transition">
-                  <i class="fa-solid fa-arrows-rotate"></i> Atualizar Materiais
+                <button onclick="sincronizarGoogleDrive()" class="px-3.5 py-2 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-2xs flex items-center gap-1.5 transition cursor-pointer">
+                  <i class="fa-solid fa-arrows-rotate"></i> Sincronizar Tutoriais do Drive
                 </button>
+              </div>
+            </div>
+
+            <!-- Barra de Ferramentas: Filtros de Categoria e Live Search para Capacitações -->
+            <div class="glass-card rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <!-- Filtro de Categorias (Chips) -->
+              <div class="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-xs font-bold" id="cap-categorias-chips">
+                <button type="button" onclick="filtrarCapacitacoesPorCategoria('todos')" id="chip-cap-todos" class="px-2.5 py-1 rounded-full bg-blue-600 text-white shadow-2xs cursor-pointer">Todas</button>
+                <button type="button" onclick="filtrarCapacitacoesPorCategoria('projetos')" id="chip-cap-projetos" class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">🛡️ Projetos & RM</button>
+                <button type="button" onclick="filtrarCapacitacoesPorCategoria('comercial')" id="chip-cap-comercial" class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">🎯 Comercial & Vendas</button>
+                <button type="button" onclick="filtrarCapacitacoesPorCategoria('financeiro')" id="chip-cap-financeiro" class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">💰 Financeiro & NF</button>
+                <button type="button" onclick="filtrarCapacitacoesPorCategoria('gestao_gente')" id="chip-cap-gestao_gente" class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">👥 Gente & PDI</button>
+                <button type="button" onclick="filtrarCapacitacoesPorCategoria('juridico')" id="chip-cap-juridico" class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">⚖️ Jurídico & Governança</button>
+                <button type="button" onclick="filtrarCapacitacoesPorCategoria('marketing')" id="chip-cap-marketing" class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">📢 Marketing</button>
+                <button type="button" onclick="filtrarCapacitacoesPorCategoria('video')" id="chip-cap-video" class="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer">🎥 Gravações</button>
+              </div>
+
+              <!-- Live Search -->
+              <div class="relative w-full md:w-72">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                <input type="text" id="tut-capacitacoes-search-input" oninput="filtrarCapacitacoesClient()" placeholder="Buscar tutorial, manual ou vídeo..." class="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
               </div>
             </div>
 
             <!-- Grade Dinâmica de Capacitações e Materiais do Google Drive -->
             <div class="space-y-4">
-              <div id="container-capacitacoes-drive" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div id="container-capacitacoes-drive" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <!-- Preenchido via app.js (renderTutoriaisDrive) com links seguros -->
               </div>
             </div>

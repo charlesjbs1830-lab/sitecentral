@@ -141,6 +141,7 @@ try:
         verify_password,
         create_access_token,
         get_current_user,
+        get_current_user_optional,
         require_role,
         verify_area_access,
         check_area_access,
@@ -255,6 +256,7 @@ except ImportError:
         verify_password,
         create_access_token,
         get_current_user,
+        get_current_user_optional,
         require_role,
         verify_area_access,
         check_area_access,
@@ -2592,7 +2594,7 @@ async def criar_kb_artigo_endpoint(
 async def listar_kb_artigos_endpoint(
     categoria: Optional[str] = Query(None, description="Filtrar por categoria operacional"),
     q: Optional[str] = Query(None, description="Busca textual em título e conteúdo"),
-    current_user: dict = Depends(get_current_user)
+    current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
     try:
         artigos = list_kb_artigos(categoria=categoria, search=q)
@@ -2611,7 +2613,7 @@ async def listar_kb_artigos_endpoint(
 )
 async def obter_kb_artigo_endpoint(
     artigo_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: Optional[dict] = Depends(get_current_user_optional)
 ):
     artigo = get_kb_artigo_by_id(artigo_id)
     if not artigo:
