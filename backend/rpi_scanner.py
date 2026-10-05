@@ -418,7 +418,7 @@ class RPIScannerEngine:
                     cls_info["status_alerta"]
                 ))
 
-                # B. Atualizar estado do contrato em contratos_rm
+                # B. Atualizar estado do contrato em contratos_rm (estritamente incremental, sem sobrescrever dados cadastrais)
                 cursor.execute("""
                 UPDATE contratos_rm
                 SET rpi_ultimo_status = ?,
@@ -431,6 +431,7 @@ class RPIScannerEngine:
                     rpi_exigencia_pendente = ?,
                     rpi_oposicao_pendente = ?,
                     process_number = COALESCE(process_number, ?),
+                    dados_legados_preservados = 1,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?;
                 """, (

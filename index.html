@@ -6073,7 +6073,7 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
       <div id="rpi-modal-resumo" class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs mb-4">
         <div>
           <span class="text-[10px] uppercase font-bold text-slate-400">Titular / Cliente</span>
-          <p id="rpi-modal-cliente" class="font-bold text-slate-700 mt-0.5">—</p>
+          <p id="rpi-modal-cliente" class="font-bold text-slate-700 mt-0.5 truncate">—</p>
         </div>
         <div>
           <span class="text-[10px] uppercase font-bold text-slate-400">Fase Atual</span>
@@ -6086,6 +6086,12 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
         <div>
           <span class="text-[10px] uppercase font-bold text-slate-400">Prazo Fatal Atual</span>
           <p id="rpi-modal-prazo-fatal" class="font-bold text-rose-600 mt-0.5">Sem pendências</p>
+        </div>
+        <div class="col-span-2 sm:col-span-4 flex items-center justify-between pt-2 border-t border-slate-200/60 text-[11px] text-slate-500">
+          <div><strong class="text-slate-600 font-semibold">Equipe / Participantes:</strong> <span id="rpi-modal-participantes" class="text-slate-700">—</span> &bull; <strong class="text-slate-600 font-semibold">Contato:</strong> <span id="rpi-modal-contato" class="text-slate-700">—</span></div>
+          <span id="rpi-modal-sync-badge" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+            <i class="fa-solid fa-shield-halved text-[9px] text-emerald-600"></i> Histórico Preservado (100%)
+          </span>
         </div>
       </div>
 

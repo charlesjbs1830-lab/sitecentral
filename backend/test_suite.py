@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from main import app, login_rate_limiter
-from database import init_db, get_connection, VALID_ROLES, seed_official_kb_pops, OFFICIAL_KB_POPS
+from database import init_db, get_connection, VALID_ROLES, seed_official_kb_pops, OFFICIAL_KB_POPS, seed_contratos_rm_from_legacy
 
 class TestEDbrainRBACAndFinancial(unittest.TestCase):
 
@@ -3093,6 +3093,116 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         self.assertGreaterEqual(resumo["total_processos_monitorados"], 1)
         self.assertGreaterEqual(resumo["processos_com_exigencia"], 1)
         self.assertEqual(resumo["ultima_rpi_auditada"], "2851")
+
+    def test_73_preservacao_integral_rms_legados_e_atualizacao_incremental(self):
+        """
+        Teste 73: Valida a retenção integral de 100% dos RMs legados (zero data loss),
+        persistência e integridade de todos os campos descritivos (participantes, telefone,
+        última conferência, último contato, responsável técnico) e a atualização
+        estritamente incremental via motor autônomo da RPI (sem sobrescrever dados cadastrais).
+        """
+        # 1. Executar o seed de migração da base legada para contratos_rm
+        total_seeded = seed_contratos_rm_from_legacy()
+        self.assertGreaterEqual(total_seeded, 85, "A rotina de seed deve garantir pelo menos 85 processos legados importados.")
+
+        # 2. Consultar todos os processos via endpoint oficial
+        res_list = self.client.get("/api/rpi/processos")
+        self.assertEqual(res_list.status_code, 200)
+        data_proc = res_list.json()
+        self.assertEqual(data_proc["status"], "success")
+        self.assertGreaterEqual(data_proc["total"], 85)
+        processos = data_proc["processos"]
+
+        # Validar integridade cadastral de 100% dos RMs legados
+        rms_legados = [p for p in processos if p.get("origem_legado") == 1]
+        self.assertGreaterEqual(len(rms_legados), 85)
+
+        for p in rms_legados:
+            self.assertIsNotNone(p.get("rm_code"))
+            self.assertIsNotNone(p.get("brand_name"))
+            self.assertIsNotNone(p.get("process_number"))
+            self.assertEqual(p["origem_legado"], 1)
+            self.assertEqual(p.get("dados_legados_preservados"), 1)
+
+        # 3. Idempotência do seed: Executar novamente e garantir que nenhum dado é duplicado ou apagado
+        total_seeded_2 = seed_contratos_rm_from_legacy()
+        self.assertEqual(total_seeded, total_seeded_2, "Chamadas consecutivas do seed não devem duplicar registros.")
+
+        # 4. Capturar snapshot de RM-001 (Vivacidade) antes da varredura RPI
+        target_rm = next((p for p in rms_legados if p["rm_code"] == "RM-001"), None)
+        self.assertIsNotNone(target_rm, "RM-001 deve estar presente na base de dados.")
+        
+        proc_num_target = target_rm["process_number"]
+        original_participantes = target_rm["participantes"]
+        original_telefone = target_rm["telefone"]
+        original_responsavel = target_rm["responsavel_tecnico"]
+        original_conferencia = target_rm["ultima_conferencia"]
+        original_escopo = target_rm["consultoria_escopo"]
+        original_valor = target_rm["valor_total"]
+
+        self.assertEqual(target_rm["brand_name"], "Vivacidade")
+        self.assertEqual(original_participantes, "Flaviane e Anna Paula")
+        self.assertIn("99935-4662", original_telefone)
+
+        # 5. Executar varredura da RPI com despacho oficial para RM-001 (Deferimento do registro)
+        payload_rpi = {
+            "numero_rpi": "2855",
+            "data_publicacao": "2026-10-13",
+            "despachos": [
+                {
+                    "numero_processo": proc_num_target,
+                    "marca": "Vivacidade",
+                    "codigo_despacho": "IPAS157",
+                    "nome_despacho": "Deferimento do pedido de registro (Art. 159/160 da LPI)",
+                    "texto_complementar": "Pedido deferido com base no exame de mérito favorável."
+                }
+            ]
+        }
+        res_scan = self.client.post(
+            "/api/rpi/scan",
+            headers={"Authorization": f"Bearer {self.tokens['presidente']}"},
+            json=payload_rpi
+        )
+        self.assertEqual(res_scan.status_code, 200)
+        scan_data = res_scan.json()
+        self.assertEqual(scan_data["status"], "success")
+        self.assertEqual(scan_data["processos_correspondidos"], 1)
+
+        # 6. Re-consultar RM-001 e atestar que:
+        # A. Campos RPI foram cirurgicamente atualizados
+        # B. Campos cadastrais e dados legados originais foram 100% PRESERVADOS (Zero Data Loss)
+        res_target = self.client.get(f"/api/rpi/processos?q={proc_num_target}")
+        self.assertEqual(res_target.status_code, 200)
+        target_atualizado = res_target.json()["processos"][0]
+
+        # Auditoria RPI atualizada
+        self.assertEqual(target_atualizado["rpi_ultimo_despacho_codigo"], "IPAS157")
+        self.assertIn("Deferimento", target_atualizado["rpi_ultimo_status"])
+        self.assertEqual(target_atualizado["rpi_numero"], "2855")
+        self.assertEqual(target_atualizado["fase_inpi"], "DEFERIDO - AGUARDANDO DECÊNIO")
+        self.assertIsNotNone(target_atualizado["rpi_prazo_fatal"])
+
+        # Preservação absoluta dos dados cadastrais originais (Zero Alteração)
+        self.assertEqual(target_atualizado["brand_name"], "Vivacidade")
+        self.assertEqual(target_atualizado["participantes"], original_participantes)
+        self.assertEqual(target_atualizado["telefone"], original_telefone)
+        self.assertEqual(target_atualizado["responsavel_tecnico"], original_responsavel)
+        self.assertEqual(target_atualizado["ultima_conferencia"], original_conferencia)
+        self.assertEqual(target_atualizado["consultoria_escopo"], original_escopo)
+        self.assertEqual(target_atualizado["valor_total"], original_valor)
+        self.assertEqual(target_atualizado["origem_legado"], 1)
+        self.assertEqual(target_atualizado["dados_legados_preservados"], 1)
+
+        # 7. Garantir que os demais processos não correspondidos permaneceram intactos
+        res_all_after = self.client.get("/api/rpi/processos")
+        self.assertEqual(res_all_after.json()["total"], data_proc["total"])
+
+        # RM-002 (Sementes Vitória) não deve ter sido afetado
+        rm_002 = next((p for p in res_all_after.json()["processos"] if p["rm_code"] == "RM-002"), None)
+        self.assertIsNotNone(rm_002)
+        self.assertEqual(rm_002["brand_name"], "Sementes Vitória")
+        self.assertEqual(rm_002["participantes"], "Alice e Gabrielle")
+        self.assertIn("99619-3002", rm_002["telefone"])
 
 
 if __name__ == "__main__":
