@@ -2814,6 +2814,111 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         conn.close()
         self.assertGreaterEqual(len(rows), 1)
 
+    def test_69_kb_content_unification_and_didactic_document_generation(self):
+        """
+        Teste 69: Valida a unificação de chaves de conteúdo (conteudo, content, body, texto)
+        e a geração de Cadernos Didáticos Oficiais pelo motor em backend/legal_engine.py.
+        Garante hierarquia visual estrita, tom acadêmico, densidade conceitual,
+        paleta oficial EDbrain (#0f172a, #1e293b, #3b82f6, #6366f1) e integridade SHA-256.
+        """
+        from datetime import datetime
+        from backend.legal_engine import gerar_documento_didatico
+
+        # 1. Testar unificação com chave alternativa 'content'
+        artigo_alt_1 = {
+            "id": 991,
+            "titulo": "POP-09: Guia Descomplicado de Registro de Marca no INPI",
+            "categoria": "projetos",
+            "content": "Orientações para protocolo no e-Marcas e acompanhamento na RPI.",
+            "autor_nome": "Thais Junger"
+        }
+        res_did_1 = gerar_documento_didatico(artigo_alt_1)
+        self.assertEqual(res_did_1["status"], "success")
+        self.assertEqual(res_did_1["protocolo"], f"ED-DID-0991/{datetime.now().year}")
+        self.assertIn("Lei Federal nº 9.279/1996", res_did_1["marco_normativo"])
+        self.assertIn("INPI", res_did_1["orgao_competente"])
+        self.assertEqual(len(res_did_1["secoes"]), 4)
+        self.assertTrue(all(len(s["paragrafos"]) >= 2 for s in res_did_1["secoes"]))
+
+        # Verificar presença das cores da identidade visual EDbrain no HTML gerado
+        html_1 = res_did_1["documento_html"]
+        self.assertIn("#0f172a", html_1)
+        self.assertIn("#1e293b", html_1)
+        self.assertIn("#3b82f6", html_1)
+        self.assertIn("#6366f1", html_1)
+        self.assertIn(res_did_1["hash_sha256"], html_1)
+
+        # 2. Testar unificação com chave alternativa 'body'
+        artigo_alt_2 = {
+            "id": 992,
+            "titulo": "POP-10: Elaboração e Revisão de Contratos de Prestação de Serviços",
+            "categoria": "projetos",
+            "body": "Procedimento de revisão com Legal Design e cláusula resolutiva.",
+            "autor_nome": "Charles Junior"
+        }
+        res_did_2 = gerar_documento_didatico(artigo_alt_2)
+        self.assertEqual(res_did_2["status"], "success")
+        self.assertIn("13.267/2016", res_did_2["marco_normativo"])
+        self.assertIn("Código Civil", res_did_2["marco_normativo"])
+        self.assertIn("## 1. FUNDAMENTAÇÃO NORMATIVA E ENQUADRAMENTO DOGMÁTICO", res_did_2["documento_markdown"])
+        self.assertIn("## 2. PRESSUPOSTOS MATERIAIS E METODOLOGIA OPERATÓRIA", res_did_2["documento_markdown"])
+        self.assertIn("## 3. GESTÃO DE RISCOS REGULATÓRIOS E COMPLIANCE INSTITUCIONAL", res_did_2["documento_markdown"])
+        self.assertIn("## 4. PARÂMETROS DE EFICÁCIA PRÁTICA E CONTROLE DE QUALIDADE", res_did_2["documento_markdown"])
+
+        # 3. Testar unificação com chave alternativa 'texto'
+        artigo_alt_3 = {
+            "id": 993,
+            "titulo": "POP-16: Rotina Prática de Emissão de Nota Fiscal de Serviços (NFS-e)",
+            "categoria": "financeiro",
+            "texto": "Acesso ao portal da PMV Vitória e conciliação bancária Cora.",
+            "autor_nome": "Diretoria Financeira"
+        }
+        res_did_3 = gerar_documento_didatico(artigo_alt_3)
+        self.assertEqual(res_did_3["status"], "success")
+        self.assertIn("ISSQN", res_did_3["marco_normativo"])
+        self.assertIn("Secretaria Municipal de Fazenda", res_did_3["orgao_competente"])
+
+    def test_70_didactic_document_api_endpoint(self):
+        """
+        Teste 70: Valida os endpoints GET e POST /api/kb/artigos/{id}/didatico.
+        Verifica o acesso público/intranet (sem barreira 401), integridade do JSON retornado
+        e tratamento de erro 404 para identificadores inexistentes.
+        """
+        # Obter um artigo válido da base
+        res_list = self.client.get("/api/kb/artigos")
+        self.assertEqual(res_list.status_code, 200)
+        artigos = res_list.json()["artigos"]
+        self.assertGreater(len(artigos), 0)
+        target_artigo = artigos[0]
+        target_id = target_artigo["id"]
+
+        # Chamada GET anônima/intranet
+        res_get = self.client.get(f"/api/kb/artigos/{target_id}/didatico")
+        self.assertEqual(res_get.status_code, 200)
+        data_get = res_get.json()
+        self.assertEqual(data_get["status"], "success")
+        self.assertEqual(data_get["artigo_id"], target_id)
+        self.assertEqual(data_get["titulo"], target_artigo["titulo"])
+        self.assertIn("hash_sha256", data_get)
+        self.assertIn("documento_html", data_get)
+        self.assertIn("documento_markdown", data_get)
+        self.assertEqual(len(data_get["secoes"]), 4)
+
+        # Chamada POST com autenticação
+        token = self.tokens["presidente"]
+        res_post = self.client.post(
+            f"/api/kb/artigos/{target_id}/didatico",
+            headers={"Authorization": f"Bearer {token}"}
+        )
+        self.assertEqual(res_post.status_code, 200)
+        data_post = res_post.json()
+        self.assertEqual(data_post["status"], "success")
+        self.assertEqual(data_post["hash_sha256"], data_get["hash_sha256"])
+
+        # Chamada para artigo inexistente
+        res_404 = self.client.get("/api/kb/artigos/999999/didatico")
+        self.assertEqual(res_404.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()

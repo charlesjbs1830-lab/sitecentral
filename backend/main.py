@@ -274,9 +274,9 @@ except ImportError:
     )
 
 try:
-    from backend.legal_engine import gerar_minuta_contratual
+    from backend.legal_engine import gerar_minuta_contratual, gerar_documento_didatico
 except ImportError:
-    from legal_engine import gerar_minuta_contratual
+    from legal_engine import gerar_minuta_contratual, gerar_documento_didatico
 
 try:
     from semantic_nlp import (
@@ -2639,6 +2639,27 @@ async def deletar_kb_artigo_endpoint(
         "status": "success",
         "message": f"Artigo #{artigo_id} removido com sucesso da base de conhecimento."
     }
+
+
+@app.get(
+    "/api/kb/artigos/{artigo_id}/didatico",
+    summary="Gerador de Documento Didático Oficial: Gera caderno formativo estruturado com rigor estético e acadêmico"
+)
+@app.post(
+    "/api/kb/artigos/{artigo_id}/didatico",
+    summary="Gerador de Documento Didático Oficial: Gera caderno formativo estruturado com rigor estético e acadêmico"
+)
+async def obter_documento_didatico_endpoint(
+    artigo_id: int,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    artigo = get_kb_artigo_by_id(artigo_id)
+    if not artigo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Artigo #{artigo_id} não encontrado na base de conhecimento para geração do documento didático."
+        )
+    return gerar_documento_didatico(artigo)
 
 
 class KBArtigoExpandRequest(BaseModel):
