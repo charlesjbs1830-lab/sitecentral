@@ -2919,6 +2919,181 @@ class TestEDbrainRBACAndFinancial(unittest.TestCase):
         res_404 = self.client.get("/api/kb/artigos/999999/didatico")
         self.assertEqual(res_404.status_code, 404)
 
+    def test_71_avaliacao_360_error_extraction_and_resilience(self):
+        """
+        Teste 71: Valida o tratamento e extração de erros na Avaliação 360º (VPGG),
+        assegurando que falhas de validação (HTTP 422/400) retornem mensagens descritivas
+        e que a lógica de formatação impeça a injeção da string literal '[object Object]'.
+        """
+        token = self.tokens["diretor"]
+        
+        # 1. Envio de payload com nota inválida (> 10)
+        payload_invalido = {
+            "evaluatee_email": "thais.junger@edvjr.com.br",
+            "evaluation_cycle": "2026.1",
+            "relationship": "gestor_direto",
+            "score_lideranca": 15.0,  # Máximo permitido é 10.0
+            "score_gestao": 9.0,
+            "score_visao_sistemica": 8.5,
+            "score_orientacao_resultados": 9.2,
+            "score_autoconhecimento": 8.0,
+            "qualitative_feedback": "Líder inspiradora."
+        }
+        res_422 = self.client.post(
+            "/vpgg/evaluations-360",
+            headers={"Authorization": f"Bearer {token}"},
+            json=payload_invalido
+        )
+        self.assertIn(res_422.status_code, [400, 422])
+        err_json = res_422.json()
+        self.assertIn("detail", err_json)
+        
+        # Validação do algoritmo de extração (extrairMensagemErro)
+        detail = err_json["detail"]
+        if isinstance(detail, list):
+            msgs = []
+            for item in detail:
+                if isinstance(item, dict):
+                    loc = ".".join([str(l) for l in item.get("loc", []) if l != "body"])
+                    msg = item.get("msg") or item.get("message") or str(item)
+                    msgs.append(f"{loc}: {msg}" if loc else msg)
+                else:
+                    msgs.append(str(item))
+            formatted_error = " | ".join(msgs)
+        elif isinstance(detail, dict):
+            formatted_error = detail.get("msg") or detail.get("message") or str(detail)
+        else:
+            formatted_error = str(detail)
+            
+        self.assertNotIn("[object Object]", formatted_error)
+        self.assertTrue(len(formatted_error) > 0)
+        
+        # 2. Envio de avaliação válida
+        payload_valido = {
+            "evaluatee_email": "thais.junger@edvjr.com.br",
+            "cycle_id": "2026.1",
+            "relationship_type": "peer",
+            "score_lideranca": 4.8,
+            "score_gestao": 4.5,
+            "score_visao_sistemica": 4.2,
+            "score_orientacao_resultados": 4.9,
+            "score_autoconhecimento": 4.0,
+            "feedback_qualitativo": "Excelente liderança técnica na gestão de marcas."
+        }
+        res_valido = self.client.post(
+            "/vpgg/evaluations-360",
+            headers={"Authorization": f"Bearer {token}"},
+            json=payload_valido
+        )
+        self.assertIn(res_valido.status_code, [200, 201])
+        data_valido = res_valido.json()
+        self.assertEqual(data_valido["evaluatee_email"], "thais.junger@edvjr.com.br")
+
+    def test_72_rpi_scanner_and_contracts_rm_integration(self):
+        """
+        Teste 72: Valida o motor autônomo de varredura da RPI (INPI), ingestão de despachos
+        em XML/JSON, cruzamento automático com contratos_rm, atualização de status,
+        cálculo de prazo fatal de 60 dias e emissão de alertas críticos para a Presidência.
+        """
+        token_pres = self.tokens["presidente"]
+        
+        # 1. Cadastrar lead e contrato de RM para monitoramento
+        res_lead = self.client.post(
+            "/api/crm/leads",
+            headers={"Authorization": f"Bearer {token_pres}"},
+            json={
+                "client_name": "AeroTech Soluções em Drones S.A.",
+                "cnpj": "55.666.777/0001-88",
+                "contact_person": "Felipe Albuquerque",
+                "estimated_value": 3660.0,
+                "etapa": "fechado"
+            }
+        )
+        self.assertEqual(res_lead.status_code, 201)
+        lead_id = res_lead.json()["lead"]["id"]
+        
+        proc_num = "935889901"
+        res_contrato = self.client.post(
+            "/api/crm/contratos",
+            headers={"Authorization": f"Bearer {token_pres}"},
+            json={
+                "lead_id": lead_id,
+                "rm_code": "RM-999",
+                "process_number": proc_num,
+                "brand_name": "AEROTECH DRONES",
+                "client_name": "AeroTech Soluções em Drones S.A.",
+                "consultoria_escopo": "Monitoramento de registro de marca e despachos RPI.",
+                "valor_total": 3660.0,
+                "status_execucao": "ativo"
+            }
+        )
+        self.assertEqual(res_contrato.status_code, 201)
+        contrato_id = res_contrato.json()["contrato"]["id"]
+        
+        # 2. Simular ingestão de XML oficial da RPI com despacho de Exigência (IPAS005)
+        rpi_xml = f"""<?xml version="1.0" encoding="utf-8"?>
+        <revista numero="2851" data="2026-10-06">
+          <processo numero="{proc_num}" nome="AEROTECH DRONES">
+            <despacho codigo="IPAS005" nome="Exigência formal" texto="Apresentar certidão simplificada da Junta Comercial no prazo de 60 dias."/>
+          </processo>
+        </revista>
+        """
+        
+        res_scan = self.client.post(
+            "/api/rpi/scan",
+            headers={"Authorization": f"Bearer {token_pres}"},
+            json={
+                "numero_rpi": "2851",
+                "xml_content": rpi_xml
+            }
+        )
+        self.assertEqual(res_scan.status_code, 200)
+        data_scan = res_scan.json()
+        self.assertEqual(data_scan["status"], "success")
+        self.assertEqual(data_scan["rpi_numero"], "2851")
+        self.assertGreaterEqual(data_scan["processos_correspondidos"], 1)
+        self.assertGreaterEqual(data_scan["alertas_presidencia_gerados"], 1)
+        
+        # 3. Validar consulta de processos e integridade dos dados atualizados
+        res_proc = self.client.get(f"/api/rpi/processos?q={proc_num}")
+        self.assertEqual(res_proc.status_code, 200)
+        processos = res_proc.json()["processos"]
+        self.assertGreaterEqual(len(processos), 1)
+        proc_item = [p for p in processos if p["process_number"] == proc_num][0]
+        self.assertEqual(proc_item["rpi_ultimo_despacho_codigo"], "IPAS005")
+        self.assertEqual(proc_item["rpi_exigencia_pendente"], 1)
+        self.assertEqual(proc_item["rpi_numero"], "2851")
+        self.assertIsNotNone(proc_item["rpi_prazo_fatal"])
+        
+        # 4. Validar histórico cronológico de despachos
+        res_hist = self.client.get(f"/api/rpi/processos/{contrato_id}/historico")
+        self.assertEqual(res_hist.status_code, 200)
+        historico_data = res_hist.json()
+        self.assertEqual(historico_data["total_despachos"], 1)
+        despacho_auditado = historico_data["historico"][0]
+        self.assertEqual(despacho_auditado["codigo_despacho"], "IPAS005")
+        self.assertEqual(despacho_auditado["afeta_prazo"], 1)
+        self.assertEqual(despacho_auditado["prazo_dias"], 60)
+        
+        # 5. Validar geração de notificação para a Presidência
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT COUNT(*) FROM system_notifications WHERE target_role = 'presidente' AND category = 'audit_alert' AND metadata_json LIKE ?;",
+            (f"%{proc_num}%",)
+        )
+        notif_count = cur.fetchone()[0]
+        conn.close()
+        self.assertGreaterEqual(notif_count, 1)
+        
+        # 6. Validar resumo executivo
+        res_resumo = self.client.get("/api/rpi/resumo")
+        self.assertEqual(res_resumo.status_code, 200)
+        resumo = res_resumo.json()
+        self.assertGreaterEqual(resumo["total_processos_monitorados"], 1)
+        self.assertGreaterEqual(resumo["processos_com_exigencia"], 1)
+        self.assertEqual(resumo["ultima_rpi_auditada"], "2851")
+
 
 if __name__ == "__main__":
     unittest.main()

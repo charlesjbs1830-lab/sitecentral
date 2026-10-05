@@ -125,6 +125,10 @@ try:
         list_contratos_rm,
         get_contrato_rm_by_id,
         update_contrato_rm_status,
+        get_contrato_rm_by_process_number,
+        get_rpi_despachos_historico,
+        get_rpi_resumo_executivo,
+        seed_contratos_rm_from_legacy,
         create_transacao_financeira,
         get_transacao_financeira_by_id,
         list_transacoes_financeiras,
@@ -240,6 +244,10 @@ except ImportError:
         list_contratos_rm,
         get_contrato_rm_by_id,
         update_contrato_rm_status,
+        get_contrato_rm_by_process_number,
+        get_rpi_despachos_historico,
+        get_rpi_resumo_executivo,
+        seed_contratos_rm_from_legacy,
         create_transacao_financeira,
         get_transacao_financeira_by_id,
         list_transacoes_financeiras,
@@ -277,6 +285,11 @@ try:
     from backend.legal_engine import gerar_minuta_contratual, gerar_documento_didatico
 except ImportError:
     from legal_engine import gerar_minuta_contratual, gerar_documento_didatico
+
+try:
+    from backend.rpi_scanner import RPIScannerEngine, simular_varredura_semanal_inpi, parse_rpi_xml, parse_rpi_json
+except ImportError:
+    from rpi_scanner import RPIScannerEngine, simular_varredura_semanal_inpi, parse_rpi_xml, parse_rpi_json
 
 try:
     from semantic_nlp import (
@@ -1012,6 +1025,8 @@ class LeadUpdate(BaseModel):
 
 class ContratoRMCreate(BaseModel):
     lead_id: int = Field(..., description="ID do lead convertido no CRM")
+    rm_code: Optional[str] = Field(None, description="Código do processo RM (ex: RM-001)")
+    process_number: Optional[str] = Field(None, description="Número oficial do processo INPI (9 dígitos)")
     brand_name: Optional[str] = Field(None, description="Nome da marca ou título da consultoria")
     client_name: Optional[str] = Field(None, description="Nome do cliente ou razão social")
     cnpj: Optional[str] = Field(None, description="CNPJ ou CPF do contratante")
@@ -5077,6 +5092,105 @@ async def list_evaluator_calibrations_endpoint(
     current_user: dict = Depends(verify_vpgg_access)
 ):
     return get_evaluator_calibrations()
+
+# ==============================================================================
+# 28. SUBSISTEMA DE AUDITORIA & VARREDURA AUTÔNOMA DA RPI (INPI)
+# ==============================================================================
+
+class RPIScanRequest(BaseModel):
+    numero_rpi: Optional[str] = "2850"
+    data_publicacao: Optional[str] = None
+    xml_content: Optional[str] = None
+    despachos: Optional[List[dict]] = None
+
+
+@app.get("/api/rpi/processos", summary="Listar todos os processos de Registro de Marcas com status de auditoria RPI")
+async def list_rpi_processos_endpoint(
+    q: Optional[str] = Query(None, description="Busca textual por marca, processo, código ou cliente"),
+    status_execucao: Optional[str] = Query(None, description="Filtro de status: ativo, suspenso, concluido"),
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    try:
+        processos = list_contratos_rm(status_filter=status_execucao, q=q)
+        return {
+            "status": "success",
+            "total": len(processos),
+            "processos": processos
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@app.get("/api/rpi/processos/{contrato_id}/historico", summary="Histórico cronológico de despachos RPI do processo")
+async def get_rpi_processo_historico_endpoint(
+    contrato_id: int,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    contrato = get_contrato_rm_by_id(contrato_id)
+    if not contrato:
+        raise HTTPException(status_code=404, detail="Processo de marca não localizado.")
+    historico = get_rpi_despachos_historico(contrato_id)
+    return {
+        "status": "success",
+        "contrato_id": contrato_id,
+        "process_number": contrato.get("process_number"),
+        "brand_name": contrato.get("brand_name"),
+        "total_despachos": len(historico),
+        "historico": historico
+    }
+
+
+@app.get("/api/rpi/resumo", summary="Consolidado executivo dos processos de RM e auditorias da RPI")
+async def get_rpi_resumo_endpoint(
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    return get_rpi_resumo_executivo()
+
+
+@app.post("/api/rpi/scan", summary="Executar varredura da RPI a partir de XML ou JSON de despachos do INPI")
+async def scan_rpi_endpoint(
+    payload: Optional[RPIScanRequest] = None,
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    try:
+        engine = RPIScannerEngine()
+        user_email = current_user.get("email") if current_user else "sistema.rpi@edvjr.com.br"
+        
+        if payload and payload.xml_content:
+            res = engine.scan_and_reconcile(payload.xml_content, format_type="xml", current_user_email=user_email)
+        elif payload and payload.despachos:
+            data = {
+                "numero_rpi": payload.numero_rpi or "2850",
+                "data_publicacao": payload.data_publicacao or datetime.now().strftime("%Y-%m-%d"),
+                "despachos": payload.despachos
+            }
+            res = engine.scan_and_reconcile(data, format_type="json", current_user_email=user_email)
+        else:
+            res = simular_varredura_semanal_inpi(rpi_numero=(payload.numero_rpi if payload else "2850"))
+            
+        return res
+    except Exception as e:
+        logger.error(f"Erro na varredura da RPI: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Falha na varredura da RPI: {str(e)}")
+
+
+@app.post("/api/rpi/simular-varredura", summary="Simulação executiva de varredura semanal de terça-feira do INPI")
+async def simular_varredura_rpi_endpoint(
+    rpi_numero: str = Query("2850", description="Número da edição da RPI"),
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    try:
+        return simular_varredura_semanal_inpi(rpi_numero=rpi_numero)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/rpi/seed-legacy", summary="Migração de integridade dos 85 processos legados para a tabela relacional")
+async def seed_legacy_rms_endpoint(
+    current_user: Optional[dict] = Depends(get_current_user_optional)
+):
+    total = seed_contratos_rm_from_legacy()
+    return {"status": "success", "message": f"{total} processos de marcas sincronizados na base relacional."}
 
 
 # ==============================================================================

@@ -824,6 +824,45 @@ function copyToClipboard(elementId) {
   });
 }
 
+function extrairMensagemErro(err, fallback = 'Ocorreu um erro na operação.') {
+  if (!err) return fallback;
+  if (typeof err === 'string') {
+    if (err.includes('[object Object]')) {
+      const replaced = err.replace(/\[object Object\]/g, 'Erro de validação ou payload inválido.');
+      return replaced.trim() || fallback;
+    }
+    return err;
+  }
+  if (Array.isArray(err)) {
+    const msgs = err.map(item => {
+      if (typeof item === 'string') return item;
+      if (item && typeof item === 'object') {
+        const campo = Array.isArray(item.loc) ? item.loc.filter(l => l !== 'body').join('.') : '';
+        const msg = item.msg || item.message || item.detail || JSON.stringify(item);
+        return campo ? `${campo}: ${msg}` : msg;
+      }
+      return String(item);
+    }).filter(Boolean);
+    return msgs.length > 0 ? msgs.join(' | ') : fallback;
+  }
+  if (typeof err === 'object') {
+    if (err.detail !== undefined) return extrairMensagemErro(err.detail, fallback);
+    if (err.message !== undefined) return extrairMensagemErro(err.message, fallback);
+    if (err.msg !== undefined) {
+      const campo = Array.isArray(err.loc) ? err.loc.filter(l => l !== 'body').join('.') : '';
+      return campo ? `${campo}: ${err.msg}` : err.msg;
+    }
+    if (err.error !== undefined) return extrairMensagemErro(err.error, fallback);
+    try {
+      const s = JSON.stringify(err);
+      return (s && s !== '{}') ? s : fallback;
+    } catch {
+      return fallback;
+    }
+  }
+  return String(err);
+}
+
 function showToast(message) {
   let toast = document.getElementById('appToast');
   if (!toast) {
@@ -832,11 +871,17 @@ function showToast(message) {
     toast.className = 'fixed bottom-5 right-5 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-xl z-50 border border-slate-700 transition-opacity duration-300 pointer-events-none';
     document.body.appendChild(toast);
   }
-  toast.innerText = message;
+  let text = message;
+  if (typeof text !== 'string') {
+    text = extrairMensagemErro(text, 'Operação processada.');
+  } else if (text.includes('[object Object]')) {
+    text = text.replace(/\[object Object\]/g, 'Erro de validação ou payload inválido.');
+  }
+  toast.innerText = text;
   toast.style.opacity = '1';
   setTimeout(() => {
     toast.style.opacity = '0';
-  }, 2500);
+  }, 3200);
 }
 
 function openTutorialReader(title, docSource, summary, steps) {
@@ -1004,15 +1049,87 @@ function selectLead(nome, segmento, responsavel, status, valor, email) {
   alert(`📋 Dossiê do Lead:\n\n• Empresa: ${nome}\n• Segmento: ${segmento}\n• Consultor Responsável: ${responsavel}\n• Status do Funil: ${status}\n• Honorário Estimado: ${valor}\n• Contato / E-mail: ${email || 'Não informado'}`);
 }
 
-// --- 3.2 DATAGRID DE PROJETOS (INPI / RMs) ---
+// --- 3.2 DATAGRID DE PROJETOS (INPI / RMs) & AUDITORIA RPI ---
 let rmsList = [];
 let rmsPaginaAtual = 1;
 const RMS_POR_PAGINA = 15;
 
 function initRMsDataGrid() {
   const data = getLegacyData();
-  rmsList = data.rms || [];
+  rmsList = (data.rms || []).map((r, idx) => ({
+    ...r,
+    marca: r.marca,
+    fase: r.fase || 'EM EXAME',
+    rm_code: r.id,
+    contrato_id: r.id,
+    process_number: r.process_number || `92500${String(idx + 1).padStart(4, '0')}`
+  }));
   filtrarRMsDataGrid();
+  carregarRMsDoServidor();
+}
+
+async function carregarRMsDoServidor() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/rpi/processos`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.processos) && data.processos.length > 0) {
+        rmsList = data.processos.map(p => ({
+          ...p,
+          id: p.rm_code || `RM-${p.id}`,
+          rm_code: p.rm_code || `RM-${p.id}`,
+          contrato_id: p.id,
+          marca: p.brand_name || p.marca,
+          client_name: p.client_name || p.brand_name || '',
+          fase: p.fase_inpi || p.fase || 'EM EXAME',
+          responsavel: p.responsavel_tecnico || p.responsavel || 'Thais Junger',
+          participantes: p.participantes || '',
+          process_number: p.process_number || '',
+          rpi_ultimo_status: p.rpi_ultimo_status || '—',
+          rpi_ultimo_despacho_codigo: p.rpi_ultimo_despacho_codigo || '',
+          rpi_ultimo_despacho_nome: p.rpi_ultimo_despacho_nome || '',
+          rpi_numero: p.rpi_numero || '—',
+          rpi_data_auditoria: p.rpi_data_auditoria || '',
+          rpi_prazo_fatal: p.rpi_prazo_fatal || '',
+          rpi_exigencia_pendente: p.rpi_exigencia_pendente || 0,
+          rpi_oposicao_pendente: p.rpi_oposicao_pendente || 0
+        }));
+        renderRMsDataGrid();
+      }
+    }
+  } catch (err) {
+    console.warn('[RPI] Falha ao carregar processos do servidor:', err);
+  }
+  
+  // Atualizar cards executivos de resumo
+  carregarResumoExecutivoRPI();
+}
+
+async function carregarResumoExecutivoRPI() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/rpi/resumo`);
+    if (res.ok) {
+      const data = await res.json();
+      const elTotal = document.getElementById('kpi-rpi-total');
+      const elExig = document.getElementById('kpi-rpi-exigencias');
+      const elOpos = document.getElementById('kpi-rpi-oposicoes');
+      const elConc = document.getElementById('kpi-rpi-concedidos');
+      const elEdicao = document.getElementById('kpi-rpi-edicao');
+      const elDataAud = document.getElementById('kpi-rpi-data-auditoria');
+      
+      if (elTotal) elTotal.innerText = data.total_processos_monitorados || rmsList.length;
+      if (elExig) elExig.innerText = data.processos_com_exigencia || 0;
+      if (elOpos) elOpos.innerText = data.processos_com_oposicao || 0;
+      if (elConc) elConc.innerText = data.processos_concedidos || 0;
+      if (elEdicao) elEdicao.innerText = `RPI ${data.ultima_rpi_auditada || '2850'}`;
+      if (elDataAud) elDataAud.innerText = data.data_ultima_auditoria ? `Auditado ${formatarDataSimplesBR(data.data_ultima_auditoria)}` : 'Auditado Terça';
+      
+      const navBadge = document.getElementById('nav-badge-rms');
+      if (navBadge) navBadge.innerText = data.total_processos_monitorados || rmsList.length;
+    }
+  } catch (err) {
+    console.warn('[RPI] Falha ao carregar resumo executivo:', err);
+  }
 }
 
 function filtrarRMsDataGrid() {
@@ -1037,10 +1154,17 @@ function renderRMsDataGrid() {
     const matchBusca = !termoBusca ||
       String(item.marca || '').toLowerCase().includes(termoBusca) ||
       String(item.id || '').toLowerCase().includes(termoBusca) ||
+      String(item.rm_code || '').toLowerCase().includes(termoBusca) ||
+      String(item.process_number || '').toLowerCase().includes(termoBusca) ||
       String(item.responsavel || '').toLowerCase().includes(termoBusca) ||
       String(item.participantes || '').toLowerCase().includes(termoBusca);
 
-    const matchFase = !faseFiltro || String(item.fase || '').toUpperCase().includes(faseFiltro);
+    let matchFase = true;
+    if (faseFiltro) {
+      if (faseFiltro === 'EXIGÊNCIA') matchFase = Boolean(item.rpi_exigencia_pendente || String(item.fase || '').toUpperCase().includes('EXIG'));
+      else if (faseFiltro === 'OPOSIÇÃO') matchFase = Boolean(item.rpi_oposicao_pendente || String(item.fase || '').toUpperCase().includes('OPOS'));
+      else matchFase = String(item.fase || '').toUpperCase().includes(faseFiltro);
+    }
     return matchBusca && matchFase;
   });
 
@@ -1054,7 +1178,7 @@ function renderRMsDataGrid() {
 
   tbody.innerHTML = '';
   if (paginaItens.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-slate-400 italic">Nenhum processo de RM encontrado.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-slate-400 italic">Nenhum processo de RM encontrado na base oficial.</td></tr>`;
   } else {
     paginaItens.forEach(rm => {
       const tr = document.createElement('tr');
@@ -1062,20 +1186,59 @@ function renderRMsDataGrid() {
 
       const fase = String(rm.fase || '').toUpperCase();
       let badgeClass = 'bg-slate-100 text-slate-700';
-      if (fase.includes('CONCED')) badgeClass = 'badge-inpi-concedido';
-      else if (fase.includes('INDEF')) badgeClass = 'badge-inpi-indeferido';
-      else if (fase.includes('PUBLIC')) badgeClass = 'badge-inpi-publicacao';
-      else badgeClass = 'badge-inpi-exame';
+      if (rm.rpi_exigencia_pendente || fase.includes('EXIG')) {
+        badgeClass = 'bg-rose-100 text-rose-800 border border-rose-300 font-bold';
+      } else if (rm.rpi_oposicao_pendente || fase.includes('OPOS')) {
+        badgeClass = 'bg-amber-100 text-amber-800 border border-amber-300 font-bold';
+      } else if (fase.includes('CONCED')) {
+        badgeClass = 'badge-inpi-concedido';
+      } else if (fase.includes('DEFER')) {
+        badgeClass = 'bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold';
+      } else if (fase.includes('INDEF')) {
+        badgeClass = 'badge-inpi-indeferido';
+      } else if (fase.includes('PUBLIC')) {
+        badgeClass = 'badge-inpi-publicacao';
+      } else {
+        badgeClass = 'badge-inpi-exame';
+      }
+
+      const ultimoDespacho = rm.rpi_ultimo_status && rm.rpi_ultimo_status !== '—'
+        ? `${rm.rpi_ultimo_despacho_codigo ? `<span class="font-mono font-bold text-indigo-600">${rm.rpi_ultimo_despacho_codigo}</span> • ` : ''}${rm.rpi_ultimo_status}`
+        : '<span class="text-slate-400 italic">Aguardando despacho</span>';
+
+      const auditoria = rm.rpi_numero && rm.rpi_numero !== '—'
+        ? `<div><span class="font-mono font-bold text-slate-700">RPI ${rm.rpi_numero}</span></div><div class="text-[10px] text-slate-400 font-mono">${rm.rpi_data_auditoria ? rm.rpi_data_auditoria.slice(0, 10) : '—'}</div>`
+        : '<span class="text-slate-400 font-mono text-[11px]">—</span>';
+
+      const prazo = rm.rpi_prazo_fatal
+        ? `<span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">⚠️ ${formatarDataSimplesBR(rm.rpi_prazo_fatal)}</span>`
+        : '<span class="text-slate-400 text-[11px]">Sem pendências</span>';
+
+      const contratoId = rm.contrato_id || (String(rm.id).startsWith('RM-') ? rm.id.replace('RM-', '') : rm.id);
 
       tr.innerHTML = `
-        <td class="px-4 py-3 font-mono font-semibold text-slate-600">${rm.id}</td>
-        <td class="px-4 py-3 font-bold text-slate-800">${rm.marca}</td>
-        <td class="px-4 py-3 text-slate-600 text-[11px]">${rm.participantes || 'Thais Junger'}</td>
-        <td class="px-4 py-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeClass}">${rm.fase}</span></td>
+        <td class="px-4 py-3">
+          <span class="font-mono font-bold text-slate-700 block">${rm.rm_code || rm.id}</span>
+          <span class="font-mono text-[10px] text-indigo-600 font-semibold">${rm.process_number || '—'}</span>
+        </td>
+        <td class="px-4 py-3 font-bold text-slate-800">
+          <div>${rm.marca}</div>
+          <div class="text-[10px] text-slate-400 font-normal truncate max-w-[170px]">${rm.client_name || rm.participantes || 'EDV Jr.'}</div>
+        </td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-0.5 rounded text-[10px] ${badgeClass}">${rm.fase}</span>
+        </td>
+        <td class="px-4 py-3 text-slate-700 font-medium max-w-[220px]">
+          <div class="truncate" title="${rm.rpi_ultimo_status || ''}">${ultimoDespacho}</div>
+        </td>
+        <td class="px-4 py-3">${auditoria}</td>
+        <td class="px-4 py-3">${prazo}</td>
         <td class="px-4 py-3 text-slate-700 font-medium">${rm.responsavel || 'Thais'}</td>
-        <td class="px-4 py-3 font-mono text-[11px] text-slate-500">${rm.ultima_conferencia || '—'}</td>
-        <td class="px-4 py-3 font-mono text-[11px] text-slate-500">${rm.ultimo_contato || '—'}</td>
-        <td class="px-4 py-3 font-mono text-[11px] text-slate-600">${rm.telefone || '—'}</td>
+        <td class="px-4 py-3 text-center">
+          <button onclick="abrirHistoricoRPI('${contratoId}', '${encodeURIComponent(rm.marca)}', '${rm.process_number || ''}', '${encodeURIComponent(rm.client_name || rm.marca)}', '${encodeURIComponent(rm.fase)}', '${rm.rpi_numero || ''}', '${rm.rpi_prazo_fatal || ''}')" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[11px] font-bold transition flex items-center gap-1 mx-auto cursor-pointer" title="Ver linha do tempo de despachos RPI">
+            <i class="fa-solid fa-timeline"></i> Histórico
+          </button>
+        </td>
       `;
       tbody.appendChild(tr);
     });
@@ -1084,7 +1247,190 @@ function renderRMsDataGrid() {
   if (infoPag) {
     const de = total > 0 ? inicio + 1 : 0;
     const ate = Math.min(inicio + RMS_POR_PAGINA, total);
-    infoPag.innerText = `Mostrando ${de}–${ate} de ${total} processos (Página ${rmsPaginaAtual}/${totalPaginas})`;
+    infoPag.innerText = `Mostrando ${de}–${ate} de ${total} processos auditados (Página ${rmsPaginaAtual}/${totalPaginas})`;
+  }
+}
+
+// ==============================================================================
+// MODAIS DE AUDITORIA RPI & VARREDURA AUTÔNOMA
+// ==============================================================================
+
+async function abrirHistoricoRPI(contratoId, marcaEnc, processNum, clienteEnc, faseEnc, rpiNum, prazoFatal) {
+  const modal = document.getElementById('modal-rpi-historico');
+  if (!modal) return;
+
+  const marca = decodeURIComponent(marcaEnc || 'Marca');
+  const cliente = decodeURIComponent(clienteEnc || marca);
+  const fase = decodeURIComponent(faseEnc || 'EM EXAME');
+
+  document.getElementById('rpi-modal-marca-titulo').innerText = `${marca}`;
+  document.getElementById('rpi-modal-processo-badge').innerText = `Proc. ${processNum || '—'}`;
+  document.getElementById('rpi-modal-cliente').innerText = cliente;
+  document.getElementById('rpi-modal-fase').innerText = fase;
+  document.getElementById('rpi-modal-ultima-rpi').innerText = rpiNum ? `RPI ${rpiNum}` : '—';
+  
+  const elPrazo = document.getElementById('rpi-modal-prazo-fatal');
+  if (prazoFatal && prazoFatal !== '—') {
+    elPrazo.className = 'font-bold text-rose-600 mt-0.5';
+    elPrazo.innerText = `⚠️ ${formatarDataSimplesBR(prazoFatal)}`;
+  } else {
+    elPrazo.className = 'font-bold text-emerald-600 mt-0.5';
+    elPrazo.innerText = '✅ Sem pendências';
+  }
+
+  const container = document.getElementById('rpi-timeline-container');
+  container.innerHTML = '<div class="p-6 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i> Consultando linha do tempo de despachos...</div>';
+  modal.classList.remove('hidden');
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/rpi/processos/${contratoId}/historico`);
+    if (res.ok) {
+      const data = await res.json();
+      const despachos = data.historico || [];
+      if (despachos.length === 0) {
+        container.innerHTML = `
+          <div class="p-6 text-center text-slate-400 bg-slate-50 rounded-xl border border-slate-100">
+            <i class="fa-solid fa-clock-rotate-left text-2xl text-slate-300 mb-2 block"></i>
+            Nenhum despacho publicado na RPI registrado até o momento para este processo.
+          </div>
+        `;
+      } else {
+        container.innerHTML = '';
+        despachos.forEach((d, idx) => {
+          const itemDiv = document.createElement('div');
+          itemDiv.className = 'relative pl-8 pb-4 text-xs';
+          
+          let dotColor = 'bg-indigo-600';
+          let borderBadge = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+          if (d.status_alerta === 'urgente') {
+            dotColor = 'bg-rose-500 animate-ping';
+            borderBadge = 'bg-rose-100 text-rose-800 border-rose-300 font-bold';
+          } else if (d.status_alerta === 'alerta') {
+            dotColor = 'bg-amber-500';
+            borderBadge = 'bg-amber-100 text-amber-800 border-amber-300 font-bold';
+          }
+
+          const prazoHtml = d.afeta_prazo && d.data_limite_resposta
+            ? `<div class="mt-2 p-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 font-semibold flex items-center gap-1.5">
+                <i class="fa-solid fa-triangle-exclamation text-rose-600"></i>
+                Prazo Fatal de Resposta (60 dias): <strong class="font-mono">${formatarDataSimplesBR(d.data_limite_resposta)}</strong>
+              </div>`
+            : '';
+
+          itemDiv.innerHTML = `
+            <div class="absolute left-2.5 top-1.5 -ml-1 w-3 h-3 rounded-full border-2 border-white ${d.status_alerta === 'urgente' ? 'bg-rose-600' : 'bg-indigo-600'} shadow-xs"></div>
+            <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs hover:border-slate-300 transition">
+              <div class="flex items-center justify-between gap-2 flex-wrap mb-1.5">
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${borderBadge}">${d.codigo_despacho}</span>
+                  <span class="font-extrabold text-slate-800 text-xs">${d.nome_despacho}</span>
+                </div>
+                <span class="text-[11px] text-slate-500 font-mono">
+                  RPI nº ${d.rpi_numero} • ${formatarDataSimplesBR(d.rpi_data_publicacao || d.processado_em)}
+                </span>
+              </div>
+              <p class="text-slate-600 text-xs mt-1 leading-relaxed">${d.descricao_detalhada || 'Despacho publicado pelo INPI.'}</p>
+              ${prazoHtml}
+            </div>
+          `;
+          container.appendChild(itemDiv);
+        });
+      }
+    } else {
+      container.innerHTML = '<div class="p-6 text-center text-rose-500">Erro ao carregar histórico de despachos.</div>';
+    }
+  } catch (err) {
+    container.innerHTML = `<div class="p-6 text-center text-rose-500">Erro de conexão: ${extrairMensagemErro(err)}</div>`;
+  }
+}
+
+function fecharModalRPIHistorico() {
+  const modal = document.getElementById('modal-rpi-historico');
+  if (modal) modal.classList.add('hidden');
+}
+
+function abrirModalExecutarVarredura() {
+  const modal = document.getElementById('modal-executar-varredura-rpi');
+  if (modal) modal.classList.remove('hidden');
+}
+
+function fecharModalExecutarVarredura() {
+  const modal = document.getElementById('modal-executar-varredura-rpi');
+  if (modal) modal.classList.add('hidden');
+}
+
+function toggleRpiCustomInput(mostrar) {
+  const container = document.getElementById('container-rpi-custom');
+  if (container) {
+    if (mostrar) container.classList.remove('hidden');
+    else container.classList.add('hidden');
+  }
+}
+
+async function dispararVarreduraRPI() {
+  const btn = document.getElementById('btn-rodar-rpi-scan');
+  const rpiNum = getVal('input-rpi-numero') || '2850';
+  const radios = document.getElementsByName('rpi-modo');
+  let modo = 'semanal';
+  for (const r of radios) {
+    if (r.checked) modo = r.value;
+  }
+  
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Executando varredura...';
+  }
+
+  try {
+    let payload = { numero_rpi: rpiNum };
+    if (modo === 'custom') {
+      const conteudo = getVal('input-rpi-custom-content').trim();
+      if (!conteudo) {
+        showToast('⚠️ Por favor, insira o XML ou JSON da RPI.');
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-play"></i> Iniciar Varredura'; }
+        return;
+      }
+      if (conteudo.startsWith('<')) {
+        payload.xml_content = conteudo;
+      } else {
+        try {
+          const parsed = JSON.parse(conteudo);
+          payload.despachos = parsed.despachos || parsed;
+        } catch {
+          showToast('❌ JSON inválido inserido.');
+          if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-play"></i> Iniciar Varredura'; }
+          return;
+        }
+      }
+    }
+
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    const res = await fetch(`${API_BASE_URL}/api/rpi/scan`, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      fecharModalExecutarVarredura();
+      showToast(`⚡ Varredura RPI nº ${data.rpi_numero} concluída! ${data.processos_correspondidos} processos conciliados, ${data.alertas_presidencia_gerados} alertas emitidos para a Presidência.`);
+      await carregarRMsDoServidor();
+      carregarNotificacoesUsuario();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      showToast(`❌ Falha na varredura: ${extrairMensagemErro(err)}`);
+    }
+  } catch (err) {
+    showToast(`❌ Erro de conexão: ${extrairMensagemErro(err)}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-play"></i> Iniciar Varredura';
+    }
   }
 }
 
@@ -4541,10 +4887,11 @@ async function salvarAvaliacao360(event) {
       carregarSucessaoIPS();
     } else {
       const err = await res.json().catch(() => ({}));
-      showToast(`❌ Falha: ${err.detail || 'Não foi possível salvar a avaliação.'}`);
+      const msgErro = extrairMensagemErro(err.detail !== undefined ? err.detail : err, 'Não foi possível salvar a avaliação.');
+      showToast(`❌ Falha: ${msgErro}`);
     }
   } catch (e) {
-    showToast(`❌ Erro de conexão: ${e.message}`);
+    showToast(`❌ Erro de conexão: ${extrairMensagemErro(e, e.message)}`);
   } finally {
     if (btn) {
       btn.disabled = false;

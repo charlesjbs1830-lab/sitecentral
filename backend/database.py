@@ -321,21 +321,56 @@ class ContratoRMORM(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     tenant_id = Column(String(50), nullable=False, default="edv_jr")
     lead_id = Column(Integer, ForeignKey("leads.id"), nullable=False, index=True)
+    rm_code = Column(String(50), nullable=True, index=True)
+    process_number = Column(String(50), nullable=True, index=True)
     brand_name = Column(String(200), nullable=False)
     client_name = Column(String(200), nullable=False)
     cnpj = Column(String(30), nullable=True)
     consultoria_escopo = Column(Text, nullable=False)
+    participantes = Column(Text, nullable=True)
+    fase_inpi = Column(String(100), nullable=True, default="EM EXAME")
+    responsavel_tecnico = Column(String(150), nullable=True)
+    ultima_conferencia = Column(String(50), nullable=True)
+    ultimo_contato = Column(String(50), nullable=True)
+    telefone = Column(String(50), nullable=True)
+    rpi_ultimo_status = Column(String(200), nullable=True)
+    rpi_ultimo_despacho_codigo = Column(String(50), nullable=True)
+    rpi_ultimo_despacho_nome = Column(String(255), nullable=True)
+    rpi_numero = Column(String(50), nullable=True)
+    rpi_data_auditoria = Column(String(50), nullable=True)
+    rpi_prazo_fatal = Column(String(50), nullable=True)
+    rpi_exigencia_pendente = Column(Integer, default=0)
+    rpi_oposicao_pendente = Column(Integer, default=0)
     prazo_dias = Column(Integer, default=60)
     prazo_entrega = Column(String(50), nullable=True)
     marcos_financeiros = Column(Text, nullable=True)
     valor_total = Column(Float, default=0.0)
     status_execucao = Column(String(50), nullable=False, default="ativo")
-    responsavel_tecnico = Column(String(150), nullable=True)
     hash_integridade = Column(String(64), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     lead = relationship("LeadORM", back_populates="contratos")
     transacoes = relationship("TransacaoFinanceiraORM", back_populates="contrato")
+    despachos_rpi = relationship("RPIDespachoHistoricoORM", back_populates="contrato", cascade="all, delete-orphan")
+
+
+class RPIDespachoHistoricoORM(Base):
+    __tablename__ = "rpi_despachos_historico"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    contrato_id = Column(Integer, ForeignKey("contratos_rm.id", ondelete="CASCADE"), nullable=False, index=True)
+    process_number = Column(String(50), nullable=False, index=True)
+    brand_name = Column(String(200), nullable=False)
+    rpi_numero = Column(String(50), nullable=False, index=True)
+    rpi_data_publicacao = Column(String(50), nullable=True)
+    codigo_despacho = Column(String(50), nullable=False)
+    nome_despacho = Column(String(255), nullable=False)
+    descricao_detalhada = Column(Text, nullable=True)
+    afeta_prazo = Column(Integer, default=0)
+    prazo_dias = Column(Integer, default=0)
+    data_limite_resposta = Column(String(50), nullable=True)
+    status_alerta = Column(String(50), default="normal")
+    processado_em = Column(DateTime, server_default=func.now())
+    contrato = relationship("ContratoRMORM", back_populates="despachos_rpi")
 
 
 class TransacaoFinanceiraORM(Base):
@@ -1493,6 +1528,57 @@ def init_db():
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_contratos_rm_lead ON contratos_rm(lead_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_contratos_rm_status ON contratos_rm(status_execucao);")
+
+    # Migração e compatibilidade de colunas de monitoramento RPI e operação de marcas em contratos_rm
+    cursor.execute("PRAGMA table_info(contratos_rm);")
+    existing_rm_cols = {col[1] for col in cursor.fetchall()}
+    rm_columns_def = [
+        ("rm_code", "TEXT"),
+        ("process_number", "TEXT"),
+        ("participantes", "TEXT"),
+        ("fase_inpi", "TEXT DEFAULT 'EM EXAME'"),
+        ("ultima_conferencia", "TEXT"),
+        ("ultimo_contato", "TEXT"),
+        ("telefone", "TEXT"),
+        ("rpi_ultimo_status", "TEXT"),
+        ("rpi_ultimo_despacho_codigo", "TEXT"),
+        ("rpi_ultimo_despacho_nome", "TEXT"),
+        ("rpi_numero", "TEXT"),
+        ("rpi_data_auditoria", "TEXT"),
+        ("rpi_prazo_fatal", "TEXT"),
+        ("rpi_exigencia_pendente", "INTEGER DEFAULT 0"),
+        ("rpi_oposicao_pendente", "INTEGER DEFAULT 0")
+    ]
+    for col_name, col_type in rm_columns_def:
+        if col_name not in existing_rm_cols:
+            cursor.execute(f"ALTER TABLE contratos_rm ADD COLUMN {col_name} {col_type};")
+
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_contratos_rm_proc ON contratos_rm(process_number);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_contratos_rm_code ON contratos_rm(rm_code);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_contratos_rm_exigencia ON contratos_rm(rpi_exigencia_pendente);")
+
+    # Tabela de Histórico Cronológico de Despachos RPI
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS rpi_despachos_historico (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        contrato_id INTEGER NOT NULL REFERENCES contratos_rm(id) ON DELETE CASCADE,
+        process_number TEXT NOT NULL,
+        brand_name TEXT NOT NULL,
+        rpi_numero TEXT NOT NULL,
+        rpi_data_publicacao TEXT,
+        codigo_despacho TEXT NOT NULL,
+        nome_despacho TEXT NOT NULL,
+        descricao_detalhada TEXT,
+        afeta_prazo INTEGER DEFAULT 0,
+        prazo_dias INTEGER DEFAULT 0,
+        data_limite_resposta TEXT,
+        status_alerta TEXT DEFAULT 'normal',
+        processado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_rpi_hist_contrato ON rpi_despachos_historico(contrato_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_rpi_hist_proc ON rpi_despachos_historico(process_number);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_rpi_hist_rpi ON rpi_despachos_historico(rpi_numero);")
 
     # Seeding inicial de Leads e Contratos de Consultoria
     cursor.execute("SELECT COUNT(*) FROM leads;")
@@ -3624,6 +3710,9 @@ def create_system_notification(
     return created
 
 
+create_notification = create_system_notification
+
+
 def get_user_notifications(
     user_email: str,
     user_role: str,
@@ -4692,20 +4781,37 @@ def create_contrato_rm(data: dict, current_user: Optional[dict] = None) -> dict:
         
     hash_integ = data.get("hash_integridade")
     
+    rm_code = data.get("rm_code")
+    process_number = data.get("process_number")
+    participantes = data.get("participantes")
+    fase_inpi = data.get("fase_inpi") or "EM EXAME"
+    telefone = data.get("telefone")
+    rpi_status = data.get("rpi_ultimo_status")
+
     cursor.execute("""
     INSERT INTO contratos_rm (
-        tenant_id, lead_id, brand_name, client_name, cnpj, consultoria_escopo,
+        tenant_id, lead_id, rm_code, process_number, brand_name, client_name, cnpj, consultoria_escopo,
+        participantes, fase_inpi, telefone, rpi_ultimo_status,
         prazo_dias, prazo_entrega, marcos_financeiros, valor_total, status_execucao,
         responsavel_tecnico, hash_integridade
     ) VALUES (
-        'edv_jr', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        'edv_jr', ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?,
+        ?, ?, ?, ?, ?,
+        ?, ?
     );
     """, (
         lead_id,
+        rm_code,
+        process_number,
         brand_name.strip(),
         client_name.strip(),
         cnpj,
         consultoria_escopo.strip(),
+        participantes,
+        fase_inpi,
+        telefone,
+        rpi_status,
         prazo_dias,
         prazo_entrega,
         marcos_str,
@@ -4715,6 +4821,13 @@ def create_contrato_rm(data: dict, current_user: Optional[dict] = None) -> dict:
         hash_integ
     ))
     new_id = cursor.lastrowid
+    
+    # Se rm_code ou process_number não foram passados, gerar padrão determinístico
+    if not rm_code or not process_number:
+        auto_code = rm_code or f"RM-{new_id:03d}"
+        auto_proc = process_number or f"92500{new_id:04d}"
+        cursor.execute("UPDATE contratos_rm SET rm_code = ?, process_number = ? WHERE id = ?;", (auto_code, auto_proc, new_id))
+    
     conn.commit()
     cursor.execute("SELECT * FROM contratos_rm WHERE id = ?;", (new_id,))
     contrato = dict(cursor.fetchone())
@@ -4722,8 +4835,8 @@ def create_contrato_rm(data: dict, current_user: Optional[dict] = None) -> dict:
     return contrato
 
 
-def list_contratos_rm(status_filter: Optional[str] = None) -> List[dict]:
-    """Lista contratos de consultoria / RMs ativas com metadados do lead."""
+def list_contratos_rm(status_filter: Optional[str] = None, q: Optional[str] = None) -> List[dict]:
+    """Lista contratos de consultoria / RMs ativas com metadados do lead e dados de auditoria RPI."""
     conn = get_connection()
     cursor = conn.cursor()
     query = """
@@ -4732,10 +4845,17 @@ def list_contratos_rm(status_filter: Optional[str] = None) -> List[dict]:
     LEFT JOIN leads l ON c.lead_id = l.id
     """
     params = []
+    conditions = []
     if status_filter and status_filter.strip():
-        query += " WHERE c.status_execucao = ?"
+        conditions.append("c.status_execucao = ?")
         params.append(status_filter.lower().strip())
-    query += " ORDER BY c.id DESC;"
+    if q and q.strip():
+        termo = f"%{q.strip().lower()}%"
+        conditions.append("(LOWER(c.brand_name) LIKE ? OR LOWER(c.client_name) LIKE ? OR LOWER(COALESCE(c.rm_code, '')) LIKE ? OR LOWER(COALESCE(c.process_number, '')) LIKE ?)")
+        params.extend([termo, termo, termo, termo])
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    query += " ORDER BY c.id ASC;"
     cursor.execute(query, tuple(params))
     rows = cursor.fetchall()
     conn.close()
@@ -4773,6 +4893,165 @@ def get_contrato_rm_by_id(contrato_id: int) -> Optional[dict]:
         except Exception:
             d["marcos_financeiros_parsed"] = []
     return d
+
+
+def get_contrato_rm_by_process_number(process_number: str) -> Optional[dict]:
+    """Retorna um contrato de RM pelo número do processo no INPI."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT c.*, l.contact_person, l.contact_email, l.contact_phone
+    FROM contratos_rm c
+    LEFT JOIN leads l ON c.lead_id = l.id
+    WHERE c.process_number = ?;
+    """, (str(process_number).strip(),))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    d = dict(row)
+    return d
+
+
+def get_rpi_despachos_historico(contrato_id: int) -> List[dict]:
+    """Retorna o histórico cronológico de despachos RPI vinculados a um processo de marca."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    SELECT * FROM rpi_despachos_historico
+    WHERE contrato_id = ?
+    ORDER BY id DESC;
+    """, (contrato_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_rpi_resumo_executivo() -> dict:
+    """Retorna o consolidado executivo do status dos processos de RM e auditorias da RPI."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM contratos_rm;")
+    total_processos = cursor.fetchone()[0] or 0
+    cursor.execute("SELECT COUNT(*) FROM contratos_rm WHERE rpi_exigencia_pendente = 1;")
+    exigencias_ativas = cursor.fetchone()[0] or 0
+    cursor.execute("SELECT COUNT(*) FROM contratos_rm WHERE rpi_oposicao_pendente = 1;")
+    oposicoes_ativas = cursor.fetchone()[0] or 0
+    cursor.execute("SELECT COUNT(*) FROM contratos_rm WHERE UPPER(COALESCE(fase_inpi, '')) LIKE '%CONCED%';")
+    concedidos = cursor.fetchone()[0] or 0
+    cursor.execute("SELECT COUNT(*) FROM contratos_rm WHERE UPPER(COALESCE(fase_inpi, '')) LIKE '%EXAME%';")
+    em_exame = cursor.fetchone()[0] or 0
+    cursor.execute("SELECT COUNT(*) FROM contratos_rm WHERE UPPER(COALESCE(fase_inpi, '')) LIKE '%INDEF%';")
+    indeferidos = cursor.fetchone()[0] or 0
+    cursor.execute("SELECT MAX(rpi_numero), MAX(rpi_data_auditoria) FROM contratos_rm WHERE rpi_numero IS NOT NULL;")
+    rpi_max_row = cursor.fetchone()
+    ultima_rpi = rpi_max_row[0] if (rpi_max_row and rpi_max_row[0]) else "2850"
+    ultima_auditoria = rpi_max_row[1] if (rpi_max_row and rpi_max_row[1]) else None
+    cursor.execute("SELECT COUNT(*) FROM rpi_despachos_historico;")
+    total_despachos = cursor.fetchone()[0] or 0
+    conn.close()
+    return {
+        "total_processos_monitorados": total_processos,
+        "processos_com_exigencia": exigencias_ativas,
+        "processos_com_oposicao": oposicoes_ativas,
+        "processos_concedidos": concedidos,
+        "processos_em_exame": em_exame,
+        "processos_indeferidos": indeferidos,
+        "ultima_rpi_auditada": ultima_rpi,
+        "data_ultima_auditoria": ultima_auditoria,
+        "total_despachos_historico": total_despachos
+    }
+
+
+def seed_contratos_rm_from_legacy(conn=None) -> int:
+    """Migra em definitivo os 85 processos de RM legados do drive/JSON para a tabela contratos_rm."""
+    should_close = False
+    if conn is None:
+        conn = get_connection()
+        should_close = True
+        
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM contratos_rm WHERE rm_code IS NOT NULL;")
+    count_existing = cursor.fetchone()[0]
+    if count_existing >= 85:
+        if should_close:
+            conn.close()
+        return count_existing
+
+    # Obter ou criar lead fechado de referência para a chave estrangeira
+    cursor.execute("SELECT id FROM leads WHERE etapa = 'fechado' LIMIT 1;")
+    lead_row = cursor.fetchone()
+    if lead_row:
+        lead_id = lead_row[0]
+    else:
+        cursor.execute("SELECT id FROM leads LIMIT 1;")
+        lead_row_any = cursor.fetchone()
+        if lead_row_any:
+            lead_id = lead_row_any[0]
+        else:
+            cursor.execute("""
+            INSERT INTO leads (tenant_id, client_name, etapa, responsible, notes)
+            VALUES ('edv_jr', 'Clientes Históricos de Registro de Marcas (INPI)', 'fechado', 'thais.junger@edvjr.com.br', 'Migração oficial e definitiva de RMs para base relacional');
+            """)
+            lead_id = cursor.lastrowid
+
+    # Carregar dados legados do arquivo JSON
+    legacy_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "legacy_data.json")
+    rms = []
+    if os.path.exists(legacy_file):
+        try:
+            with open(legacy_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                rms = data.get("rms", [])
+        except Exception as e:
+            logger.warning(f"Falha ao carregar legacy_data.json para seeding de RMs: {e}")
+
+    inserted = 0
+    for idx, item in enumerate(rms, 1):
+        rm_id = item.get("id") or f"RM-{idx:03d}"
+        cursor.execute("SELECT id FROM contratos_rm WHERE rm_code = ?;", (rm_id,))
+        if cursor.fetchone():
+            continue
+
+        marca = item.get("marca") or f"Marca {rm_id}"
+        fase = item.get("fase", "EM EXAME")
+        participantes = item.get("participantes", "")
+        responsavel = item.get("responsavel", "Thais Junger")
+        u_conf = item.get("ultima_conferencia", "—")
+        u_cont = item.get("ultimo_contato", "—")
+        tel = item.get("telefone", "")
+        
+        # Número de processo canônico de 9 dígitos no padrão INPI
+        num_seq = int(rm_id.replace("RM-", "")) if rm_id.startswith("RM-") else idx
+        process_num = f"92500{num_seq:04d}"
+        
+        status_exec = "concluido" if "CONCED" in fase.upper() else "ativo"
+        
+        cursor.execute("""
+        INSERT INTO contratos_rm (
+            tenant_id, lead_id, rm_code, process_number, brand_name, client_name,
+            consultoria_escopo, participantes, fase_inpi, responsavel_tecnico,
+            ultima_conferencia, ultimo_contato, telefone, status_execucao,
+            valor_total, prazo_dias, rpi_ultimo_status
+        ) VALUES (
+            'edv_jr', ?, ?, ?, ?, ?,
+            ?, ?, ?, ?,
+            ?, ?, ?, ?,
+            2440.0, 60, ?
+        );
+        """, (
+            lead_id, rm_id, process_num, marca, marca,
+            f"Consultoria e protocolo de registro de marca {marca} perante o INPI com monitoramento semanal de despachos da RPI.",
+            participantes, fase, responsavel,
+            u_conf, u_cont, tel, status_exec,
+            f"Fase inicial: {fase}"
+        ))
+        inserted += 1
+
+    conn.commit()
+    if should_close:
+        conn.close()
+    return inserted
 
 
 def update_contrato_rm_status(contrato_id: int, status: str, current_user: Optional[dict] = None) -> Optional[dict]:

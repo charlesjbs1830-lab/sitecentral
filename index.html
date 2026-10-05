@@ -2356,45 +2356,88 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
 
           <!-- SUB-ABA 1: ESTEIRA OFICIAL -->
           <div id="projetos-sub-esteira" class="space-y-6">
-            <div class="glass-card rounded-xl p-5 border-t-4 border-indigo-600">
+            <!-- CARDS EXECUTIVOS DE AUDITORIA RPI -->
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3.5">
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-indigo-600 bg-white">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Total Monitorados</span>
+                <p id="kpi-rpi-total" class="text-xl font-black text-slate-800 mt-0.5">85</p>
+                <span class="text-[10px] text-slate-500 font-medium">Contratos RM Ativos</span>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-rose-500 bg-rose-50/20">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-rose-500">Exigências Pendentes</span>
+                <p id="kpi-rpi-exigencias" class="text-xl font-black text-rose-600 mt-0.5">0</p>
+                <span class="text-[10px] text-rose-500 font-medium">Prazo 60d (Art. 157 LPI)</span>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-amber-500 bg-amber-50/20">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-amber-600">Oposições Abertas</span>
+                <p id="kpi-rpi-oposicoes" class="text-xl font-black text-amber-700 mt-0.5">0</p>
+                <span class="text-[10px] text-amber-600 font-medium">Manifestação (Art. 158)</span>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-emerald-500 bg-emerald-50/20">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-600">Concedidos (INPI)</span>
+                <p id="kpi-rpi-concedidos" class="text-xl font-black text-emerald-700 mt-0.5">0</p>
+                <span class="text-[10px] text-emerald-600 font-medium">Certificado Expedido</span>
+              </div>
+              <div class="glass-card rounded-xl p-3.5 border-l-4 border-blue-500 bg-blue-50/20 col-span-2 md:col-span-1">
+                <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600">Última RPI Varrida</span>
+                <p id="kpi-rpi-edicao" class="text-base font-black text-blue-800 mt-0.5">RPI 2850</p>
+                <span id="kpi-rpi-data-auditoria" class="text-[10px] text-blue-600 font-mono">Auditado Terça</span>
+              </div>
+            </div>
+
+            <!-- CONTROLES & FILTROS DA ESTEIRA -->
+            <div class="glass-card rounded-xl p-4 border-t-4 border-indigo-600 bg-white">
               <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h3 class="text-base font-bold text-slate-800">🛡️ Esteira Operacional de Registro de Marca (DataGrid Oficial)</h3>
-                  <p class="text-xs text-slate-500 mt-0.5">85 Processos mapeados da planilha oficial do Drive. Gestão de prazos de 60 dias e despachos RPI.</p>
+                  <div class="flex items-center gap-2">
+                    <h3 class="text-base font-bold text-slate-800">🛡️ Esteira Operacional de Registro de Marca (Fonte Única: EDbrain DB)</h3>
+                    <span class="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">Extinção de Planilhas Ativa</span>
+                  </div>
+                  <p class="text-xs text-slate-500 mt-0.5">Processos conciliados diretamente via varredura autônoma da Revista da Propriedade Industrial (RPI/INPI).</p>
                 </div>
-                <div class="flex items-center gap-2">
-                  <input type="text" id="filtro-rms-busca" oninput="filtrarRMsDataGrid()" placeholder="Buscar marca, processo ou consultor..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-64 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <div class="flex flex-wrap items-center gap-2">
+                  <input type="text" id="filtro-rms-busca" oninput="filtrarRMsDataGrid()" placeholder="Buscar marca, processo ou consultor..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-52 sm:w-64 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                   <select id="filtro-rms-fase" onchange="filtrarRMsDataGrid()" class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     <option value="">Todas as Fases</option>
+                    <option value="EXIGÊNCIA">Em Exigência (Crítico)</option>
+                    <option value="OPOSIÇÃO">Oposição Aberta (Crítico)</option>
                     <option value="CONCEDIDO">Concedido</option>
-                    <option value="INDEFERIDO">Indeferido</option>
+                    <option value="DEFERIDO">Deferido (Decênio)</option>
                     <option value="EXAME">Exame de Mérito</option>
+                    <option value="INDEFERIDO">Indeferido</option>
                     <option value="PUBLICADO">Publicação</option>
                   </select>
+                  <button type="button" onclick="carregarRMsDoServidor()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 cursor-pointer" title="Recarregar processos da base relacional">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                  </button>
+                  <button type="button" onclick="abrirModalExecutarVarredura()" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer" title="Executar varredura da RPI do INPI">
+                    <i class="fa-solid fa-bolt"></i> Executar Varredura RPI
+                  </button>
                 </div>
               </div>
             </div>
 
-            <div class="glass-card rounded-xl overflow-hidden shadow-sm">
-              <div class="overflow-x-auto max-h-[550px]">
+            <!-- TABELA OFICIAL DE PROCESSOS RM -->
+            <div class="glass-card rounded-xl overflow-hidden shadow-sm bg-white">
+              <div class="overflow-x-auto max-h-[580px]">
                 <table class="w-full text-xs text-left datagrid-table responsive-card-table">
                   <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
                     <tr>
-                      <th class="px-4 py-3">Código</th>
-                      <th class="px-4 py-3">Marca / Pedido</th>
-                      <th class="px-4 py-3">Participantes (Equipe)</th>
-                      <th class="px-4 py-3">Fase do Processo (INPI)</th>
+                      <th class="px-4 py-3">Código / Proc.</th>
+                      <th class="px-4 py-3">Marca / Titular</th>
+                      <th class="px-4 py-3">Fase Atual (INPI)</th>
+                      <th class="px-4 py-3">Último Despacho RPI</th>
+                      <th class="px-4 py-3">Auditoria RPI</th>
+                      <th class="px-4 py-3">Prazo Fatal</th>
                       <th class="px-4 py-3">Responsável</th>
-                      <th class="px-4 py-3">Última Conferência</th>
-                      <th class="px-4 py-3">Último Contato Cliente</th>
-                      <th class="px-4 py-3">Telefone</th>
+                      <th class="px-4 py-3 text-center">Ações</th>
                     </tr>
                   </thead>
                   <tbody id="datagrid-projetos-rms" class="divide-y divide-slate-100"></tbody>
                 </table>
               </div>
               <div class="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-                <span id="info-paginacao-rms">Carregando processos...</span>
+                <span id="info-paginacao-rms">Carregando processos da base oficial...</span>
                 <div class="flex gap-2">
                   <button onclick="mudarPaginaRMs(-1)" class="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 cursor-pointer">Anterior</button>
                   <button onclick="mudarPaginaRMs(1)" class="px-2.5 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 cursor-pointer">Próxima</button>
@@ -5995,6 +6038,136 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
         </button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- Modal de Histórico Completo de Despachos da RPI (INPI) -->
+  <div id="modal-rpi-historico" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-4xl w-full p-5 sm:p-7 shadow-2xl border border-slate-200 my-auto max-h-[92vh] flex flex-col justify-between">
+      
+      <!-- Topo do Modal -->
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4 flex-wrap gap-2">
+        <div class="flex items-center gap-3">
+          <span class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-md shadow-indigo-200">
+            <i class="fa-solid fa-timeline"></i>
+          </span>
+          <div>
+            <div class="flex items-center gap-2">
+              <h3 id="rpi-modal-marca-titulo" class="font-extrabold text-slate-800 text-base tracking-tight">Histórico de Despachos RPI</h3>
+              <span id="rpi-modal-processo-badge" class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                Proc. 925000001
+              </span>
+            </div>
+            <p id="rpi-modal-subtitulo" class="text-xs text-slate-500 mt-0.5">
+              Linha do tempo oficial auditada pelo motor autônomo da Revista da Propriedade Industrial (INPI).
+            </p>
+          </div>
+        </div>
+
+        <button type="button" onclick="fecharModalRPIHistorico()" class="text-slate-400 hover:text-slate-600 p-2 rounded-lg hover:bg-slate-100 transition cursor-pointer text-sm" title="Fechar visualização">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Resumo do Processo -->
+      <div id="rpi-modal-resumo" class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-100 text-xs mb-4">
+        <div>
+          <span class="text-[10px] uppercase font-bold text-slate-400">Titular / Cliente</span>
+          <p id="rpi-modal-cliente" class="font-bold text-slate-700 mt-0.5">—</p>
+        </div>
+        <div>
+          <span class="text-[10px] uppercase font-bold text-slate-400">Fase Atual</span>
+          <p id="rpi-modal-fase" class="font-bold text-slate-700 mt-0.5">—</p>
+        </div>
+        <div>
+          <span class="text-[10px] uppercase font-bold text-slate-400">Última RPI</span>
+          <p id="rpi-modal-ultima-rpi" class="font-bold text-slate-700 mt-0.5">—</p>
+        </div>
+        <div>
+          <span class="text-[10px] uppercase font-bold text-slate-400">Prazo Fatal Atual</span>
+          <p id="rpi-modal-prazo-fatal" class="font-bold text-rose-600 mt-0.5">Sem pendências</p>
+        </div>
+      </div>
+
+      <!-- Linha do Tempo de Despachos -->
+      <div class="overflow-y-auto pr-2 custom-scrollbar flex-1 max-h-[58vh] my-1">
+        <div id="rpi-timeline-container" class="space-y-3 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-slate-200">
+          <!-- Despachos renderizados via JS -->
+        </div>
+      </div>
+
+      <!-- Rodapé do Modal -->
+      <div class="border-t border-slate-100 pt-3 mt-3 flex items-center justify-between text-xs text-slate-500">
+        <span class="text-[11px] text-slate-400">
+          <i class="fa-solid fa-shield-halved text-indigo-500"></i> Fonte da Verdade: INPI / EDbrain DB (Lei 9.279/1996)
+        </span>
+        <button type="button" onclick="fecharModalRPIHistorico()" class="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition cursor-pointer">
+          Fechar
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Modal de Execução de Varredura RPI -->
+  <div id="modal-executar-varredura-rpi" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl border border-slate-200 my-auto">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+        <div class="flex items-center gap-3">
+          <span class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-lg border border-indigo-100">
+            <i class="fa-solid fa-bolt"></i>
+          </span>
+          <div>
+            <h3 class="font-extrabold text-slate-800 text-base">Varredura Autônoma da RPI (INPI)</h3>
+            <p class="text-xs text-slate-500">Publicação semanal oficial (todas as terças-feiras)</p>
+          </div>
+        </div>
+        <button type="button" onclick="fecharModalExecutarVarredura()" class="text-slate-400 hover:text-slate-600 p-2 rounded-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Edição da RPI (Número)</label>
+          <input type="text" id="input-rpi-numero" value="2850" placeholder="Ex: 2850" class="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Tipo de Execução</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="border border-indigo-200 bg-indigo-50/50 p-2.5 rounded-lg flex items-center gap-2 cursor-pointer">
+              <input type="radio" name="rpi-modo" value="semanal" checked onchange="toggleRpiCustomInput(false)">
+              <span class="font-semibold text-slate-700 text-xs">Varredura Semanal Automática</span>
+            </label>
+            <label class="border border-slate-200 p-2.5 rounded-lg flex items-center gap-2 cursor-pointer hover:bg-slate-50">
+              <input type="radio" name="rpi-modo" value="custom" onchange="toggleRpiCustomInput(true)">
+              <span class="font-semibold text-slate-700 text-xs">Ingerir XML / JSON Manual</span>
+            </label>
+          </div>
+        </div>
+
+        <div id="container-rpi-custom" class="hidden">
+          <label class="block font-bold text-slate-700 mb-1">Conteúdo XML ou JSON da RPI</label>
+          <textarea id="input-rpi-custom-content" rows="4" placeholder="Cole aqui o XML ou JSON da RPI emitido pelo INPI..." class="w-full border border-slate-200 rounded-lg p-2.5 font-mono text-[11px] focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
+        </div>
+
+        <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-[11px] flex gap-2">
+          <i class="fa-solid fa-triangle-exclamation text-amber-600 text-sm shrink-0 mt-0.5"></i>
+          <div>
+            <strong>Geração de Alertas Executivos:</strong> Despachos críticos (exigências, oposições, indeferimentos) criarão notificações de prioridade máxima no painel da Presidência com cálculo de prazos improrrogáveis de 60 dias.
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-4 mt-4">
+        <button type="button" onclick="fecharModalExecutarVarredura()" class="px-3.5 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-xs font-semibold transition">
+          Cancelar
+        </button>
+        <button type="button" id="btn-rodar-rpi-scan" onclick="dispararVarreduraRPI()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+          <i class="fa-solid fa-play"></i> Iniciar Varredura
+        </button>
+      </div>
     </div>
   </div>
 
