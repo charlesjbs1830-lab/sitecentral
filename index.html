@@ -8,6 +8,8 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Font Awesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js para Dashboards Financeiros e Forecasting -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Design System Oficial Kamiclock + Prospector -->
   <link rel="stylesheet" href="style.css">
 </head>
@@ -2524,11 +2526,23 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
             <button onclick="switchFinanceiroSubtab('caixa')" id="subtab-fin-caixa" class="pb-3 subtab-active flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
               <i class="fa-solid fa-chart-line text-emerald-600"></i> Fluxo de Caixa & Contas (Financeiro 2.0)
             </button>
-            <button onclick="switchFinanceiroSubtab('legado')" id="subtab-fin-legado" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
-              <i class="fa-solid fa-table text-slate-500"></i> Livro Caixa Legado (Cora / CJA)
+            <button onclick="switchFinanceiroSubtab('cpq')" id="subtab-fin-cpq" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-calculator text-indigo-600"></i> CPQ & Precificação de Honorários
+            </button>
+            <button onclick="switchFinanceiroSubtab('dre')" id="subtab-fin-dre" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-file-invoice-dollar text-purple-600"></i> DRE por Centro de Custo Jurídico
+            </button>
+            <button onclick="switchFinanceiroSubtab('forecasting')" id="subtab-fin-forecasting" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-arrow-trend-up text-cyan-600"></i> Forecasting & Cash Runway
+            </button>
+            <button onclick="switchFinanceiroSubtab('obz')" id="subtab-fin-obz" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-scale-balanced text-amber-600"></i> Orçamento Base Zero & Prestação AGO
             </button>
             <button onclick="switchFinanceiroSubtab('edbrain')" id="subtab-fin-edbrain" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
               <i class="fa-solid fa-shield-halved text-blue-600"></i> Lançamentos por Alçada (Blindagem)
+            </button>
+            <button onclick="switchFinanceiroSubtab('legado')" id="subtab-fin-legado" class="pb-3 subtab-inactive flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+              <i class="fa-solid fa-table text-slate-500"></i> Livro Caixa Legado (Cora / CJA)
             </button>
           </div>
 
@@ -2930,6 +2944,524 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
                   </thead>
                   <tbody id="datagrid-fluxo-caixa" class="divide-y divide-slate-100"></tbody>
                 </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-ABA 3: CPQ JURÍDICO & PRECIFICAÇÃO DE HONORÁRIOS -->
+          <div id="fin-sub-cpq" class="hidden space-y-6">
+            <!-- Header Card -->
+            <div class="glass-card rounded-xl p-5 border-t-4 border-indigo-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-base font-bold text-slate-800">⚖️ CPQ Paramétrico & Precificação de Honorários Jurídicos</h3>
+                  <span class="text-[10px] bg-indigo-100 text-indigo-800 font-mono font-bold px-2 py-0.5 rounded-full border border-indigo-200">Lei nº 13.267/2016</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">Calculadora técnica de honorários baseada em Homem-Hora (HH), senioridade, risco processual e margem estatutária de reinvestimento (15%).</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="carregarCPQJuridico()" class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg border border-slate-300 transition flex items-center gap-1.5 shadow-2xs cursor-pointer">
+                  <i class="fa-solid fa-arrows-rotate text-indigo-600"></i> Atualizar Dados
+                </button>
+              </div>
+            </div>
+
+            <!-- Grid: Calculadora CPQ + Live Card -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              <!-- Formulário Parâmetros CPQ -->
+              <div class="lg:col-span-7 glass-card rounded-xl p-5 border border-slate-200 shadow-xs space-y-4">
+                <h4 class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                  <i class="fa-solid fa-sliders text-indigo-600"></i> Parâmetros da Proposta Técnica
+                </h4>
+
+                <div class="space-y-4">
+                  <!-- Serviço Jurídico Padronizado -->
+                  <div>
+                    <label for="cpq-servico-select" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Serviço Jurídico Padronizado *</label>
+                    <select id="cpq-servico-select" onchange="aoSelecionarServicoCPQ()" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:ring-2 focus:ring-indigo-500 font-semibold">
+                      <option value="">Carregando catálogo de serviços...</option>
+                    </select>
+                  </div>
+
+                  <!-- Linha: Senioridade e Fator de Risco -->
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label for="cpq-senioridade-select" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Senioridade do Responsável *</label>
+                      <select id="cpq-senioridade-select" onchange="calcularCPQJuridico()" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:ring-2 focus:ring-indigo-500 font-medium">
+                        <option value="Consultor Jurídico">Consultor Jurídico (R$ 45,00/h)</option>
+                        <option value="Gerente de Projetos">Gerente de Projetos (R$ 65,00/h)</option>
+                        <option value="Diretor Jurídico">Diretor Jurídico (R$ 90,00/h)</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label for="cpq-risco-select" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Fator de Risco / Complexidade *</label>
+                      <select id="cpq-risco-select" onchange="calcularCPQJuridico()" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:ring-2 focus:ring-indigo-500 font-medium">
+                        <option value="1.0">1.0x - Complexidade Padrão / Risco Baixo</option>
+                        <option value="1.15" selected>1.15x - Complexidade Moderada (Recomendado)</option>
+                        <option value="1.30">1.30x - Complexidade Elevada / Risco Alto</option>
+                        <option value="1.50">1.50x - Complexidade Crítica / Litigiosa</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- Desmembramento de Homem-Hora (Pesquisa, Redação, Revisão) -->
+                  <div>
+                    <span class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Dimensionamento de Homem-Hora (HH)</span>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <label for="cpq-hh-pesquisa" class="block text-[11px] font-semibold text-slate-600 mb-1">Pesquisa / Doutrina (h)</label>
+                        <input type="number" id="cpq-hh-pesquisa" min="0" value="10" oninput="calcularCPQJuridico()" class="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 bg-white font-mono font-bold">
+                      </div>
+                      <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <label for="cpq-hh-redacao" class="block text-[11px] font-semibold text-slate-600 mb-1">Redação / Minuta (h)</label>
+                        <input type="number" id="cpq-hh-redacao" min="0" value="25" oninput="calcularCPQJuridico()" class="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 bg-white font-mono font-bold">
+                      </div>
+                      <div class="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                        <label for="cpq-hh-revisao" class="block text-[11px] font-semibold text-slate-600 mb-1">Revisão Técnica (h)</label>
+                        <input type="number" id="cpq-hh-revisao" min="0" value="10" oninput="calcularCPQJuridico()" class="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 bg-white font-mono font-bold">
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Custas Diretas (INPI / Cartório / Taxas Federais) -->
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label for="cpq-custas-inpi" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Custas Diretas (INPI/Cartório/Taxas) (R$)</label>
+                      <input type="number" id="cpq-custas-inpi" min="0" step="0.01" value="0.00" oninput="calcularCPQJuridico()" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white font-mono">
+                      <span class="text-[10px] text-slate-400 mt-1 block">Custas reembolsáveis diretas repassadas ao cliente.</span>
+                    </div>
+                    <div>
+                      <label for="cpq-hourly-override" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Taxa Horária Personalizada (R$/h)</label>
+                      <input type="number" id="cpq-hourly-override" min="0" step="1.0" placeholder="Padrão do cargo" oninput="calcularCPQJuridico()" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white font-mono">
+                      <span class="text-[10px] text-slate-400 mt-1 block">Opcional. Deixe vazio para usar a taxa padrão da senioridade.</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Formulário de Gravação da Proposta no Pipeline -->
+                <div class="pt-4 border-t border-slate-200 space-y-3">
+                  <h5 class="text-xs font-bold text-slate-700 uppercase">Identificação do Cliente / Negociação</h5>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label for="cpq-cliente-nome" class="block text-[11px] font-semibold text-slate-600 mb-1">Razão Social / Nome do Cliente *</label>
+                      <input type="text" id="cpq-cliente-nome" placeholder="Ex: Innova Tech Ltda" class="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 bg-white">
+                    </div>
+                    <div>
+                      <label for="cpq-contato-nome" class="block text-[11px] font-semibold text-slate-600 mb-1">Representante / Contato</label>
+                      <input type="text" id="cpq-contato-nome" placeholder="Ex: Lucas Ferreira" class="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 bg-white">
+                    </div>
+                    <div>
+                      <label for="cpq-contato-email" class="block text-[11px] font-semibold text-slate-600 mb-1">Email de Contato</label>
+                      <input type="email" id="cpq-contato-email" placeholder="contato@empresa.com" class="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 bg-white">
+                    </div>
+                  </div>
+                  <div>
+                    <label for="cpq-obs" class="block text-[11px] font-semibold text-slate-600 mb-1">Observações do Escopo / Prazos</label>
+                    <input type="text" id="cpq-obs" placeholder="Ex: Lead time estimado em 6 semanas com 2 reuniões intermediárias." class="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 bg-white">
+                  </div>
+                  <div class="flex justify-end pt-2">
+                    <button type="button" onclick="salvarPropostaCPQJuridica()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs shadow-sm transition flex items-center gap-2 cursor-pointer">
+                      <i class="fa-solid fa-file-signature"></i> Salvar Proposta no Pipeline
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Live Card: Resumo Financeiro & Margem Estatutária -->
+              <div class="lg:col-span-5 space-y-4">
+                <div class="glass-card rounded-xl p-5 border-2 border-indigo-200 bg-gradient-to-br from-indigo-50/40 via-white to-slate-50 shadow-sm space-y-4">
+                  <div class="flex items-center justify-between pb-3 border-b border-indigo-100">
+                    <h4 class="font-bold text-xs text-indigo-900 uppercase tracking-wider flex items-center gap-2">
+                      <i class="fa-solid fa-receipt text-indigo-600"></i> Composição Orçamentária
+                    </h4>
+                    <span id="cpq-card-senioridade-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">Consultor</span>
+                  </div>
+
+                  <div class="space-y-2.5 text-xs">
+                    <div class="flex justify-between items-center text-slate-600">
+                      <span>Total de Homem-Hora (HH):</span>
+                      <span id="cpq-resumo-hh-total" class="font-bold font-mono text-slate-800">45h</span>
+                    </div>
+                    <div class="flex justify-between items-center text-slate-600">
+                      <span>Preço Base Horário:</span>
+                      <span id="cpq-resumo-hourly-rate" class="font-bold font-mono text-slate-800">R$ 45,00/h</span>
+                    </div>
+                    <div class="flex justify-between items-center text-slate-600">
+                      <span>Subtotal Homem-Hora:</span>
+                      <span id="cpq-resumo-subtotal-hh" class="font-bold font-mono text-slate-800">R$ 2.025,00</span>
+                    </div>
+                    <div class="flex justify-between items-center text-slate-600">
+                      <span>Fator de Risco / Complexidade:</span>
+                      <span id="cpq-resumo-risco-fator" class="font-bold font-mono text-slate-800">1.15x</span>
+                    </div>
+                    <div class="flex justify-between items-center text-slate-600">
+                      <span>Custas Diretas (INPI / Taxas):</span>
+                      <span id="cpq-resumo-custas" class="font-bold font-mono text-slate-800">R$ 0,00</span>
+                    </div>
+                    
+                    <div class="pt-3 border-t border-indigo-100 flex justify-between items-center">
+                      <span class="font-semibold text-slate-700">Honorários Brutos Técnicos:</span>
+                      <span id="cpq-resumo-honorarios" class="font-black font-mono text-slate-900 text-sm">R$ 2.328,75</span>
+                    </div>
+
+                    <!-- Margem Estatutária (Lei 13.267/2016) -->
+                    <div class="p-3 bg-emerald-50 rounded-lg border border-emerald-200 text-emerald-900 space-y-1">
+                      <div class="flex justify-between items-center">
+                        <span class="text-[11px] font-bold flex items-center gap-1">
+                          <i class="fa-solid fa-piggy-bank text-emerald-600"></i> Fundo de Reinvestimento (15%):
+                        </span>
+                        <span id="cpq-resumo-reinvestimento" class="font-bold font-mono text-emerald-800">R$ 349,31</span>
+                      </div>
+                      <p class="text-[10px] text-emerald-700 leading-tight">Retenção estatutária obrigatória para o Fundo de Reserva, capacitação de membros e modernização técnica.</p>
+                    </div>
+
+                    <!-- Total Final da Proposta -->
+                    <div class="p-4 bg-indigo-700 rounded-xl text-white shadow-md space-y-1 text-center">
+                      <span class="text-[11px] uppercase tracking-wider text-indigo-200 font-semibold block">Preço Final da Proposta ao Cliente</span>
+                      <div id="cpq-resumo-total-final" class="text-2xl font-black font-mono">R$ 2.328,75</div>
+                      <span class="text-[10px] text-indigo-200 block">Sem fins lucrativos • 100% reinvestido na formação dos alunos</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pipeline / Histórico de Propostas Comerciais -->
+            <div class="glass-card rounded-xl overflow-hidden shadow-sm space-y-3">
+              <div class="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/50">
+                <div>
+                  <h4 class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-list-check text-indigo-600"></i> Pipeline de Propostas Comerciais Emitidas
+                  </h4>
+                  <p class="text-[11px] text-slate-500 mt-0.5">Acompanhe a conversão de orçamentos, altere o status de negociação ou exclua registros obsoletos.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <select id="filtro-cpq-status" onchange="renderizarPropostasCPQ()" class="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white focus:ring-2 focus:ring-indigo-500 font-medium">
+                    <option value="">Todos os Status</option>
+                    <option value="proposta_gerada">Proposta Gerada</option>
+                    <option value="em_negociacao">Em Negociação</option>
+                    <option value="fechada_ganha">Aprovada / Fechada</option>
+                    <option value="perdida">Perdida</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="overflow-x-auto max-h-[500px]">
+                <table class="w-full text-xs text-left datagrid-table">
+                  <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                    <tr>
+                      <th class="px-4 py-3">Código</th>
+                      <th class="px-4 py-3">Data</th>
+                      <th class="px-4 py-3">Cliente</th>
+                      <th class="px-4 py-3">Serviço Jurídico</th>
+                      <th class="px-4 py-3">Senioridade</th>
+                      <th class="px-4 py-3 text-center">Horas</th>
+                      <th class="px-4 py-3 text-right">Valor Total</th>
+                      <th class="px-4 py-3 text-right">Fundo Reserva (15%)</th>
+                      <th class="px-4 py-3 text-center">Status</th>
+                      <th class="px-4 py-3 text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="datagrid-propostas-cpq" class="divide-y divide-slate-100">
+                    <tr><td colspan="10" class="text-center py-8 text-slate-400">Carregando histórico de propostas...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-ABA 4: DRE POR CENTRO DE CUSTO JURÍDICO & TRAVAS DE ORIENTADOR -->
+          <div id="fin-sub-dre" class="hidden space-y-6">
+            <!-- Header Card -->
+            <div class="glass-card rounded-xl p-5 border-t-4 border-purple-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-base font-bold text-slate-800">📊 DRE Gerencial por Centro de Custo Jurídico</h3>
+                  <span class="text-[10px] bg-purple-100 text-purple-800 font-mono font-bold px-2 py-0.5 rounded-full border border-purple-200">Margem ~95%</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">Apuração analítica do resultado por caso jurídico, margem de contribuição direta e destinação de 100% do superávit ao Fundo Estatutário.</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="button" onclick="abrirModalNovoCentroCusto()" class="px-3.5 py-1.5 text-xs bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition flex items-center gap-1.5 shadow-xs cursor-pointer">
+                  <i class="fa-solid fa-plus"></i> Novo Centro de Custo
+                </button>
+                <button type="button" onclick="carregarDREJuridica()" class="px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg border border-slate-300 transition flex items-center gap-1.5 shadow-2xs cursor-pointer">
+                  <i class="fa-solid fa-arrows-rotate text-purple-600"></i> Atualizar DRE
+                </button>
+              </div>
+            </div>
+
+            <!-- KPIs DRE -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="glass-card rounded-xl p-4 border-l-4 border-purple-600 bg-white shadow-xs">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Receita Bruta Total</span>
+                  <span class="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-xs"><i class="fa-solid fa-file-invoice-dollar"></i></span>
+                </div>
+                <div id="dre-kpi-receita" class="text-xl font-black font-mono text-purple-700 mt-1">R$ 0,00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Contratos ativos faturados</div>
+              </div>
+
+              <div class="glass-card rounded-xl p-4 border-l-4 border-rose-600 bg-white shadow-xs">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Custas & Despesas Diretas</span>
+                  <span class="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-xs"><i class="fa-solid fa-receipt"></i></span>
+                </div>
+                <div id="dre-kpi-custas" class="text-xl font-black font-mono text-rose-700 mt-1">R$ 0,00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">INPI, cartórios e correios</div>
+              </div>
+
+              <div class="glass-card rounded-xl p-4 border-l-4 border-emerald-600 bg-white shadow-xs">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Margem de Contribuição</span>
+                  <span class="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs"><i class="fa-solid fa-percent"></i></span>
+                </div>
+                <div id="dre-kpi-margem-pct" class="text-xl font-black font-mono text-emerald-700 mt-1">0.0%</div>
+                <div id="dre-kpi-margem-val" class="text-[10px] text-slate-400 mt-0.5">R$ 0,00 de margem direta</div>
+              </div>
+
+              <div class="glass-card rounded-xl p-4 border-l-4 border-blue-600 bg-white shadow-xs">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Superávit Estatutário</span>
+                  <span class="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs"><i class="fa-solid fa-landmark"></i></span>
+                </div>
+                <div id="dre-kpi-superavit" class="text-xl font-black font-mono text-blue-700 mt-1">R$ 0,00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">100% carreado ao Fundo de Reserva</div>
+              </div>
+            </div>
+
+            <!-- Tabela DRE por Centro de Custo -->
+            <div class="glass-card rounded-xl overflow-hidden shadow-sm space-y-3">
+              <div class="p-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-slate-50/50">
+                <div>
+                  <h4 class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-table-list text-purple-600"></i> Centros de Custo Jurídicos Ativos
+                  </h4>
+                  <p class="text-[11px] text-slate-500 mt-0.5">Demonstrativo individualizado de receitas, deduções e margem direta por contrato.</p>
+                </div>
+              </div>
+
+              <div class="overflow-x-auto max-h-[500px]">
+                <table class="w-full text-xs text-left datagrid-table">
+                  <thead class="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+                    <tr>
+                      <th class="px-4 py-3">Código</th>
+                      <th class="px-4 py-3">Caso / Projeto</th>
+                      <th class="px-4 py-3">Cliente</th>
+                      <th class="px-4 py-3">Área do Direito</th>
+                      <th class="px-4 py-3 text-right">Receita Bruta</th>
+                      <th class="px-4 py-3 text-right">Custas Diretas</th>
+                      <th class="px-4 py-3 text-right">Margem Contribuição</th>
+                      <th class="px-4 py-3 text-center">Margem %</th>
+                      <th class="px-4 py-3 text-right">Superávit Retido</th>
+                    </tr>
+                  </thead>
+                  <tbody id="datagrid-dre-centros" class="divide-y divide-slate-100">
+                    <tr><td colspan="9" class="text-center py-8 text-slate-400">Carregando centros de custo...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Travas de Orientador (Professor / Advogado OAB) -->
+            <div class="glass-card rounded-xl p-5 border border-slate-200 shadow-xs space-y-4">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-slate-100">
+                <div>
+                  <h4 class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-user-shield text-indigo-600"></i> Travas Estatutárias de Orientador (Professor / Advogado OAB)
+                  </h4>
+                  <p class="text-[11px] text-slate-500 mt-0.5">Exigência regimental de parecer formal e rubrica de orientador antes da entrega final de peças e contratos a clientes.</p>
+                </div>
+              </div>
+
+              <div id="grid-marcos-orientador" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Cards de marcos injetados dinamicamente -->
+                <div class="p-6 text-center text-slate-400 col-span-3">Carregando marcos e travas de orientador...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-ABA 5: FORECASTING PREDITIVO & RUNWAY JURÍDICO -->
+          <div id="fin-sub-forecasting" class="hidden space-y-6">
+            <!-- Header Card -->
+            <div class="glass-card rounded-xl p-5 border-t-4 border-cyan-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-base font-bold text-slate-800">📈 Motor Econométrico de Previsão de Fluxo de Caixa (12 a 36 Meses)</h3>
+                  <span class="text-[10px] bg-cyan-100 text-cyan-800 font-mono font-bold px-2 py-0.5 rounded-full border border-cyan-200">Sazonalidade MEJ Direito</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">Séries temporais econométricas incorporando recesso acadêmico (Jan/Fev/Jul) vs períodos de pico (Mar-Mai/Set-Out), simulação de cenários e cálculo de Cash Runway.</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="carregarForecastingJuridico()" class="px-3.5 py-1.5 text-xs bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-lg transition flex items-center gap-1.5 shadow-xs cursor-pointer">
+                  <i class="fa-solid fa-calculator"></i> Recalcular Projeções
+                </button>
+              </div>
+            </div>
+
+            <!-- Controles Deslizantes / Premissas Macroeconômicas -->
+            <div class="glass-card rounded-xl p-5 border border-slate-200 shadow-xs space-y-4">
+              <h4 class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                <i class="fa-solid fa-sliders text-cyan-600"></i> Premissas do Modelo Econométrico
+              </h4>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Horizonte -->
+                <div>
+                  <label for="fc-horizonte" class="block text-[11px] font-bold text-slate-600 uppercase mb-1">Horizonte Temporal</label>
+                  <select id="fc-horizonte" onchange="carregarForecastingJuridico()" class="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 bg-white font-medium">
+                    <option value="12">12 Meses (Curto Prazo)</option>
+                    <option value="24" selected>24 Meses (Médio Prazo - Padrão)</option>
+                    <option value="36">36 Meses (Longo Prazo / Gestões Futuras)</option>
+                  </select>
+                </div>
+
+                <!-- Crescimento Base -->
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <label for="fc-growth" class="text-[11px] font-bold text-slate-600 uppercase">Crescimento Anual Base</label>
+                    <span id="fc-growth-val" class="text-xs font-mono font-bold text-cyan-700">15.0%</span>
+                  </div>
+                  <input type="range" id="fc-growth" min="0" max="50" step="1" value="15" oninput="document.getElementById('fc-growth-val').textContent = this.value + '.0%'; carregarForecastingJuridico()" class="w-full accent-cyan-600">
+                </div>
+
+                <!-- Bônus Otimista -->
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <label for="fc-opt-bonus" class="text-[11px] font-bold text-slate-600 uppercase">Bônus Cenário Otimista</label>
+                    <span id="fc-opt-bonus-val" class="text-xs font-mono font-bold text-emerald-700">+20.0%</span>
+                  </div>
+                  <input type="range" id="fc-opt-bonus" min="5" max="50" step="1" value="20" oninput="document.getElementById('fc-opt-bonus-val').textContent = '+' + this.value + '.0%'; carregarForecastingJuridico()" class="w-full accent-emerald-600">
+                </div>
+
+                <!-- Penalidade Pessimista -->
+                <div>
+                  <div class="flex justify-between items-center mb-1">
+                    <label for="fc-pess-penalty" class="text-[11px] font-bold text-slate-600 uppercase">Queda Cenário Pessimista</label>
+                    <span id="fc-pess-penalty-val" class="text-xs font-mono font-bold text-rose-700">-15.0%</span>
+                  </div>
+                  <input type="range" id="fc-pess-penalty" min="5" max="50" step="1" value="15" oninput="document.getElementById('fc-pess-penalty-val').textContent = '-' + this.value + '.0%'; carregarForecastingJuridico()" class="w-full accent-rose-600">
+                </div>
+              </div>
+            </div>
+
+            <!-- KPIs de Projeção & Runway -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="glass-card rounded-xl p-4 border-l-4 border-cyan-600 bg-white shadow-xs">
+                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Caixa Final (Cenário Base)</span>
+                <div id="fc-kpi-base" class="text-xl font-black font-mono text-cyan-700 mt-1">R$ 0,00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Trajetória normal de contratações</div>
+              </div>
+
+              <div class="glass-card rounded-xl p-4 border-l-4 border-emerald-600 bg-white shadow-xs">
+                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Caixa Final (Cenário Otimista)</span>
+                <div id="fc-kpi-otimista" class="text-xl font-black font-mono text-emerald-700 mt-1">R$ 0,00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Expansão de contratos e parcerias</div>
+              </div>
+
+              <div class="glass-card rounded-xl p-4 border-l-4 border-rose-600 bg-white shadow-xs">
+                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Caixa Final (Cenário Pessimista)</span>
+                <div id="fc-kpi-pessimista" class="text-xl font-black font-mono text-rose-700 mt-1">R$ 0,00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Desaceleração de captação comercial</div>
+              </div>
+
+              <div class="glass-card rounded-xl p-4 border-l-4 border-amber-500 bg-white shadow-xs">
+                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Cash Runway Estimado</span>
+                <div id="fc-kpi-runway" class="text-xl font-black font-mono text-amber-600 mt-1">0 meses</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Fôlego de caixa com custo fixo atual</div>
+              </div>
+            </div>
+
+            <!-- Gráfico Interativo Chart.js -->
+            <div class="glass-card rounded-xl p-5 border border-slate-200 shadow-xs space-y-4">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <h4 class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                  <i class="fa-solid fa-chart-line text-cyan-600"></i> Projeção Comparativa de Fluxo de Caixa Acumulado
+                </h4>
+                <div class="flex items-center gap-4 text-xs font-semibold">
+                  <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-cyan-500 inline-block"></span> Cenário Base</span>
+                  <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> Otimista</span>
+                  <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-rose-500 inline-block"></span> Pessimista</span>
+                </div>
+              </div>
+
+              <div class="w-full h-80 relative">
+                <canvas id="chart-forecasting-juridico"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- SUB-ABA 6: ORÇAMENTO BASE ZERO (OBZ) & PRESTAÇÃO DE CONTAS AGO -->
+          <div id="fin-sub-obz" class="hidden space-y-6">
+            <!-- Header Card -->
+            <div class="glass-card rounded-xl p-5 border-t-4 border-amber-600 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2">
+                  <h3 class="text-base font-bold text-slate-800">⚖️ Orçamento Base Zero (OBZ) & Prestação de Contas AGO</h3>
+                  <span class="text-[10px] bg-amber-100 text-amber-800 font-mono font-bold px-2 py-0.5 rounded-full border border-amber-200">Conselho Fiscal & AGO</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">Gestão matricial de custos estruturada em 4 pacotes fundamentais, com prestação de contas automatizada pronta para auditoria e prestação de contas estatutária.</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <a href="/api/financeiro/relatorio/prestacao-contas-excel" target="_blank" class="px-3.5 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition flex items-center gap-1.5 shadow-xs cursor-pointer">
+                  <i class="fa-solid fa-file-excel"></i> Exportar Excel (.xlsx)
+                </a>
+                <a href="/api/financeiro/relatorio/prestacao-contas-html" target="_blank" class="px-3.5 py-1.5 text-xs bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg transition flex items-center gap-1.5 shadow-xs cursor-pointer">
+                  <i class="fa-solid fa-print"></i> Visualizar Relatório AGO
+                </a>
+              </div>
+            </div>
+
+            <!-- KPIs OBZ -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="glass-card rounded-xl p-4 border-l-4 border-slate-600 bg-white shadow-xs">
+                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Orçamento Aprovado</span>
+                <div id="obz-kpi-orcado" class="text-xl font-black font-mono text-slate-800 mt-1">R$ 0,00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Teto anual alocado nos pacotes</div>
+              </div>
+
+              <div class="glass-card rounded-xl p-4 border-l-4 border-amber-600 bg-white shadow-xs">
+                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Despesas Realizadas</span>
+                <div id="obz-kpi-realizado" class="text-xl font-black font-mono text-amber-700 mt-1">R$ 0,00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Execução financeira acumulada</div>
+              </div>
+
+              <div class="glass-card rounded-xl p-4 border-l-4 border-emerald-600 bg-white shadow-xs">
+                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Saldo Disponível</span>
+                <div id="obz-kpi-saldo" class="text-xl font-black font-mono text-emerald-700 mt-1">R$ 0,00</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Remanescente para execução</div>
+              </div>
+
+              <div class="glass-card rounded-xl p-4 border-l-4 border-blue-600 bg-white shadow-xs">
+                <span class="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Execução Orçamentária</span>
+                <div id="obz-kpi-pct" class="text-xl font-black font-mono text-blue-700 mt-1">0.0%</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">Índice de aderência ao plano</div>
+              </div>
+            </div>
+
+            <!-- Gráfico Donut Chart.js + Detalhamento dos 4 Pacotes -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <!-- Donut Chart -->
+              <div class="lg:col-span-5 glass-card rounded-xl p-5 border border-slate-200 shadow-xs space-y-4">
+                <h4 class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                  <i class="fa-solid fa-chart-pie text-amber-600"></i> Distribuição por Pacotes Estratégicos
+                </h4>
+                <div class="w-full h-64 relative flex items-center justify-center">
+                  <canvas id="chart-obz-pacotes"></canvas>
+                </div>
+              </div>
+
+              <!-- Detalhes dos Pacotes -->
+              <div class="lg:col-span-7 glass-card rounded-xl p-5 border border-slate-200 shadow-xs space-y-4">
+                <h4 class="font-bold text-xs text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                  <i class="fa-solid fa-layer-group text-amber-600"></i> Detalhamento Matricial dos 4 Pacotes
+                </h4>
+                <div id="obz-pacotes-lista" class="space-y-3">
+                  <!-- Pacotes injetados dinamicamente -->
+                  <div class="p-6 text-center text-slate-400">Carregando pacotes de despesas...</div>
+                </div>
               </div>
             </div>
           </div>
@@ -6172,6 +6704,134 @@ Você teria 10 minutinhos nesta quinta ou sexta-feira para alinharmos os próxim
         </button>
         <button type="button" id="btn-rodar-rpi-scan" onclick="dispararVarreduraRPI()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold shadow-sm transition flex items-center gap-1.5 cursor-pointer">
           <i class="fa-solid fa-play"></i> Iniciar Varredura
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL DE VALIDAÇÃO DO ADVOGADO/PROFESSOR ORIENTADOR (TRAVA OAB) ==================== -->
+  <div id="modal-mentor-edv" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 my-auto space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center text-lg border border-indigo-200">
+            <i class="fa-solid fa-user-shield"></i>
+          </div>
+          <div>
+            <h3 class="font-extrabold text-slate-800 text-base">Validação Formal do Orientador (OAB)</h3>
+            <p class="text-xs text-slate-500">Chancela regimental obrigatória antes do envio de peças a clientes</p>
+          </div>
+        </div>
+        <button type="button" onclick="fecharModalAprovacaoMentor()" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 text-sm">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <input type="hidden" id="mentor-modal-marco-id">
+
+      <div class="space-y-3">
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1">
+          <div class="text-slate-500">Caso / Projeto: <strong id="mentor-modal-caso-nome" class="text-slate-800">--</strong></div>
+          <div class="text-slate-500">Marco / Entregável: <strong id="mentor-modal-fase-nome" class="text-indigo-700">--</strong></div>
+        </div>
+
+        <div>
+          <label for="mentor-nome-input" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Nome do Professor / Advogado Orientador *</label>
+          <input type="text" id="mentor-nome-input" placeholder="Ex: Dr. Roberto M. Silveira" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:ring-2 focus:ring-indigo-500 font-medium">
+        </div>
+
+        <div>
+          <label for="mentor-rubrica-input" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Inscrição OAB / Rubrica Eletrônica *</label>
+          <input type="text" id="mentor-rubrica-input" placeholder="Ex: OAB/SP 412.890" value="OAB/MG-Orientador-2026" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:ring-2 focus:ring-indigo-500 font-mono">
+        </div>
+
+        <div>
+          <label for="mentor-parecer-input" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Parecer Técnico / Despacho de Conformidade *</label>
+          <textarea id="mentor-parecer-input" rows="3" placeholder="Atesto que a peça jurídica/minuta contratual foi integralmente revisada sob a ótica doutrinária e jurisprudencial, estando apta à entrega final ao cliente..." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:ring-2 focus:ring-indigo-500"></textarea>
+        </div>
+
+        <div class="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2">
+          <i class="fa-solid fa-triangle-exclamation text-amber-600 mt-0.5"></i>
+          <div>
+            <strong>Responsabilidade Técnica:</strong> A chancela deste marco remove a trava de segurança regimental do caso e habilita a emissão do faturamento definitivo pela Tesouraria.
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+        <button type="button" onclick="fecharModalAprovacaoMentor()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition">
+          Cancelar
+        </button>
+        <button type="button" onclick="confirmarAprovacaoMentor()" class="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+          <i class="fa-solid fa-stamp"></i> Assinar & Chancelar Marco
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL DE NOVO CENTRO DE CUSTO JURÍDICO ==================== -->
+  <div id="modal-novo-centro-custo-edv" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 my-auto space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center text-lg border border-purple-200">
+            <i class="fa-solid fa-folder-plus"></i>
+          </div>
+          <div>
+            <h3 class="font-extrabold text-slate-800 text-base">Novo Centro de Custo Jurídico</h3>
+            <p class="text-xs text-slate-500">Cadastro de contrato/caso para controle de margem na DRE</p>
+          </div>
+        </div>
+        <button type="button" onclick="fecharModalNovoCentroCusto()" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 text-sm">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label for="dre-novo-caso" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Título do Caso / Contrato *</label>
+          <input type="text" id="dre-novo-caso" placeholder="Ex: Registro e Blindagem de Marca Internacional" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:ring-2 focus:ring-purple-500 font-medium">
+        </div>
+
+        <div>
+          <label for="dre-novo-cliente" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Razão Social / Cliente *</label>
+          <input type="text" id="dre-novo-cliente" placeholder="Ex: Global Trade Logistics S.A." class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:ring-2 focus:ring-purple-500 font-medium">
+        </div>
+
+        <div>
+          <label for="dre-novo-area" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Área do Direito *</label>
+          <select id="dre-novo-area" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white focus:ring-2 focus:ring-purple-500 font-medium">
+            <option value="Propriedade Intelectual">Propriedade Intelectual (Marcas e Patentes)</option>
+            <option value="Compliance e LGPD">Compliance e LGPD</option>
+            <option value="Direito Contratual">Direito Contratual</option>
+            <option value="Direito Societário">Direito Societário (Acordo de Sócios)</option>
+            <option value="Consultoria em Parcerias">Consultoria em Parcerias</option>
+            <option value="Assessoria Regimental e Estatutária">Assessoria Regimental e Estatutária</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="dre-novo-receita" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Receita Bruta (R$) *</label>
+            <input type="number" id="dre-novo-receita" step="0.01" value="3500.00" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white font-mono font-bold">
+          </div>
+          <div>
+            <label for="dre-novo-custas" class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">Custas Diretas (INPI) (R$)</label>
+            <input type="number" id="dre-novo-custas" step="0.01" value="142.00" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-800 bg-white font-mono">
+          </div>
+        </div>
+
+        <div class="p-3 bg-purple-50 rounded-xl border border-purple-200 text-[11px] text-purple-900">
+          <strong>Superávit Automático:</strong> O sistema calculará a Margem de Contribuição Direta (aprox. 95%) e destinará 100% do saldo ao Fundo de Reinvestimento Estatutário.
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+        <button type="button" onclick="fecharModalNovoCentroCusto()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition">
+          Cancelar
+        </button>
+        <button type="button" onclick="submeterNovoCentroCusto()" class="px-4 py-2 text-xs font-bold text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+          <i class="fa-solid fa-check"></i> Cadastrar Centro de Custo
         </button>
       </div>
     </div>

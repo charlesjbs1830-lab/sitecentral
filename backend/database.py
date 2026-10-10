@@ -1700,6 +1700,17 @@ def init_db():
 
     # Migração e retenção integral dos 88 processos de marcas (RMs) legados
     seed_contratos_rm_from_legacy(conn)
+
+    # Inicialização do Motor de Tesouraria Avançada, CPQ Jurídico e DRE
+    try:
+        try:
+            from treasury_engine import init_treasury_tables
+        except ImportError:
+            from backend.treasury_engine import init_treasury_tables
+        init_treasury_tables(conn)
+    except Exception as e_tres:
+        print(f"[Treasury Engine] Aviso ao inicializar tesouraria: {e_tres}")
+
     conn.commit()
     cursor.execute("SELECT COUNT(*) FROM users;")
     total_users = cursor.fetchone()[0]

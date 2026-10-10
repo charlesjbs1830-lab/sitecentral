@@ -719,13 +719,21 @@ function switchFinanceiroSubtab(subtab) {
   const caixaView = document.getElementById('fin-sub-caixa');
   const legadoView = document.getElementById('fin-sub-legado');
   const edbrainView = document.getElementById('fin-sub-edbrain');
+  const cpqView = document.getElementById('fin-sub-cpq');
+  const dreView = document.getElementById('fin-sub-dre');
+  const forecastingView = document.getElementById('fin-sub-forecasting');
+  const obzView = document.getElementById('fin-sub-obz');
 
   const btnCaixa = document.getElementById('subtab-fin-caixa');
   const btnLegado = document.getElementById('subtab-fin-legado');
   const btnEdbrain = document.getElementById('subtab-fin-edbrain');
+  const btnCpq = document.getElementById('subtab-fin-cpq');
+  const btnDre = document.getElementById('subtab-fin-dre');
+  const btnForecasting = document.getElementById('subtab-fin-forecasting');
+  const btnObz = document.getElementById('subtab-fin-obz');
 
-  [caixaView, legadoView, edbrainView].forEach(el => el && el.classList.add('hidden'));
-  [btnCaixa, btnLegado, btnEdbrain].forEach(btn => {
+  [caixaView, legadoView, edbrainView, cpqView, dreView, forecastingView, obzView].forEach(el => el && el.classList.add('hidden'));
+  [btnCaixa, btnLegado, btnEdbrain, btnCpq, btnDre, btnForecasting, btnObz].forEach(btn => {
     if (btn) {
       btn.classList.remove('subtab-active');
       btn.classList.add('subtab-inactive');
@@ -736,6 +744,22 @@ function switchFinanceiroSubtab(subtab) {
     if (caixaView) caixaView.classList.remove('hidden');
     if (btnCaixa) { btnCaixa.classList.add('subtab-active'); btnCaixa.classList.remove('subtab-inactive'); }
     carregarModuloFinanceiro2();
+  } else if (subtab === 'cpq') {
+    if (cpqView) cpqView.classList.remove('hidden');
+    if (btnCpq) { btnCpq.classList.add('subtab-active'); btnCpq.classList.remove('subtab-inactive'); }
+    carregarCPQJuridico();
+  } else if (subtab === 'dre') {
+    if (dreView) dreView.classList.remove('hidden');
+    if (btnDre) { btnDre.classList.add('subtab-active'); btnDre.classList.remove('subtab-inactive'); }
+    carregarDREJuridica();
+  } else if (subtab === 'forecasting') {
+    if (forecastingView) forecastingView.classList.remove('hidden');
+    if (btnForecasting) { btnForecasting.classList.add('subtab-active'); btnForecasting.classList.remove('subtab-inactive'); }
+    carregarForecastingJuridico();
+  } else if (subtab === 'obz') {
+    if (obzView) obzView.classList.remove('hidden');
+    if (btnObz) { btnObz.classList.add('subtab-active'); btnObz.classList.remove('subtab-inactive'); }
+    carregarOBZJuridico();
   } else if (subtab === 'edbrain') {
     if (edbrainView) edbrainView.classList.remove('hidden');
     if (btnEdbrain) { btnEdbrain.classList.add('subtab-active'); btnEdbrain.classList.remove('subtab-inactive'); }
@@ -11940,6 +11964,746 @@ ${p2_qua}
 }
 
 // ==============================================================================
+// 7.2 TESOURARIA AVANÇADA, CPQ PARAMÉTRICO, DRE & PRESTAÇÃO DE CONTAS (EDBRAIN)
+// ==============================================================================
+
+window.cpqServicosCache = [];
+window.propostasCPQCache = [];
+window.dreDataCache = null;
+window.chartForecastingInstance = null;
+window.chartOBZInstance = null;
+
+function formatarMoedaBRL(val) {
+  return Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+// ------------------------------------------------------------------------------
+// CPQ JURÍDICO & PRECIFICAÇÃO DE HONORÁRIOS
+// ------------------------------------------------------------------------------
+async function carregarCPQJuridico() {
+  try {
+    const res = await fetch('/api/financeiro/cpq/servicos');
+    if (!res.ok) throw new Error('Falha ao carregar catálogo CPQ');
+    const data = await res.json();
+    window.cpqServicosCache = data.servicos || [];
+
+    const select = document.getElementById('cpq-servico-select');
+    if (select) {
+      const currentVal = select.value;
+      select.innerHTML = '<option value="">-- Selecione o Serviço Jurídico --</option>' +
+        window.cpqServicosCache.map(s => `
+          <option value="${s.id}" data-pesquisa="${s.horas_pesquisa_padrao}" data-redacao="${s.horas_redacao_padrao}" data-revisao="${s.horas_revisao_padrao}" data-custas="${s.custas_inpi_padrao}">
+            ${escapeHtml(s.codigo_servico)} - ${escapeHtml(s.nome)} (${escapeHtml(s.macro_area)})
+          </option>
+        `).join('');
+
+      if (currentVal && window.cpqServicosCache.some(s => s.id == currentVal)) {
+        select.value = currentVal;
+      } else if (window.cpqServicosCache.length > 0) {
+        select.value = window.cpqServicosCache[0].id;
+        aoSelecionarServicoCPQ();
+      }
+    }
+
+    calcularCPQJuridico();
+    carregarPropostasCPQJuridicas();
+  } catch (err) {
+    console.error('[CPQ] Erro ao carregar catálogo:', err);
+  }
+}
+
+function aoSelecionarServicoCPQ() {
+  const select = document.getElementById('cpq-servico-select');
+  if (!select) return;
+  const opt = select.options[select.selectedIndex];
+  if (!opt || !opt.dataset) return;
+
+  const hPesquisa = opt.dataset.pesquisa;
+  const hRedacao = opt.dataset.redacao;
+  const hRevisao = opt.dataset.revisao;
+  const custas = opt.dataset.custas;
+
+  if (hPesquisa !== undefined && document.getElementById('cpq-hh-pesquisa')) document.getElementById('cpq-hh-pesquisa').value = hPesquisa;
+  if (hRedacao !== undefined && document.getElementById('cpq-hh-redacao')) document.getElementById('cpq-hh-redacao').value = hRedacao;
+  if (hRevisao !== undefined && document.getElementById('cpq-hh-revisao')) document.getElementById('cpq-hh-revisao').value = hRevisao;
+  if (custas !== undefined && document.getElementById('cpq-custas-inpi')) document.getElementById('cpq-custas-inpi').value = parseFloat(custas).toFixed(2);
+
+  calcularCPQJuridico();
+}
+
+async function calcularCPQJuridico() {
+  const select = document.getElementById('cpq-servico-select');
+  const servicoId = select && select.value ? parseInt(select.value) : (window.cpqServicosCache[0]?.id || 1);
+  if (!servicoId) return;
+
+  const hPesquisa = parseInt(document.getElementById('cpq-hh-pesquisa')?.value || 10);
+  const hRedacao = parseInt(document.getElementById('cpq-hh-redacao')?.value || 25);
+  const hRevisao = parseInt(document.getElementById('cpq-hh-revisao')?.value || 10);
+  const senioridade = document.getElementById('cpq-senioridade-select')?.value || 'Consultor Jurídico';
+  const risco = parseFloat(document.getElementById('cpq-risco-select')?.value || 1.15);
+  const custas = parseFloat(document.getElementById('cpq-custas-inpi')?.value || 0.0);
+  const overrideVal = document.getElementById('cpq-hourly-override')?.value;
+  const hourlyOverride = overrideVal ? parseFloat(overrideVal) : null;
+
+  try {
+    const res = await fetch('/api/financeiro/cpq/calcular', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        servico_id: servicoId,
+        horas_pesquisa: hPesquisa,
+        horas_redacao: hRedacao,
+        horas_revisao: hRevisao,
+        senioridade: senioridade,
+        multiplicador_risco: risco,
+        custas_inpi_cartorio: custas,
+        hourly_rate_override: hourlyOverride
+      })
+    });
+
+    if (res.ok) {
+      const q = await res.json();
+      atualizarCardResumoCPQ(q);
+    }
+  } catch (err) {
+    console.error('[CPQ] Erro no cálculo:', err);
+  }
+}
+
+function atualizarCardResumoCPQ(q) {
+  const badge = document.getElementById('cpq-card-senioridade-badge');
+  if (badge) badge.textContent = q.senioridade;
+
+  const setEl = (id, txt) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = txt;
+  };
+
+  setEl('cpq-resumo-hh-total', `${q.horas_totais}h`);
+  setEl('cpq-resumo-hourly-rate', `${formatarMoedaBRL(q.preco_hh_base)}/h`);
+  setEl('cpq-resumo-subtotal-hh', formatarMoedaBRL(q.subtotal_hh));
+  setEl('cpq-resumo-risco-fator', `${q.fator_risco}x`);
+  setEl('cpq-resumo-custas', formatarMoedaBRL(q.custas_diretas));
+  setEl('cpq-resumo-honorarios', formatarMoedaBRL(q.honorarios_brutos));
+  setEl('cpq-resumo-reinvestimento', formatarMoedaBRL(q.margem_estatutaria_reinvestimento));
+  setEl('cpq-resumo-total-final', formatarMoedaBRL(q.preco_total_proposta));
+}
+
+async function salvarPropostaCPQJuridica() {
+  const select = document.getElementById('cpq-servico-select');
+  const servicoId = select && select.value ? parseInt(select.value) : null;
+  const clienteNome = document.getElementById('cpq-cliente-nome')?.value.trim();
+  const contatoNome = document.getElementById('cpq-contato-nome')?.value.trim() || null;
+  const contatoEmail = document.getElementById('cpq-contato-email')?.value.trim() || null;
+  const obs = document.getElementById('cpq-obs')?.value.trim() || null;
+
+  if (!clienteNome) {
+    alert('Por favor, informe a Razão Social ou Nome do Cliente.');
+    document.getElementById('cpq-cliente-nome')?.focus();
+    return;
+  }
+  if (!servicoId) {
+    alert('Por favor, selecione o Serviço Jurídico.');
+    return;
+  }
+
+  const hPesquisa = parseInt(document.getElementById('cpq-hh-pesquisa')?.value || 10);
+  const hRedacao = parseInt(document.getElementById('cpq-hh-redacao')?.value || 25);
+  const hRevisao = parseInt(document.getElementById('cpq-hh-revisao')?.value || 10);
+  const senioridade = document.getElementById('cpq-senioridade-select')?.value || 'Consultor Jurídico';
+  const risco = parseFloat(document.getElementById('cpq-risco-select')?.value || 1.15);
+  const custas = parseFloat(document.getElementById('cpq-custas-inpi')?.value || 0.0);
+  const overrideVal = document.getElementById('cpq-hourly-override')?.value;
+  const hourlyOverride = overrideVal ? parseFloat(overrideVal) : null;
+
+  try {
+    const res = await fetch('/api/financeiro/cpq/salvar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cliente_nome: clienteNome,
+        contato_nome: contatoNome,
+        contato_email: contatoEmail,
+        servico_id: servicoId,
+        senioridade: senioridade,
+        horas_pesquisa: hPesquisa,
+        horas_redacao: hRedacao,
+        horas_revisao: hRevisao,
+        multiplicador_risco: risco,
+        custas_inpi_cartorio: custas,
+        hourly_rate: hourlyOverride,
+        status: 'proposta_gerada',
+        observacoes: obs
+      })
+    });
+
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.detail || 'Erro ao salvar proposta');
+    }
+
+    alert('Proposta comercial registrada com sucesso no pipeline!');
+    document.getElementById('cpq-cliente-nome').value = '';
+    document.getElementById('cpq-contato-nome').value = '';
+    document.getElementById('cpq-contato-email').value = '';
+    document.getElementById('cpq-obs').value = '';
+
+    carregarPropostasCPQJuridicas();
+  } catch (err) {
+    console.error('[CPQ] Erro ao salvar proposta:', err);
+    alert('Erro ao salvar proposta: ' + err.message);
+  }
+}
+
+async function carregarPropostasCPQJuridicas() {
+  try {
+    const res = await fetch('/api/financeiro/cpq/propostas');
+    if (!res.ok) throw new Error('Falha ao obter propostas');
+    const data = await res.json();
+    window.propostasCPQCache = data.propostas || [];
+    renderizarPropostasCPQ();
+  } catch (err) {
+    console.error('[CPQ] Erro ao listar propostas:', err);
+  }
+}
+
+function renderizarPropostasCPQ() {
+  const tbody = document.getElementById('datagrid-propostas-cpq');
+  if (!tbody) return;
+
+  const filtro = document.getElementById('filtro-cpq-status')?.value || '';
+  const propostas = window.propostasCPQCache.filter(p => !filtro || p.status === filtro);
+
+  if (propostas.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="text-center py-6 text-slate-400">Nenhuma proposta encontrada.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = propostas.map(p => {
+    let badgeClass = 'bg-blue-100 text-blue-800 border-blue-200';
+    if (p.status === 'em_negociacao') {
+      badgeClass = 'bg-amber-100 text-amber-800 border-amber-200';
+    } else if (p.status === 'fechada_ganha') {
+      badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    } else if (p.status === 'perdida') {
+      badgeClass = 'bg-rose-100 text-rose-800 border-rose-200';
+    }
+
+    const dataFormatada = p.data_proposta ? p.data_proposta.substring(0, 10) : '--';
+
+    return `
+      <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+        <td class="px-4 py-3 font-mono font-bold text-slate-700">#${p.id}</td>
+        <td class="px-4 py-3 text-slate-500">${dataFormatada}</td>
+        <td class="px-4 py-3 font-semibold text-slate-800">${escapeHtml(p.cliente_nome)}</td>
+        <td class="px-4 py-3 text-slate-600">${escapeHtml(p.servico_nome || 'Serviço Jurídico')}</td>
+        <td class="px-4 py-3 text-slate-600">${escapeHtml(p.senioridade)}</td>
+        <td class="px-4 py-3 text-center font-mono font-bold text-slate-700">${p.horas_totais}h</td>
+        <td class="px-4 py-3 text-right font-mono font-black text-indigo-700">${formatarMoedaBRL(p.valor_total)}</td>
+        <td class="px-4 py-3 text-right font-mono font-bold text-emerald-700">${formatarMoedaBRL(p.margem_reinvestimento)}</td>
+        <td class="px-4 py-3 text-center">
+          <select onchange="alterarStatusPropostaJuridica(${p.id}, this.value)" class="text-[10px] font-bold px-2 py-1 rounded-full border ${badgeClass} cursor-pointer focus:outline-none">
+            <option value="proposta_gerada" ${p.status === 'proposta_gerada' ? 'selected' : ''}>Proposta Gerada</option>
+            <option value="em_negociacao" ${p.status === 'em_negociacao' ? 'selected' : ''}>Em Negociação</option>
+            <option value="fechada_ganha" ${p.status === 'fechada_ganha' ? 'selected' : ''}>Fechada / Ganha</option>
+            <option value="perdida" ${p.status === 'perdida' ? 'selected' : ''}>Perdida</option>
+          </select>
+        </td>
+        <td class="px-4 py-3 text-center">
+          <button onclick="excluirPropostaJuridica(${p.id})" title="Excluir Proposta" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function alterarStatusPropostaJuridica(id, status) {
+  try {
+    const res = await fetch(`/api/financeiro/cpq/propostas/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: status })
+    });
+    if (!res.ok) throw new Error('Falha ao atualizar status');
+    carregarPropostasCPQJuridicas();
+  } catch (err) {
+    console.error('[CPQ] Erro ao atualizar status:', err);
+    alert('Erro ao atualizar status: ' + err.message);
+  }
+}
+
+async function excluirPropostaJuridica(id) {
+  if (!confirm(`Deseja realmente excluir a proposta comercial #${id}?`)) return;
+  try {
+    const res = await fetch(`/api/financeiro/cpq/propostas/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Falha ao excluir');
+    carregarPropostasCPQJuridicas();
+  } catch (err) {
+    console.error('[CPQ] Erro ao excluir proposta:', err);
+    alert('Erro ao excluir proposta: ' + err.message);
+  }
+}
+
+// ------------------------------------------------------------------------------
+// DRE GERENCIAL POR CENTRO DE CUSTO & TRAVAS DE ORIENTADOR (OAB)
+// ------------------------------------------------------------------------------
+async function carregarDREJuridica() {
+  try {
+    const res = await fetch('/api/financeiro/dre/centros-custo');
+    if (!res.ok) throw new Error('Falha ao carregar DRE');
+    const data = await res.json();
+    window.dreDataCache = data;
+
+    const setEl = (id, txt) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = txt;
+    };
+
+    setEl('dre-kpi-receita', formatarMoedaBRL(data.receita_bruta_total));
+    setEl('dre-kpi-custas', formatarMoedaBRL(data.custas_diretas_total));
+    setEl('dre-kpi-margem-pct', `${data.margem_contribuicao_media_pct}%`);
+    setEl('dre-kpi-margem-val', `${formatarMoedaBRL(data.margem_contribuicao_total)} de margem direta`);
+    setEl('dre-kpi-superavit', formatarMoedaBRL(data.superavit_estatutario_total));
+
+    renderizarGridCentrosCustoDRE(data.centros_custo || []);
+    renderizarMarcosOrientador(data.centros_custo || []);
+  } catch (err) {
+    console.error('[DRE] Erro ao carregar DRE:', err);
+  }
+}
+
+function renderizarGridCentrosCustoDRE(centros) {
+  const tbody = document.getElementById('datagrid-dre-centros');
+  if (!tbody) return;
+
+  if (centros.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-6 text-slate-400">Nenhum centro de custo registrado.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = centros.map(c => `
+    <tr class="hover:bg-slate-50 transition border-b border-slate-100">
+      <td class="px-4 py-3 font-mono font-bold text-slate-700">CC-${c.id}</td>
+      <td class="px-4 py-3 font-semibold text-slate-900">${escapeHtml(c.caso_nome)}</td>
+      <td class="px-4 py-3 text-slate-600">${escapeHtml(c.cliente_nome)}</td>
+      <td class="px-4 py-3">
+        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">${escapeHtml(c.area_juridica)}</span>
+      </td>
+      <td class="px-4 py-3 text-right font-mono font-bold text-slate-800">${formatarMoedaBRL(c.receita_bruta)}</td>
+      <td class="px-4 py-3 text-right font-mono text-rose-600">${formatarMoedaBRL(c.custas_diretas_inpi_cartorio)}</td>
+      <td class="px-4 py-3 text-right font-mono font-black text-purple-700">${formatarMoedaBRL(c.margem_contribuicao_direta)}</td>
+      <td class="px-4 py-3 text-center font-mono font-bold text-emerald-700">${c.margem_contribuicao_pct}%</td>
+      <td class="px-4 py-3 text-right font-mono font-black text-blue-700">${formatarMoedaBRL(c.superavit_estatutario_retido)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderizarMarcosOrientador(centros) {
+  const container = document.getElementById('grid-marcos-orientador');
+  if (!container) return;
+
+  const marcosComCaso = [];
+  centros.forEach(c => {
+    (c.marcos || []).forEach(m => {
+      marcosComCaso.push({ ...m, caso_nome: c.caso_nome, cliente_nome: c.cliente_nome });
+    });
+  });
+
+  if (marcosComCaso.length === 0) {
+    container.innerHTML = '<div class="p-6 text-center text-slate-400 col-span-3">Nenhum marco regulatório cadastrado.</div>';
+    return;
+  }
+
+  container.innerHTML = marcosComCaso.map(m => {
+    const isAprovado = (m.validado_orientador == 1);
+    const borderColor = isAprovado ? 'border-emerald-300 bg-emerald-50/20' : 'border-amber-300 bg-amber-50/20';
+
+    return `
+      <div class="glass-card rounded-xl p-4 border ${borderColor} space-y-3 relative shadow-xs flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+            <span class="text-[10px] font-mono text-slate-500 font-bold">MARCO #${m.id}</span>
+            ${isAprovado ? `
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                <i class="fa-solid fa-stamp"></i> Chancelado OAB
+              </span>
+            ` : `
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                <i class="fa-solid fa-lock"></i> Trava OAB Ativa
+              </span>
+            `}
+          </div>
+
+          <div class="mt-2">
+            <h5 class="font-bold text-xs text-slate-900">${escapeHtml(m.fase_nome)}</h5>
+            <p class="text-[11px] text-slate-500 mt-0.5">Caso: <strong>${escapeHtml(m.caso_nome)}</strong> (${escapeHtml(m.cliente_nome)})</p>
+            <div class="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+              <i class="fa-regular fa-calendar"></i> Prazo Limite: ${m.prazo_limite || 'Sem prazo'}
+            </div>
+          </div>
+
+          ${isAprovado ? `
+            <div class="mt-3 p-2.5 bg-white rounded-lg border border-emerald-200 text-[10px] text-slate-700 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-emerald-800">${escapeHtml(m.mentor_nome)}</span>
+                <span class="font-mono text-slate-500">${escapeHtml(m.mentor_rubrica)}</span>
+              </div>
+              <p class="italic text-slate-600">"${escapeHtml(m.mentor_parecer || 'Parecer de conformidade formal emitido.')}"</p>
+            </div>
+          ` : `
+            <div class="mt-3 p-2 bg-amber-50 rounded-lg border border-amber-200 text-[10px] text-amber-800">
+              Entrega bloqueada até homologação formal do orientador regimental.
+            </div>
+          `}
+        </div>
+
+        <div class="pt-2">
+          ${!isAprovado ? `
+            <button type="button" onclick="abrirModalAprovacaoMentor(${m.id}, '${escapeHtml(m.caso_nome).replace(/'/g, "\\'")}', '${escapeHtml(m.fase_nome).replace(/'/g, "\\'")}')" class="w-full py-1.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs shadow-2xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+              <i class="fa-solid fa-stamp"></i> Chancelar Marco (Orientador OAB)
+            </button>
+          ` : `
+            <div class="text-center text-[10px] text-emerald-700 font-bold py-1 flex items-center justify-center gap-1">
+              <i class="fa-solid fa-circle-check"></i> Homologado pelo Orientador
+            </div>
+          `}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function abrirModalAprovacaoMentor(marcoId, casoNome, faseNome) {
+  document.getElementById('mentor-modal-marco-id').value = marcoId;
+  document.getElementById('mentor-modal-caso-nome').textContent = casoNome;
+  document.getElementById('mentor-modal-fase-nome').textContent = faseNome;
+  document.getElementById('modal-mentor-edv')?.classList.remove('hidden');
+}
+
+function fecharModalAprovacaoMentor() {
+  document.getElementById('modal-mentor-edv')?.classList.add('hidden');
+}
+
+async function confirmarAprovacaoMentor() {
+  const marcoId = document.getElementById('mentor-modal-marco-id')?.value;
+  const nome = document.getElementById('mentor-nome-input')?.value.trim();
+  const rubrica = document.getElementById('mentor-rubrica-input')?.value.trim() || 'OAB-VALIDADO-2026';
+  const parecer = document.getElementById('mentor-parecer-input')?.value.trim();
+
+  if (!nome) {
+    alert('Por favor, informe o nome do Professor ou Advogado Orientador.');
+    return;
+  }
+  if (!parecer) {
+    alert('Por favor, redija o parecer técnico de homologação formal.');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/financeiro/marcos/${marcoId}/aprovar-orientador`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mentor_nome: nome,
+        mentor_rubrica: rubrica,
+        mentor_parecer: parecer
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.detail || 'Erro ao validar marco');
+    }
+
+    alert('Marco chancelado com sucesso! A trava estatutária foi liberada.');
+    fecharModalAprovacaoMentor();
+    carregarDREJuridica();
+  } catch (err) {
+    console.error('[Orientador] Erro na validação:', err);
+    alert('Erro ao validar marco: ' + err.message);
+  }
+}
+
+function abrirModalNovoCentroCusto() {
+  document.getElementById('modal-novo-centro-custo-edv')?.classList.remove('hidden');
+}
+
+function fecharModalNovoCentroCusto() {
+  document.getElementById('modal-novo-centro-custo-edv')?.classList.add('hidden');
+}
+
+async function submeterNovoCentroCusto() {
+  const caso = document.getElementById('dre-novo-caso')?.value.trim();
+  const cliente = document.getElementById('dre-novo-cliente')?.value.trim();
+  const area = document.getElementById('dre-novo-area')?.value || 'Direito Contratual';
+  const receita = parseFloat(document.getElementById('dre-novo-receita')?.value || 0);
+  const custas = parseFloat(document.getElementById('dre-novo-custas')?.value || 0);
+
+  if (!caso || !cliente) {
+    alert('Preencha o título do caso e o nome do cliente.');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/financeiro/dre/centros-custo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        caso_nome: caso,
+        cliente_nome: cliente,
+        area_juridica: area,
+        receita_bruta: receita,
+        custas_diretas_inpi_cartorio: custas
+      })
+    });
+
+    if (!res.ok) throw new Error('Falha ao criar centro de custo');
+    alert('Centro de custo registrado com sucesso!');
+    fecharModalNovoCentroCusto();
+    carregarDREJuridica();
+  } catch (err) {
+    console.error('[DRE] Erro ao cadastrar centro de custo:', err);
+    alert('Erro ao criar centro de custo: ' + err.message);
+  }
+}
+
+// ------------------------------------------------------------------------------
+// FORECASTING PREDITIVO & CASH RUNWAY JURÍDICO
+// ------------------------------------------------------------------------------
+async function carregarForecastingJuridico() {
+  const horizon = document.getElementById('fc-horizonte')?.value || 24;
+  const growth = document.getElementById('fc-growth')?.value || 15;
+  const optBonus = document.getElementById('fc-opt-bonus')?.value || 20;
+  const pessPenalty = document.getElementById('fc-pess-penalty')?.value || 15;
+
+  const url = `/api/financeiro/forecasting?horizon_months=${horizon}&growth_rate_pct=${growth}&opt_bonus_pct=${optBonus}&pess_penalty_pct=${pessPenalty}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Falha ao gerar forecasting');
+    const data = await res.json();
+
+    const setEl = (id, txt) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = txt;
+    };
+
+    setEl('fc-kpi-base', formatarMoedaBRL(data.resumo_executivo.caixa_final_cenario_base));
+    setEl('fc-kpi-otimista', formatarMoedaBRL(data.resumo_executivo.caixa_final_cenario_otimista));
+    setEl('fc-kpi-pessimista', formatarMoedaBRL(data.resumo_executivo.caixa_final_cenario_pessimista));
+    setEl('fc-kpi-runway', `${data.resumo_executivo.cash_runway_estimado_meses} meses`);
+
+    renderizarGraficoForecasting(data);
+  } catch (err) {
+    console.error('[Forecasting] Erro ao carregar projeções:', err);
+  }
+}
+
+function renderizarGraficoForecasting(data) {
+  if (typeof Chart === 'undefined') return;
+
+  const canvas = document.getElementById('chart-forecasting-juridico');
+  if (!canvas) return;
+
+  const labels = data.projecoes.map(p => p.mes);
+  const baseData = data.projecoes.map(p => p.caixa_acumulado_base);
+  const optData = data.projecoes.map(p => p.caixa_acumulado_otimista);
+  const pessData = data.projecoes.map(p => p.caixa_acumulado_pessimista);
+
+  if (window.chartForecastingInstance) {
+    window.chartForecastingInstance.destroy();
+  }
+
+  const ctx = canvas.getContext('2d');
+  window.chartForecastingInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Cenário Base',
+          data: baseData,
+          borderColor: '#06b6d4',
+          backgroundColor: 'rgba(6, 182, 212, 0.08)',
+          fill: true,
+          tension: 0.35,
+          borderWidth: 2.5,
+          pointRadius: 3
+        },
+        {
+          label: 'Cenário Otimista (+20%)',
+          data: optData,
+          borderColor: '#10b981',
+          backgroundColor: 'transparent',
+          borderDash: [4, 4],
+          tension: 0.35,
+          borderWidth: 2,
+          pointRadius: 2
+        },
+        {
+          label: 'Cenário Pessimista (-15%)',
+          data: pessData,
+          borderColor: '#ef4444',
+          backgroundColor: 'transparent',
+          borderDash: [3, 3],
+          tension: 0.35,
+          borderWidth: 2,
+          pointRadius: 2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return `${context.dataset.label}: ${formatarMoedaBRL(context.raw)}`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          ticks: {
+            callback: function(value) {
+              return 'R$ ' + (value / 1000).toFixed(0) + 'k';
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+// ------------------------------------------------------------------------------
+// ORÇAMENTO BASE ZERO (OBZ) & PRESTAÇÃO DE CONTAS AGO
+// ------------------------------------------------------------------------------
+async function carregarOBZJuridico() {
+  try {
+    const res = await fetch('/api/financeiro/obz');
+    if (!res.ok) throw new Error('Falha ao obter OBZ');
+    const data = await res.json();
+
+    const setEl = (id, txt) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = txt;
+    };
+
+    setEl('obz-kpi-orcado', formatarMoedaBRL(data.total_orcado));
+    setEl('obz-kpi-realizado', formatarMoedaBRL(data.total_realizado));
+    setEl('obz-kpi-saldo', formatarMoedaBRL(data.saldo_remanescente));
+    setEl('obz-kpi-pct', `${data.execucao_global_pct}%`);
+
+    renderizarPacotesOBZ(data.pacotes || []);
+    renderizarGraficoOBZ(data.pacotes || []);
+  } catch (err) {
+    console.error('[OBZ] Erro ao carregar OBZ:', err);
+  }
+}
+
+function renderizarPacotesOBZ(pacotes) {
+  const container = document.getElementById('obz-pacotes-lista');
+  if (!container) return;
+
+  if (pacotes.length === 0) {
+    container.innerHTML = '<div class="p-6 text-center text-slate-400">Nenhum pacote orçamentário configurado.</div>';
+    return;
+  }
+
+  container.innerHTML = pacotes.map(p => {
+    const pct = p.valor_orcado > 0 ? ((p.valor_realizado / p.valor_orcado) * 100).toFixed(1) : 0;
+    return `
+      <div class="p-4 bg-slate-50/70 rounded-xl border border-slate-200/80 space-y-2 hover:bg-slate-50 transition">
+        <div class="flex items-center justify-between">
+          <div>
+            <span class="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">${escapeHtml(p.macro_area)}</span>
+            <h5 class="text-xs font-bold text-slate-800">${escapeHtml(p.nome_pacote)}</h5>
+          </div>
+          <span class="text-xs font-black font-mono text-amber-700">${pct}% executado</span>
+        </div>
+
+        <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+          <div class="bg-amber-600 h-2 rounded-full" style="width: ${Math.min(pct, 100)}%"></div>
+        </div>
+
+        <div class="flex items-center justify-between text-[11px] font-mono pt-1 text-slate-600">
+          <span>Orçado: <strong>${formatarMoedaBRL(p.valor_orcado)}</strong></span>
+          <span>Realizado: <strong class="text-amber-700">${formatarMoedaBRL(p.valor_realizado)}</strong></span>
+          <span>Saldo: <strong class="text-emerald-700">${formatarMoedaBRL(p.saldo_remanescente)}</strong></span>
+        </div>
+
+        <p class="text-[10px] text-slate-500 italic pt-1 border-t border-slate-100">
+          "${escapeHtml(p.justificativa_estrategica || 'Alinhamento com diretrizes estatutárias.')}"
+        </p>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderizarGraficoOBZ(pacotes) {
+  if (typeof Chart === 'undefined') return;
+
+  const canvas = document.getElementById('chart-obz-pacotes');
+  if (!canvas) return;
+
+  const labels = pacotes.map(p => p.nome_pacote);
+  const values = pacotes.map(p => p.valor_orcado);
+  const colors = ['#8b5cf6', '#6366f1', '#f59e0b', '#10b981'];
+
+  if (window.chartOBZInstance) {
+    window.chartOBZInstance.destroy();
+  }
+
+  const ctx = canvas.getContext('2d');
+  window.chartOBZInstance = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors,
+        borderWidth: 2,
+        borderColor: '#ffffff'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { boxWidth: 10, font: { size: 10 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return `${context.label}: ${formatarMoedaBRL(context.raw)}`;
+            }
+          }
+        }
+      },
+      cutout: '65%'
+    }
+  });
+}
+
+// ==============================================================================
 // 8. INICIALIZAÇÃO DEFINITIVA DO ECOSSISTEMA
 // ==============================================================================
 function initApp() {
@@ -11967,6 +12731,7 @@ function initApp() {
   carregarPipelineCRM();
   carregarPainelContratos();
   carregarModuloFinanceiro2();
+  carregarCPQJuridico();
   const role = (currentUserSession?.role || '').toLowerCase();
   if (['presidente', 'diretor'].includes(role)) {
     carregarDashboardExecutivoBI();

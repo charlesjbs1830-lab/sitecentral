@@ -19,7 +19,7 @@ from typing import Dict, Any, Optional, List, Union
 import httpx
 
 from fastapi import FastAPI, Depends, HTTPException, status, Query, Request, BackgroundTasks
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -5191,6 +5191,196 @@ async def seed_legacy_rms_endpoint(
 ):
     total = seed_contratos_rm_from_legacy()
     return {"status": "success", "message": f"{total} processos de marcas sincronizados na base relacional."}
+
+
+
+# ==============================================================================
+# 28. TESOURARIA AVANÇADA, CPQ JURÍDICO, DRE & PRESTAÇÃO DE CONTAS (EDBRAIN)
+# ==============================================================================
+try:
+    from treasury_engine import (
+        get_cpq_servicos_juridicos,
+        calculate_cpq_juridico,
+        save_proposta_cpq_juridica,
+        list_propostas_cpq_juridicas,
+        update_proposta_cpq_status,
+        delete_proposta_cpq,
+        get_dre_juridica_centros_custo,
+        create_dre_centro_custo_juridico,
+        aprovar_marco_orientador_juridico,
+        get_forecasting_juridico,
+        get_obz_distribuicao_edv,
+        generate_prestacao_contas_excel_edv,
+        generate_prestacao_contas_html_edv
+    )
+except ImportError:
+    from backend.treasury_engine import (
+        get_cpq_servicos_juridicos,
+        calculate_cpq_juridico,
+        save_proposta_cpq_juridica,
+        list_propostas_cpq_juridicas,
+        update_proposta_cpq_status,
+        delete_proposta_cpq,
+        get_dre_juridica_centros_custo,
+        create_dre_centro_custo_juridico,
+        aprovar_marco_orientador_juridico,
+        get_forecasting_juridico,
+        get_obz_distribuicao_edv,
+        generate_prestacao_contas_excel_edv,
+        generate_prestacao_contas_html_edv
+    )
+
+class CPQCalculoPayload(BaseModel):
+    servico_id: int
+    horas_pesquisa: int = 10
+    horas_redacao: int = 25
+    horas_revisao: int = 10
+    senioridade: str = "Consultor Jurídico"
+    multiplicador_risco: float = 1.15
+    custas_inpi_cartorio: float = 0.0
+    hourly_rate_override: Optional[float] = None
+
+class CPQSalvarPayload(BaseModel):
+    cliente_nome: str
+    contato_nome: Optional[str] = None
+    contato_email: Optional[str] = None
+    servico_id: int
+    senioridade: str = "Consultor Jurídico"
+    horas_pesquisa: int = 10
+    horas_redacao: int = 25
+    horas_revisao: int = 10
+    multiplicador_risco: float = 1.15
+    custas_inpi_cartorio: float = 0.0
+    hourly_rate: Optional[float] = None
+    status: str = "proposta_gerada"
+    observacoes: Optional[str] = None
+
+class CPQStatusPayload(BaseModel):
+    status: str
+
+class DRECentroCustoPayload(BaseModel):
+    caso_nome: str
+    cliente_nome: str
+    area_juridica: str = "Direito Contratual"
+    receita_bruta: float = 4500.0
+    custas_diretas_inpi_cartorio: float = 0.0
+    despesas_operacionais_diretas: Optional[float] = None
+    data_competencia: Optional[str] = None
+
+class MarcoOrientadorPayload(BaseModel):
+    mentor_nome: str
+    mentor_rubrica: str = "OAB-VALIDADO-2026"
+    mentor_parecer: str
+
+@app.get("/api/financeiro/cpq/servicos", summary="Catálogo oficial de serviços jurídicos padronizados EDV")
+async def listar_cpq_servicos_endpoint(area: Optional[str] = None):
+    servicos = get_cpq_servicos_juridicos(area=area)
+    return {"total": len(servicos), "servicos": servicos}
+
+@app.post("/api/financeiro/cpq/calcular", summary="Calcular honorários e margem estatutária via CPQ Jurídico")
+async def calcular_cpq_endpoint(payload: CPQCalculoPayload):
+    try:
+        quote = calculate_cpq_juridico(
+            servico_id=payload.servico_id,
+            horas_pesquisa=payload.horas_pesquisa,
+            horas_redacao=payload.horas_redacao,
+            horas_revisao=payload.horas_revisao,
+            senioridade=payload.senioridade,
+            risco_fator=payload.multiplicador_risco,
+            custas_inpi_cartorio=payload.custas_inpi_cartorio,
+            hourly_rate_override=payload.hourly_rate_override
+        )
+        return quote
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/financeiro/cpq/salvar", summary="Registrar proposta comercial no histórico do CPQ")
+async def salvar_cpq_endpoint(payload: CPQSalvarPayload):
+    try:
+        res = save_proposta_cpq_juridica(payload.dict())
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/financeiro/cpq/propostas", summary="Listar histórico de propostas de honorários emitidas")
+async def listar_cpq_propostas_endpoint():
+    propostas = list_propostas_cpq_juridicas()
+    return {"total": len(propostas), "propostas": propostas}
+
+@app.patch("/api/financeiro/cpq/propostas/{proposta_id}/status", summary="Atualizar status de proposta no pipeline")
+async def atualizar_status_proposta_endpoint(proposta_id: int, payload: CPQStatusPayload):
+    sucesso = update_proposta_cpq_status(proposta_id, payload.status)
+    if not sucesso:
+        raise HTTPException(status_code=404, detail="Proposta não encontrada")
+    return {"status": "success", "message": f"Status atualizado para {payload.status}"}
+
+@app.delete("/api/financeiro/cpq/propostas/{proposta_id}", summary="Excluir proposta obsoleta")
+async def excluir_proposta_endpoint(proposta_id: int):
+    sucesso = delete_proposta_cpq(proposta_id)
+    if not sucesso:
+        raise HTTPException(status_code=404, detail="Proposta não encontrada")
+    return {"status": "success", "message": "Proposta excluída com sucesso."}
+
+@app.get("/api/financeiro/dre/centros-custo", summary="DRE Gerencial por Centro de Custo Jurídico")
+async def obter_dre_centros_custo_endpoint():
+    return get_dre_juridica_centros_custo()
+
+@app.post("/api/financeiro/dre/centros-custo", summary="Criar novo centro de custo para caso jurídico")
+async def criar_dre_centro_custo_endpoint(payload: DRECentroCustoPayload):
+    res = create_dre_centro_custo_juridico(payload.dict())
+    return res
+
+@app.post("/api/financeiro/marcos/{marco_id}/aprovar-orientador", summary="Chancela formal do advogado/professor orientador (Trava OAB)")
+async def aprovar_marco_orientador_endpoint(marco_id: int, payload: MarcoOrientadorPayload):
+    sucesso = aprovar_marco_orientador_juridico(
+        marco_id=marco_id,
+        mentor_nome=payload.mentor_nome,
+        mentor_rubrica=payload.mentor_rubrica,
+        mentor_parecer=payload.mentor_parecer
+    )
+    if not sucesso:
+        raise HTTPException(status_code=404, detail="Marco do caso não encontrado")
+    return {"status": "success", "message": "Marco jurídico chancelado com sucesso pelo orientador."}
+
+@app.get("/api/financeiro/forecasting", summary="Motor econométrico de projeção de fluxo de caixa (12-36 meses)")
+async def obter_forecasting_juridico_endpoint(
+    horizon_months: int = 24,
+    growth_rate_pct: float = 15.0,
+    opt_bonus_pct: float = 20.0,
+    pess_penalty_pct: float = 15.0,
+    inflation_pct: float = 5.5,
+    seasonality: float = 1.0,
+    initial_cash: Optional[float] = None
+):
+    return get_forecasting_juridico(
+        horizon_months=horizon_months,
+        growth_rate_pct=growth_rate_pct,
+        opt_bonus_pct=opt_bonus_pct,
+        pess_penalty_pct=pess_penalty_pct,
+        inflation_pct=inflation_pct,
+        seasonality_intensity=seasonality,
+        initial_cash_balance=initial_cash
+    )
+
+@app.get("/api/financeiro/obz", summary="Distribuição por pacotes do Orçamento Base Zero (OBZ)")
+async def obter_obz_distribuicao_endpoint():
+    return get_obz_distribuicao_edv()
+
+@app.get("/api/financeiro/relatorio/prestacao-contas-excel", summary="Download de relatório de prestação de contas em Excel")
+async def download_prestacao_contas_excel_endpoint():
+    buf = generate_prestacao_contas_excel_edv()
+    filename = f"Prestacao_Contas_EDV_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    headers = {"Content-Disposition": f"attachment; filename={filename}"}
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers
+    )
+
+@app.get("/api/financeiro/relatorio/prestacao-contas-html", summary="Visualização de relatório de prestação de contas formatado")
+async def view_prestacao_contas_html_endpoint():
+    html_content = generate_prestacao_contas_html_edv()
+    return HTMLResponse(content=html_content)
 
 
 # ==============================================================================
