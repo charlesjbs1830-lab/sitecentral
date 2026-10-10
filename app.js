@@ -11992,7 +11992,7 @@ function escapeHtml(str) {
 // ------------------------------------------------------------------------------
 async function carregarCPQJuridico() {
   try {
-    const res = await fetch('/api/financeiro/cpq/servicos');
+    const res = await fetch(`${API_BASE_URL}/api/financeiro/cpq/servicos`);
     if (!res.ok) throw new Error('Falha ao carregar catálogo CPQ');
     const data = await res.json();
     window.cpqServicosCache = data.servicos || [];
@@ -12056,7 +12056,7 @@ async function calcularCPQJuridico() {
   const hourlyOverride = overrideVal ? parseFloat(overrideVal) : null;
 
   try {
-    const res = await fetch('/api/financeiro/cpq/calcular', {
+    const res = await fetch(`${API_BASE_URL}/api/financeiro/cpq/calcular`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -12127,7 +12127,7 @@ async function salvarPropostaCPQJuridica() {
   const hourlyOverride = overrideVal ? parseFloat(overrideVal) : null;
 
   try {
-    const res = await fetch('/api/financeiro/cpq/salvar', {
+    const res = await fetch(`${API_BASE_URL}/api/financeiro/cpq/salvar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -12167,7 +12167,7 @@ async function salvarPropostaCPQJuridica() {
 
 async function carregarPropostasCPQJuridicas() {
   try {
-    const res = await fetch('/api/financeiro/cpq/propostas');
+    const res = await fetch(`${API_BASE_URL}/api/financeiro/cpq/propostas`);
     if (!res.ok) throw new Error('Falha ao obter propostas');
     const data = await res.json();
     window.propostasCPQCache = data.propostas || [];
@@ -12231,7 +12231,7 @@ function renderizarPropostasCPQ() {
 
 async function alterarStatusPropostaJuridica(id, status) {
   try {
-    const res = await fetch(`/api/financeiro/cpq/propostas/${id}/status`, {
+    const res = await fetch(`${API_BASE_URL}/api/financeiro/cpq/propostas/${id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status: status })
@@ -12247,7 +12247,7 @@ async function alterarStatusPropostaJuridica(id, status) {
 async function excluirPropostaJuridica(id) {
   if (!confirm(`Deseja realmente excluir a proposta comercial #${id}?`)) return;
   try {
-    const res = await fetch(`/api/financeiro/cpq/propostas/${id}`, { method: 'DELETE' });
+    const res = await fetch(`${API_BASE_URL}/api/financeiro/cpq/propostas/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('Falha ao excluir');
     carregarPropostasCPQJuridicas();
   } catch (err) {
@@ -12261,7 +12261,7 @@ async function excluirPropostaJuridica(id) {
 // ------------------------------------------------------------------------------
 async function carregarDREJuridica() {
   try {
-    const res = await fetch('/api/financeiro/dre/centros-custo');
+    const res = await fetch(`${API_BASE_URL}/api/financeiro/dre/centros-custo`);
     if (!res.ok) throw new Error('Falha ao carregar DRE');
     const data = await res.json();
     window.dreDataCache = data;
@@ -12412,7 +12412,7 @@ async function confirmarAprovacaoMentor() {
   }
 
   try {
-    const res = await fetch(`/api/financeiro/marcos/${marcoId}/aprovar-orientador`, {
+    const res = await fetch(`${API_BASE_URL}/api/financeiro/marcos/${marcoId}/aprovar-orientador`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -12457,7 +12457,7 @@ async function submeterNovoCentroCusto() {
   }
 
   try {
-    const res = await fetch('/api/financeiro/dre/centros-custo', {
+    const res = await fetch(`${API_BASE_URL}/api/financeiro/dre/centros-custo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -12488,7 +12488,7 @@ async function carregarForecastingJuridico() {
   const optBonus = document.getElementById('fc-opt-bonus')?.value || 20;
   const pessPenalty = document.getElementById('fc-pess-penalty')?.value || 15;
 
-  const url = `/api/financeiro/forecasting?horizon_months=${horizon}&growth_rate_pct=${growth}&opt_bonus_pct=${optBonus}&pess_penalty_pct=${pessPenalty}`;
+  const url = `${API_BASE_URL}/api/financeiro/forecasting?horizon_months=${horizon}&growth_rate_pct=${growth}&opt_bonus_pct=${optBonus}&pess_penalty_pct=${pessPenalty}`;
 
   try {
     const res = await fetch(url);
@@ -12596,7 +12596,7 @@ function renderizarGraficoForecasting(data) {
 // ------------------------------------------------------------------------------
 async function carregarOBZJuridico() {
   try {
-    const res = await fetch('/api/financeiro/obz');
+    const res = await fetch(`${API_BASE_URL}/api/financeiro/obz`);
     if (!res.ok) throw new Error('Falha ao obter OBZ');
     const data = await res.json();
 
@@ -12701,6 +12701,14 @@ function renderizarGraficoOBZ(pacotes) {
       cutout: '65%'
     }
   });
+}
+
+function exportarPrestacaoContasExcel() {
+  window.open(`${API_BASE_URL}/api/financeiro/relatorio/prestacao-contas-excel`, '_blank');
+}
+
+function visualizarPrestacaoContasHTML() {
+  window.open(`${API_BASE_URL}/api/financeiro/relatorio/prestacao-contas-html`, '_blank');
 }
 
 // ==============================================================================
